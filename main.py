@@ -4,33 +4,32 @@ import asyncio
 import os
 
 TOKEN = os.getenv("TOKEN")
-GUILD_ID = 1111391147030482944
 
-intents = discord.Intents.default()
-intents.members = True
-intents.guilds = True
+intents = discord.Intents.all()
 
-bot = commands.Bot(command_prefix="!", intents=intents)
+class PeiBot(commands.Bot):
+    def __init__(self):
+        super().__init__(
+            command_prefix="!",
+            intents=intents
+        )
 
-async def load_extensions():
-    await bot.load_extension("booster_v1")
-    await bot.load_extension("booster_v2")
+    async def setup_hook(self):
+        # Load cogs
+        await self.load_extension("booster_v1")
+        await self.load_extension("booster_v2")
 
-@bot.event
-async def on_ready():
-    print(f"Online: {bot.user}")
+        # Sync global (V2)
+        await self.tree.sync()
 
-    # Sync global (V2)
-    await bot.tree.sync()
+        # Sync riêng guild V1
+        guild = discord.Object(id=1111391147030482944)
+        await self.tree.sync(guild=guild)
 
-    # Sync riêng guild (V1)
-    await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
-
-    print("Slash synced.")
+bot = PeiBot()
 
 async def main():
     async with bot:
-        await load_extensions()
         await bot.start(TOKEN)
 
 asyncio.run(main())
