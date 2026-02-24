@@ -5,8 +5,7 @@ import os
 
 TOKEN = os.getenv("TOKEN")
 
-# ⚠️ ĐIỀN ID SERVER CÁ NHÂN CỦA BẠN VÀO ĐÂY
-PRIVATE_GUILD_ID = 123456789012345678  # <-- đổi thành ID server của bạn
+PRIVATE_GUILD_ID = 1111391147030482944  # 👈 điền ID server cá nhân
 
 intents = discord.Intents.default()
 intents.members = True
@@ -17,23 +16,17 @@ bot = commands.Bot(
     intents=intents
 )
 
-# =========================
-# LOAD COGS
-# =========================
 async def load_extensions():
-    await bot.load_extension("cogs.v1_boost")
-    await bot.load_extension("cogs.v2_boost")
+    await bot.load_extension("booster")      # V1
+    await bot.load_extension("booster_v2")   # V2 (đổi tên nếu khác)
 
-# =========================
-# READY EVENT
-# =========================
 @bot.event
 async def on_ready():
     try:
-        # ✅ Sync GLOBAL (V2 sẽ hiện mọi server)
+        # Sync global trước (cho V2)
         await bot.tree.sync()
 
-        # ✅ Sync riêng cho server cá nhân (V1)
+        # Sau đó sync riêng guild cá nhân (cho V1)
         await bot.tree.sync(guild=discord.Object(id=PRIVATE_GUILD_ID))
 
         print("Đã sync command.")
@@ -42,9 +35,6 @@ async def on_ready():
 
     print(f"Bot online: {bot.user}")
 
-# =========================
-# START BOT
-# =========================
 async def main():
     async with bot:
         await load_extensions()
