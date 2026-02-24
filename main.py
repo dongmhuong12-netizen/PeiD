@@ -5,8 +5,6 @@ import os
 
 TOKEN = os.getenv("TOKEN")
 
-PRIVATE_GUILD_ID = 1111391147030482944  # 👈 điền ID server cá nhân
-
 intents = discord.Intents.default()
 intents.members = True
 intents.guilds = True
@@ -17,21 +15,16 @@ bot = commands.Bot(
 )
 
 async def load_extensions():
-    await bot.load_extension("booster")      # V1
-    await bot.load_extension("booster_v2")   # V2 (đổi tên nếu khác)
+    await bot.load_extension("booster")           # V1
+    await bot.load_extension("boost_system_v2")   # V2
 
 @bot.event
 async def on_ready():
     try:
-        # Sync global trước (cho V2)
-        await bot.tree.sync()
-
-        # Sau đó sync riêng guild cá nhân (cho V1)
-        await bot.tree.sync(guild=discord.Object(id=PRIVATE_GUILD_ID))
-
-        print("Đã sync command.")
+        await bot.tree.sync()  # sync global cho V2
+        print("Slash commands synced.")
     except Exception as e:
-        print(f"Lỗi sync: {e}")
+        print(f"Sync error: {e}")
 
     print(f"Bot online: {bot.user}")
 
