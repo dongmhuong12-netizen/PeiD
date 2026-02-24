@@ -63,7 +63,9 @@ class BoostSystemV2(commands.Cog):
             if role and role not in user.roles:
                 await user.add_roles(role)
 
-    # ===== COMMANDS =====
+    # ========================
+    # SLASH COMMANDS
+    # ========================
 
     @app_commands.command(name="setchannel", description="Set kênh boost")
     async def setchannel(self, interaction: discord.Interaction, channel: discord.TextChannel):
@@ -94,12 +96,15 @@ class BoostSystemV2(commands.Cog):
         save_config(self.config)
         await interaction.response.send_message("Đã thêm gif.")
 
-    @app_commands.command(name="testboost", description="Test hệ thống boost v2")
-    async def testboost(self, interaction: discord.Interaction):
+    # 🔥 ĐÃ ĐỔI TÊN ĐỂ KHÔNG TRÙNG
+    @app_commands.command(name="testboostv2", description="Test hệ thống boost v2")
+    async def testboostv2(self, interaction: discord.Interaction):
         await self.send_boost_embed(interaction.guild, interaction.user)
-        await interaction.response.send_message("Đã test boost.")
+        await interaction.response.send_message("Đã test boost v2.")
 
-    # ===== AUTO BOOST DETECT =====
+    # ========================
+    # AUTO BOOST DETECT
+    # ========================
 
     @commands.Cog.listener()
     async def on_member_update(self, before, after):
