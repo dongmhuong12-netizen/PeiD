@@ -28,7 +28,7 @@ class Booster(commands.Cog):
         embed.set_image(url=chosen_gif)
         await channel.send(embed=embed)
 
-    @app_commands.command(name="testboost", description="Test thông báo boost")
+    @app_commands.command(name="1testboost", description="Test thông báo boost")
     async def testboost(self, interaction: discord.Interaction):
         channel = self.bot.get_channel(BOOST_CHANNEL_ID)
         if not channel:
