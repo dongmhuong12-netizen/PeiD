@@ -1,42 +1,55 @@
 import discord
 from discord import app_commands
-import random
 import os
+import random
 
 TOKEN = os.getenv("TOKEN")
 
-GUILD_ID = 1111391147030482944
-BOOST_CHANNEL_ID = 123456789012345678  # 🔥 THAY BẰNG ID KÊNH BOOST CỦA CẬU
+BOOST_CHANNEL_ID = 1139982707288440882
+SERVER_ID = 1111391147030482944  # giữ nguyên server id của cậu
 
 intents = discord.Intents.default()
-intents.message_content = True
 intents.members = True
+intents.guilds = True
 
-class MyBot(discord.Client):
-    def __init__(self):
-        super().__init__(intents=intents)
-        self.tree = app_commands.CommandTree(self)
+client = discord.Client(intents=intents)
+tree = app_commands.CommandTree(client)
 
-    async def setup_hook(self):
-        guild = discord.Object(id=GUILD_ID)
-        await self.tree.sync(guild=guild)
 
-bot = MyBot()
-
-@bot.event
+@client.event
 async def on_ready():
-    print(f"Bot đã đăng nhập với tên {bot.user}")
+    await tree.sync(guild=discord.Object(id=SERVER_ID))
+    print(f"Logged in as {client.user}")
 
-@bot.tree.command(name="ping", description="Kiểm tra bot hoạt động", guild=discord.Object(id=GUILD_ID))
+
+# ===== LỆNH PING =====
+@tree.command(
+    name="ping",
+    description="Kiểm tra bot còn sống không",
+    guild=discord.Object(id=SERVER_ID)
+)
 async def ping(interaction: discord.Interaction):
-    await interaction.response.send_message("Pong!")
+    await interaction.response.send_message("Pong 💗")
 
-@bot.tree.command(name="testboost", description="Test thông báo boost", guild=discord.Object(id=GUILD_ID))
+
+# ===== LỆNH TEST BOOST =====
+@tree.command(
+    name="testboost",
+    description="Test thông báo boost",
+    guild=discord.Object(id=SERVER_ID)
+)
 async def testboost(interaction: discord.Interaction):
 
-    channel = bot.get_channel(BOOST_CHANNEL_ID)
+    channel = client.get_channel(BOOST_CHANNEL_ID)
 
-    gifs = [
+    if channel is None:
+        await interaction.response.send_message(
+            "Không tìm thấy kênh boost. Kiểm tra lại ID.",
+            ephemeral=True
+        )
+        return
+
+    gif_list = [
         "https://cdn.discordapp.com/attachments/1475931488485900288/1475931584002654230/D6107690-3456-4205-9563-EE691F4DFCB5.gif",
         "https://cdn.discordapp.com/attachments/1475931488485900288/1475931661899399178/472DCFEC-EA85-41FB-94DF-F21D8A788497.gif",
         "https://cdn.discordapp.com/attachments/1475931488485900288/1475931736482250802/8B8F60E8-4154-49A3-B208-7D3139A6230E.gif",
@@ -45,7 +58,7 @@ async def testboost(interaction: discord.Interaction):
         "https://cdn.discordapp.com/attachments/1475931488485900288/1475931963880771624/E589A5AB-D017-4D3B-BD89-28C9E88E8F44.gif"
     ]
 
-    random_gif = random.choice(gifs)
+    chosen_gif = random.choice(gif_list)
 
     embed = discord.Embed(
         title="Woaaaa!! ⋆˚⟡˖ ࣪",
@@ -53,9 +66,11 @@ async def testboost(interaction: discord.Interaction):
         color=discord.Color.purple()
     )
 
-    embed.set_image(url=random_gif)
+    embed.set_image(url=chosen_gif)
 
     await channel.send(embed=embed)
-    await interaction.response.send_message("Đã gửi thông báo boost test.", ephemeral=True)
 
-bot.run(TOKEN)
+    await interaction.response.send_message("Đã gửi thông báo boost 💎", ephemeral=True)
+
+
+client.run(TOKEN)
