@@ -14,7 +14,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 async def load_extensions():
     await bot.load_extension("booster_v1")
-    await bot.load_extension("await bot.load_extension("boost_system_v2")
+    await bot.load_extension("boost_system_v2")
 
 @bot.event
 async def on_ready():
