@@ -5,8 +5,8 @@ import random
 
 TOKEN = os.getenv("TOKEN")
 
+SERVER_ID = 1111391147030482944
 BOOST_CHANNEL_ID = 1139982707288440882
-SERVER_ID = 1111391147030482944  # giữ nguyên server id của cậu
 
 intents = discord.Intents.default()
 intents.members = True
@@ -19,13 +19,13 @@ tree = app_commands.CommandTree(client)
 @client.event
 async def on_ready():
     await tree.sync(guild=discord.Object(id=SERVER_ID))
-    print(f"Logged in as {client.user}")
+    print(f"Bot đã online với tên {client.user}")
 
 
 # ===== LỆNH PING =====
 @tree.command(
     name="ping",
-    description="Kiểm tra bot còn sống không",
+    description="Kiểm tra bot hoạt động",
     guild=discord.Object(id=SERVER_ID)
 )
 async def ping(interaction: discord.Interaction):
@@ -63,14 +63,14 @@ async def testboost(interaction: discord.Interaction):
     embed = discord.Embed(
         title="Woaaaa!! ⋆˚⟡˖ ࣪",
         description=f"then kiu {interaction.user.mention} đã buff cho PeiD nha, iu nhắm nhắm ݁ ˖Ი𐑼⋆‧♡♡",
-        color=discord.Color.purple()
+        color=discord.Color(0xF8BBD0)
     )
 
     embed.set_image(url=chosen_gif)
 
     await channel.send(embed=embed)
 
-    await interaction.response.send_message("Đã gửi thông báo boost 💎", ephemeral=True)
+    await interaction.response.send_message("Đã gửi thông báo boost 💗", ephemeral=True)
 
 
 client.run(TOKEN)
