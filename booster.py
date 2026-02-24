@@ -4,9 +4,9 @@ from discord import app_commands
 import random
 
 GUILD_ID = 1111391147030482944
-BOOST_CHANNEL_ID = 1139982707288440882
-BOOSTER_ROLE_ID = 1111607606964932709
-EMBED_COLOR = 0xf48fb1
+CHANNEL_ID = 1139982707288440882
+ROLE_ID = 1111607606964932709
+COLOR = 0xf48fb1
 
 BOOST_GIFS = [
     "https://cdn.discordapp.com/attachments/1475931488485900288/1475931963880771624/E589A5AB-D017-4D3B-BD89-28C9E88E8F44.gif",
@@ -21,17 +21,17 @@ class BoosterV1(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    # BOOST EVENT V1
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member):
 
         if after.guild.id != GUILD_ID:
             return
 
-        if before.premium_since is None and after.premium_since is not None:
+        role = after.guild.get_role(ROLE_ID)
+        channel = after.guild.get_channel(CHANNEL_ID)
 
-            role = after.guild.get_role(BOOSTER_ROLE_ID)
-            channel = after.guild.get_channel(BOOST_CHANNEL_ID)
+        # Boost
+        if before.premium_since is None and after.premium_since is not None:
 
             if role:
                 await after.add_roles(role)
@@ -40,19 +40,27 @@ class BoosterV1(commands.Cog):
                 embed = discord.Embed(
                     title="Woaaaa!! ⋆˚⟡˖ ࣪",
                     description=f"then kiu {after.mention} đã buff cho PeiD nha, iu nhắm nhắm ݁ ˖Ი𐑼⋆‧♡♡",
-                    color=EMBED_COLOR
+                    color=COLOR
                 )
-
-                embed.set_thumbnail(url=after.display_avatar.url)
                 embed.set_image(url=random.choice(BOOST_GIFS))
-
                 await channel.send(embed=embed)
 
-    # LỆNH TEST V1
-    @app_commands.command(name="1testboost", description="Test hệ thống Boost V1")
+        # Unboost
+        if before.premium_since is not None and after.premium_since is None:
+
+            if role and role in after.roles:
+                await after.remove_roles(role)
+
+    # Slash commands V1 (chỉ guild bạn)
+    @app_commands.command(name="1testboost")
     @app_commands.guilds(discord.Object(id=GUILD_ID))
-    async def testboost_v1(self, interaction: discord.Interaction):
-        await interaction.response.send_message("Boost V1 hoạt động 💎", ephemeral=True)
+    async def testboost(self, interaction: discord.Interaction):
+        await interaction.response.send_message("V1 hoạt động 💎", ephemeral=True)
+
+    @app_commands.command(name="1ping")
+    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    async def ping(self, interaction: discord.Interaction):
+        await interaction.response.send_message(f"Pong: {round(self.bot.latency*1000)}ms", ephemeral=True)
 
 async def setup(bot):
     await bot.add_cog(BoosterV1(bot))
