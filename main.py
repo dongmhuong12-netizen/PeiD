@@ -7,6 +7,7 @@ TOKEN = os.getenv("TOKEN")
 
 SERVER_ID = 1111391147030482944
 BOOST_CHANNEL_ID = 1139982707288440882
+BOOST_ROLE_ID = 1111607606964932709
 
 intents = discord.Intents.default()
 intents.members = True
@@ -41,13 +42,40 @@ async def ping(interaction: discord.Interaction):
 async def testboost(interaction: discord.Interaction):
 
     channel = client.get_channel(BOOST_CHANNEL_ID)
-
     if channel is None:
-        await interaction.response.send_message(
-            "Không tìm thấy kênh boost. Kiểm tra lại ID.",
-            ephemeral=True
-        )
+        await interaction.response.send_message("Không tìm thấy kênh boost.", ephemeral=True)
         return
+
+    await send_boost_embed(channel, interaction.user)
+    await interaction.response.send_message("Đã gửi test boost 💗", ephemeral=True)
+
+
+# ===== TỰ ĐỘNG PHÁT HIỆN BOOST =====
+@client.event
+async def on_member_update(before: discord.Member, after: discord.Member):
+
+    guild = after.guild
+    role = guild.get_role(BOOST_ROLE_ID)
+
+    # Người vừa bắt đầu boost
+    if before.premium_since is None and after.premium_since is not None:
+
+        channel = client.get_channel(BOOST_CHANNEL_ID)
+        if channel:
+            await send_boost_embed(channel, after)
+
+        if role and role not in after.roles:
+            await after.add_roles(role)
+
+    # Người ngừng boost
+    if before.premium_since is not None and after.premium_since is None:
+
+        if role and role in after.roles:
+            await after.remove_roles(role)
+
+
+# ===== HÀM GỬI EMBED =====
+async def send_boost_embed(channel, user):
 
     gif_list = [
         "https://cdn.discordapp.com/attachments/1475931488485900288/1475931584002654230/D6107690-3456-4205-9563-EE691F4DFCB5.gif",
@@ -62,15 +90,13 @@ async def testboost(interaction: discord.Interaction):
 
     embed = discord.Embed(
         title="Woaaaa!! ⋆˚⟡˖ ࣪",
-        description=f"then kiu {interaction.user.mention} đã buff cho PeiD nha, iu nhắm nhắm ݁ ˖Ი𐑼⋆‧♡♡",
+        description=f"then kiu {user.mention} đã buff cho PeiD nha, iu nhắm nhắm ݁ ˖Ი𐑼⋆‧♡♡",
         color=discord.Color(0xF8BBD0)
     )
 
     embed.set_image(url=chosen_gif)
 
     await channel.send(embed=embed)
-
-    await interaction.response.send_message("Đã gửi thông báo boost 💗", ephemeral=True)
 
 
 client.run(TOKEN)
