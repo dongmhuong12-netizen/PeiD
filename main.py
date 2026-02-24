@@ -5,6 +5,8 @@ import os
 
 TOKEN = os.getenv("TOKEN")
 
+GUILD_ID = 1111391147030482944
+
 intents = discord.Intents.default()
 intents.members = True
 intents.guilds = True
@@ -15,18 +17,21 @@ bot = commands.Bot(
 )
 
 async def load_extensions():
-    await bot.load_extension("booster")           # V1
-    await bot.load_extension("boost_system_v2")   # V2
+    await bot.load_extension("booster")
+    await bot.load_extension("boost_system_v2")
 
 @bot.event
 async def on_ready():
-    try:
-        await bot.tree.sync()  # sync global cho V2
-        print("Slash commands synced.")
-    except Exception as e:
-        print(f"Sync error: {e}")
-
     print(f"Bot online: {bot.user}")
+
+    # Sync global (V2)
+    await bot.tree.sync()
+
+    # Sync riêng guild (V1)
+    guild = discord.Object(id=GUILD_ID)
+    await bot.tree.sync(guild=guild)
+
+    print("Slash commands synced.")
 
 async def main():
     async with bot:
