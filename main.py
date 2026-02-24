@@ -1,24 +1,11 @@
-from flask import Flask
-from threading import Thread
-
-app = Flask('')
-
-@app.route('/')
-def home():
-    return "Bot is running"
-
-def run():
-    app.run(host='0.0.0.0', port=8080)
-
-Thread(target=run).start()
 import discord
 from discord import app_commands
 import os
 
 TOKEN = os.getenv("TOKEN")
 
-BOOST_CHANNEL_ID = 1139982707288440882  # ID kênh boost của cậu
-SERVER_ID = 1111391147030482944  # ID server của cậu
+BOOST_CHANNEL_ID = 1139982707288440882  # ID kênh boost
+SERVER_ID = 1111391147030482944        # ID server
 
 intents = discord.Intents.default()
 intents.members = True
@@ -27,21 +14,30 @@ intents.guilds = True
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 
+
 @client.event
 async def on_ready():
+    # Xoá toàn bộ command global cũ (nếu có)
+    tree.clear_commands(guild=None)
+    await tree.sync()
+
+    # Sync command theo server (hiện ngay, không delay)
     await tree.sync(guild=discord.Object(id=SERVER_ID))
+
     print(f"Logged in as {client.user}")
 
-# Lệnh /ping
+
+# ===== LỆNH /ping =====
 @tree.command(
     name="ping",
     description="Kiểm tra bot còn sống không",
     guild=discord.Object(id=SERVER_ID)
 )
 async def ping(interaction: discord.Interaction):
-    await interaction.response.send_message("Pong!")
+    await interaction.response.send_message("Pong 🏓")
 
-# Lệnh /testboost để test thủ công
+
+# ===== LỆNH /testboost =====
 @tree.command(
     name="testboost",
     description="Test thông báo boost",
@@ -52,29 +48,17 @@ async def testboost(interaction: discord.Interaction):
 
     embed = discord.Embed(
         title="💎 Server Boost!",
-        description=f"Cảm ơn {interaction.user.mention} đã boost server ✨",
+        description=f"Cảm ơn {interaction.user.mention} đã boost server!",
         color=discord.Color.purple()
     )
 
-    embed.set_image(url="https://media.giphy.com/media/3o7aD2saalBwwftBIY/giphy.gif")
+    embed.set_image(url="https://media.giphy.com/media/26u4cqiYI30juCOGY/giphy.gif")
 
-    await channel.send(content=interaction.user.mention, embed=embed)
-    await interaction.response.send_message("Đã gửi thông báo boost!", ephemeral=True)
+    if channel:
+        await channel.send(embed=embed)
+        await interaction.response.send_message("Đã gửi thông báo boost!", ephemeral=True)
+    else:
+        await interaction.response.send_message("Không tìm thấy kênh boost!", ephemeral=True)
 
-# Tự động khi có người boost thật
-@client.event
-async def on_member_update(before, after):
-    if before.premium_since is None and after.premium_since is not None:
-        channel = client.get_channel(BOOST_CHANNEL_ID)
-
-        embed = discord.Embed(
-            title="💎 Server Boost!",
-            description=f"Cảm ơn {after.mention} đã boost server ✨",
-            color=discord.Color.purple()
-        )
-
-        embed.set_image(url="https://media.giphy.com/media/3o7aD2saalBwwftBIY/giphy.gif")
-
-        await channel.send(content=after.mention, embed=embed)
 
 client.run(TOKEN)
