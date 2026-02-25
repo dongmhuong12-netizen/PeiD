@@ -1,42 +1,66 @@
 import discord
 from discord.ext import commands
-import os
+import asyncio
 
-TOKEN = os.getenv("TOKEN")  # Railway dùng biến môi trường
+# ==========================
+# 🔑 TOKEN
+# ==========================
 
-GUILD_ID = 1111391147030482944  # 🔥 ĐỔI THÀNH ID SERVER CỦA BẠN
+TOKEN = "YOUR_BOT_TOKEN"
 
-class MyBot(commands.Bot):
+# ==========================
+# 🚀 INTENTS
+# ==========================
+
+intents = discord.Intents.default()
+intents.message_content = True
+intents.members = True
+intents.guilds = True
+
+# ==========================
+# 🤖 BOT CLASS
+# ==========================
+
+class PeiBot(commands.Bot):
     def __init__(self):
-        intents = discord.Intents.default()
-        intents.message_content = True
         super().__init__(
             command_prefix="!",
             intents=intents
         )
 
     async def setup_hook(self):
-        # Load V1 (không chỉnh sửa)
+        print("🔄 Loading extensions...")
+
+        # ===== Version 1 (GIỮ NGUYÊN) =====
         await self.load_extension("edit_v1")
 
-        # Load V2 (phase mới)
-        await self.load_extension("edit_v2")
+        # ===== Version 2 =====
+        await self.load_extension("setupv2")
+        await self.load_extension("lenhbotv2")
 
-        guild = discord.Object(id=GUILD_ID)
+        print("✅ Extensions loaded.")
 
-        # Copy toàn bộ global command vào guild
-        self.tree.copy_global_to(guild=guild)
+        # ==========================
+        # 🌍 GLOBAL SYNC (QUỐC TẾ)
+        # ==========================
+        await self.tree.sync()
+        print("🌍 Global slash commands synced.")
 
-        # Sync riêng guild → cập nhật ngay lập tức
-        await self.tree.sync(guild=guild)
+    async def on_ready(self):
+        print("===================================")
+        print(f"🔥 Logged in as {self.user}")
+        print(f"🆔 Bot ID: {self.user.id}")
+        print(f"📡 Connected to {len(self.guilds)} guild(s)")
+        print("===================================")
 
-        print("✅ Slash commands synced for guild.")
+# ==========================
+# 🟢 START BOT
+# ==========================
 
-bot = MyBot()
+bot = PeiBot()
 
-@bot.event
-async def on_ready():
-    print(f"🔥 Logged in as {bot.user}")
-    print("Bot is ready.")
+async def main():
+    async with bot:
+        await bot.start(TOKEN)
 
-bot.run(TOKEN)
+asyncio.run(main())
