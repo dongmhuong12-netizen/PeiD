@@ -7,12 +7,11 @@ class EmbedEditorView(discord.ui.View):
         self.embed_data = embed_data
 
     def build_embed(self) -> discord.Embed:
-        embed = discord.Embed(
+        return discord.Embed(
             title=self.embed_data.get("title", "Chưa có tiêu đề"),
             description=self.embed_data.get("description", "Chưa có mô tả"),
             color=self.embed_data.get("color", 0x2F3136)
         )
-        return embed
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if not interaction.user.guild_permissions.manage_guild:
@@ -23,39 +22,38 @@ class EmbedEditorView(discord.ui.View):
             return False
         return True
 
-    # ================= TITLE =================
+    # ===== ROW 1 =====
 
-    @discord.ui.button(label="Edit Title", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="Edit Title", style=discord.ButtonStyle.primary, row=0)
     async def edit_title(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(EditTitleModal(self))
 
-    # ================= DESCRIPTION =================
-
-    @discord.ui.button(label="Edit Description", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="Edit Description", style=discord.ButtonStyle.secondary, row=0)
     async def edit_description(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(EditDescriptionModal(self))
 
-    # ================= COLOR =================
-
-    @discord.ui.button(label="Edit Color", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="Edit Color", style=discord.ButtonStyle.secondary, row=0)
     async def edit_color(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(EditColorModal(self))
 
-    # ================= SEND =================
+    # ===== ROW 2 =====
 
-    @discord.ui.button(label="Send Embed", style=discord.ButtonStyle.success)
+    @discord.ui.button(label="Send Embed", style=discord.ButtonStyle.success, row=1)
     async def send_embed(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.channel.send(embed=self.build_embed())
         await interaction.response.send_message(
-            "Đã gửi embed ra channel.",
+            "Embed đã được gửi.",
             ephemeral=True
         )
 
-    # ================= DELETE =================
-
-    @discord.ui.button(label="Delete", style=discord.ButtonStyle.danger)
+    @discord.ui.button(label="Delete", style=discord.ButtonStyle.danger, row=1)
     async def delete_editor(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.message.delete()
+
+    @discord.ui.button(label="Close", style=discord.ButtonStyle.secondary, row=1)
+    async def close_editor(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.clear_items()
+        await interaction.response.edit_message(view=self)
 
 
 # ================= MODALS =================
