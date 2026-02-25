@@ -8,10 +8,6 @@ class EmbedCreate(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    async def cog_load(self):
-        root: Root = self.bot.get_cog("Root")
-        root.embed.add_command(self.create)
-
     @discord.app_commands.command(
         name="create",
         description="Create a new embed"
@@ -25,6 +21,10 @@ class EmbedCreate(commands.Cog):
             f"✅ Embed `{name}` created.",
             ephemeral=True
         )
+
+    async def cog_load(self):
+        root: Root = self.bot.get_cog("Root")
+        root.embed.add_command(self.create)
 
 
 async def setup(bot):
