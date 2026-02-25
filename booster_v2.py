@@ -42,7 +42,7 @@ class Booster(commands.Cog):
             return
 
         embed = discord.Embed(
-            title="Woaaaa!! ⋆˚⟡˖ ࣪",
+            title="Server Booster!!",
             description=message.format(user=member.mention),
             color=DEFAULT_COLOR
         )
