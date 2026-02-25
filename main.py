@@ -1,23 +1,28 @@
 import discord
 from discord.ext import commands
-import asyncio
-import os
 
-intents = discord.Intents.default()
-bot = commands.Bot(command_prefix="!", intents=intents)
+
+class Bot(commands.Bot):
+    def __init__(self):
+        intents = discord.Intents.default()
+        super().__init__(
+            command_prefix="!",
+            intents=intents
+        )
+
+    async def setup_hook(self):
+        await self.load_extension("core.root")
+        await self.load_extension("commands.embed.create")
+
+        await self.tree.sync()
+
+
+bot = Bot()
 
 
 @bot.event
 async def on_ready():
-    await bot.tree.sync()
     print(f"Logged in as {bot.user}")
 
 
-async def main():
-    async with bot:
-        await bot.load_extension("core.root")
-        await bot.load_extension("commands.embed.create")
-        await bot.start(os.getenv("TOKEN"))
-
-
-asyncio.run(main())
+bot.run("YOUR_TOKEN_HERE")
