@@ -1,6 +1,4 @@
 import aiosqlite
-import asyncio
-import os
 
 DB_PATH = "edit_v2.db"
 
@@ -11,11 +9,13 @@ class Database:
 
     async def initialize(self):
         async with aiosqlite.connect(self.db_path) as db:
+
             await db.execute("""
             CREATE TABLE IF NOT EXISTS guild_config (
                 guild_id INTEGER PRIMARY KEY,
                 log_channel_id INTEGER,
                 mod_role_id INTEGER,
+                auto_warn_limit INTEGER DEFAULT 3,
                 setup_completed INTEGER DEFAULT 0
             )
             """)
@@ -39,6 +39,15 @@ class Database:
                 user_id INTEGER,
                 moderator_id INTEGER,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+            """)
+
+            await db.execute("""
+            CREATE TABLE IF NOT EXISTS stats (
+                guild_id INTEGER,
+                moderator_id INTEGER,
+                action TEXT,
+                count INTEGER DEFAULT 0
             )
             """)
 
