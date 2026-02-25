@@ -4,7 +4,7 @@ from core.bot import create_bot
 TOKEN = os.getenv("TOKEN")
 
 if not TOKEN:
-    raise ValueError("❌ TOKEN not found in environment variables.")
+    raise ValueError("❌ TOKEN not found.")
 
 bot = create_bot()
 
