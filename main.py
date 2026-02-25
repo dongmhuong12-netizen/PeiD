@@ -12,14 +12,16 @@ class Bot(commands.Bot):
         )
 
     async def setup_hook(self):
-        # Load extensions
-        await self.load_extension("core.root")
+        # Load create trước
         await self.load_extension("commands.embed.create")
 
-        # Clear old global commands (fix CommandAlreadyRegistered)
+        # Sau đó load root
+        await self.load_extension("core.root")
+
+        # Clear old global commands
         self.tree.clear_commands(guild=None)
 
-        # Sync again
+        # Sync lại
         await self.tree.sync()
 
 
