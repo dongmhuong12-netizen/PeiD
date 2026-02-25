@@ -3,309 +3,314 @@ from discord import app_commands
 from discord.ext import commands
 import sqlite3
 import json
+import datetime
 import asyncio
-import re
 
-DB_PATH = "database.db"
-
-active_sessions = {}
-session_locks = {}
-
-HEX_PATTERN = re.compile(r"^#(?:[0-9a-fA-F]{6})$")
-
-
-# =========================
-# DATABASE
-# =========================
-
-def get_profile(guild_id: int, name: str):
-    with sqlite3.connect(DB_PATH) as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT data FROM embeds WHERE guild_id = ? AND name = ?",
-            (guild_id, name),
-        )
-        row = cursor.fetchone()
-        return json.loads(row[0]) if row else None
-
-
-def save_profile(guild_id: int, name: str, data: dict):
-    with sqlite3.connect(DB_PATH) as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            "UPDATE embeds SET data = ? WHERE guild_id = ? AND name = ?",
-            (json.dumps(data), guild_id, name),
-        )
-        conn.commit()
-
-
-# =========================
-# UTIL
-# =========================
-
-def safe_color(hex_color: str):
-    if not hex_color:
-        return discord.Color.blurple()
-
-    if HEX_PATTERN.match(hex_color):
-        return discord.Color(int(hex_color[1:], 16))
-
-    return discord.Color.blurple()
-
-
-def apply_variables(text: str, interaction: discord.Interaction):
-    if not text:
-        return text
-
-    return (
-        text.replace("{user}", interaction.user.name)
-        .replace("{mention}", interaction.user.mention)
-        .replace("{server}", interaction.guild.name)
-        .replace("{membercount}", str(interaction.guild.member_count))
-    )
-
-
-# =========================
-# FIELD SELECT
-# =========================
-
-class FieldSelect(discord.ui.Select):
-    def __init__(self, view):
-        options = []
-        for i, field in enumerate(view.data.get("fields", [])):
-            options.append(
-                discord.SelectOption(
-                    label=f"{i+1}. {field['name'][:80]}",
-                    value=str(i)
-                )
-            )
-
-        super().__init__(placeholder="Manage Field...", options=options)
-        self.view_ref = view
-
-    async def callback(self, interaction: discord.Interaction):
-        index = int(self.values[0])
-        await interaction.response.send_modal(EditFieldModal(self.view_ref, index))
-
-
-# =========================
-# MAIN VIEW
-# =========================
-
-class EmbedBuilder(discord.ui.View):
-
-    def __init__(self, bot, guild_id, profile_name, data):
-        super().__init__(timeout=1800)
-        self.bot = bot
-        self.guild_id = guild_id
-        self.profile_name = profile_name
-        self.data = data or {}
-
-        if self.data.get("fields"):
-            self.add_item(FieldSelect(self))
-
-    async def on_timeout(self):
-        key = (self.guild_id, self.profile_name)
-        active_sessions.pop(key, None)
-
-    def build(self, interaction=None):
-        embed = discord.Embed(
-            title=apply_variables(self.data.get("title"), interaction) if interaction else self.data.get("title"),
-            description=apply_variables(self.data.get("description"), interaction) if interaction else self.data.get("description"),
-            color=safe_color(self.data.get("color"))
-        )
-
-        if self.data.get("thumbnail"):
-            embed.set_thumbnail(url=self.data["thumbnail"])
-
-        if self.data.get("image"):
-            embed.set_image(url=self.data["image"])
-
-        if self.data.get("footer"):
-            embed.set_footer(text=self.data["footer"])
-
-        if self.data.get("author"):
-            embed.set_author(name=self.data["author"])
-
-        for field in self.data.get("fields", [])[:25]:
-            embed.add_field(
-                name=field["name"],
-                value=field["value"],
-                inline=field.get("inline", False)
-            )
-
-        return embed
-
-    async def refresh(self, interaction):
-        self.clear_items()
-        if self.data.get("fields"):
-            self.add_item(FieldSelect(self))
-        self.add_buttons()
-        await interaction.response.edit_message(embed=self.build(interaction), view=self)
-
-    def add_buttons(self):
-        self.add_item(EditButton("Title", "title"))
-        self.add_item(EditButton("Description", "description", paragraph=True))
-        self.add_item(EditButton("Color (#FFFFFF)", "color"))
-        self.add_item(AddFieldButton())
-        self.add_item(ClearButton())
-        self.add_item(SaveButton())
-
-    # dynamic buttons setup
-    def setup_buttons(self):
-        self.add_buttons()
-
-
-# =========================
-# BUTTONS
-# =========================
-
-class EditButton(discord.ui.Button):
-    def __init__(self, label, key, paragraph=False):
-        super().__init__(label=label, style=discord.ButtonStyle.primary)
-        self.key = key
-        self.paragraph = paragraph
-
-    async def callback(self, interaction: discord.Interaction):
-        await interaction.response.send_modal(TextModal(self.view, self.key, self.label, self.paragraph))
-
-
-class AddFieldButton(discord.ui.Button):
-    def __init__(self):
-        super().__init__(label="Add Field", style=discord.ButtonStyle.success)
-
-    async def callback(self, interaction: discord.Interaction):
-        if len(self.view.data.get("fields", [])) >= 25:
-            await interaction.response.send_message("❌ Max 25 fields.", ephemeral=True)
-            return
-        await interaction.response.send_modal(AddFieldModal(self.view))
-
-
-class ClearButton(discord.ui.Button):
-    def __init__(self):
-        super().__init__(label="Clear All", style=discord.ButtonStyle.danger)
-
-    async def callback(self, interaction: discord.Interaction):
-        self.view.data = {}
-        await self.view.refresh(interaction)
-
-
-class SaveButton(discord.ui.Button):
-    def __init__(self):
-        super().__init__(label="Save", style=discord.ButtonStyle.success)
-
-    async def callback(self, interaction: discord.Interaction):
-        save_profile(self.view.guild_id, self.view.profile_name, self.view.data)
-        await interaction.response.send_message("✅ Saved.", ephemeral=True)
-
-
-# =========================
-# MODALS
-# =========================
-
-class TextModal(discord.ui.Modal):
-    def __init__(self, view, key, title, paragraph=False):
-        super().__init__(title=title)
-        self.view_ref = view
-        self.key = key
-
-        style = discord.TextStyle.paragraph if paragraph else discord.TextStyle.short
-
-        self.input = discord.ui.TextInput(label=title, style=style, required=False)
-        self.add_item(self.input)
-
-    async def on_submit(self, interaction: discord.Interaction):
-        self.view_ref.data[self.key] = str(self.input)
-        await self.view_ref.refresh(interaction)
-
-
-class AddFieldModal(discord.ui.Modal, title="Add Field"):
-    name = discord.ui.TextInput(label="Field Name", max_length=256)
-    value = discord.ui.TextInput(label="Field Value", style=discord.TextStyle.paragraph, max_length=1024)
-
-    def __init__(self, view):
-        super().__init__()
-        self.view_ref = view
-
-    async def on_submit(self, interaction: discord.Interaction):
-        self.view_ref.data.setdefault("fields", []).append({
-            "name": str(self.name),
-            "value": str(self.value),
-            "inline": False
-        })
-        await self.view_ref.refresh(interaction)
-
-
-class EditFieldModal(discord.ui.Modal):
-    def __init__(self, view, index):
-        super().__init__(title="Edit Field")
-        self.view_ref = view
-        self.index = index
-
-        field = view.data["fields"][index]
-
-        self.name_input = discord.ui.TextInput(label="Name", default=field["name"])
-        self.value_input = discord.ui.TextInput(label="Value", style=discord.TextStyle.paragraph, default=field["value"])
-        self.inline_input = discord.ui.TextInput(label="Inline (true/false)", default=str(field.get("inline", False)))
-
-        self.add_item(self.name_input)
-        self.add_item(self.value_input)
-        self.add_item(self.inline_input)
-
-    async def on_submit(self, interaction: discord.Interaction):
-        inline = self.inline_input.value.lower() == "true"
-
-        self.view_ref.data["fields"][self.index] = {
-            "name": str(self.name_input),
-            "value": str(self.value_input),
-            "inline": inline
-        }
-
-        await self.view_ref.refresh(interaction)
-
-
-# =========================
-# COG
-# =========================
+# ===============================
+# EDIT V2 - ULTIMATE PUBLIC CORE
+# ===============================
 
 class EditV2(commands.Cog):
 
-    def __init__(self, bot):
+    # ===============================
+    # INIT
+    # ===============================
+
+    def __init__(self, bot: commands.Bot):
         self.bot = bot
+        self.db = sqlite3.connect("pei_v2.db")
+        self.db.row_factory = sqlite3.Row
+        self.cursor = self.db.cursor()
+        self.setup_database()
 
-    @app_commands.command(name="embed_edit_show", description="Open embed editor")
-    async def embed_edit_show(self, interaction: discord.Interaction, name: str):
+    # ===============================
+    # DATABASE
+    # ===============================
 
-        if not interaction.user.guild_permissions.manage_guild:
-            await interaction.response.send_message("❌ Need Manage Guild.", ephemeral=True)
+    def setup_database(self):
+
+        self.cursor.execute("""
+        CREATE TABLE IF NOT EXISTS guilds (
+            guild_id INTEGER PRIMARY KEY,
+            greet_channel INTEGER,
+            greet_message TEXT,
+            leave_channel INTEGER,
+            leave_message TEXT,
+            log_channel INTEGER
+        )
+        """)
+
+        self.cursor.execute("""
+        CREATE TABLE IF NOT EXISTS embeds (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER,
+            name TEXT,
+            data TEXT
+        )
+        """)
+
+        self.cursor.execute("""
+        CREATE TABLE IF NOT EXISTS autoroles (
+            guild_id INTEGER,
+            role_id INTEGER
+        )
+        """)
+
+        self.cursor.execute("""
+        CREATE TABLE IF NOT EXISTS warnings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER,
+            user_id INTEGER,
+            moderator_id INTEGER,
+            reason TEXT,
+            timestamp TEXT
+        )
+        """)
+
+        self.db.commit()
+
+    def ensure_guild(self, guild_id: int):
+        self.cursor.execute("SELECT guild_id FROM guilds WHERE guild_id = ?", (guild_id,))
+        if not self.cursor.fetchone():
+            self.cursor.execute("INSERT INTO guilds (guild_id) VALUES (?)", (guild_id,))
+            self.db.commit()
+
+    # ===============================
+    # ROOT GROUP
+    # ===============================
+
+    p = app_commands.Group(name="p", description="Pei Ultimate Public System")
+
+    # =========================================================
+    # EMBED SYSTEM
+    # =========================================================
+
+    embed = app_commands.Group(name="embed", description="Embed system", parent=p)
+
+    @embed.command(name="create", description="Create saved embed")
+    async def embed_create(self, interaction: discord.Interaction, name: str, title: str, description: str):
+        self.ensure_guild(interaction.guild.id)
+
+        embed_data = {
+            "title": title,
+            "description": description,
+            "color": discord.Color.blurple().value
+        }
+
+        self.cursor.execute(
+            "INSERT INTO embeds (guild_id, name, data) VALUES (?, ?, ?)",
+            (interaction.guild.id, name, json.dumps(embed_data))
+        )
+        self.db.commit()
+
+        await interaction.response.send_message("✅ Embed saved.", ephemeral=True)
+
+    @embed.command(name="send", description="Send saved embed")
+    async def embed_send(self, interaction: discord.Interaction, name: str, channel: discord.TextChannel):
+        self.cursor.execute(
+            "SELECT data FROM embeds WHERE guild_id = ? AND name = ?",
+            (interaction.guild.id, name)
+        )
+        row = self.cursor.fetchone()
+        if not row:
+            await interaction.response.send_message("❌ Embed not found.", ephemeral=True)
             return
 
-        key = (interaction.guild.id, name)
+        data = json.loads(row["data"])
+        embed = discord.Embed(
+            title=data["title"],
+            description=data["description"],
+            color=data["color"]
+        )
 
-        if key not in session_locks:
-            session_locks[key] = asyncio.Lock()
+        await channel.send(embed=embed)
+        await interaction.response.send_message("✅ Sent.", ephemeral=True)
 
-        async with session_locks[key]:
+    @embed.command(name="delete", description="Delete saved embed")
+    async def embed_delete(self, interaction: discord.Interaction, name: str):
+        self.cursor.execute(
+            "DELETE FROM embeds WHERE guild_id = ? AND name = ?",
+            (interaction.guild.id, name)
+        )
+        self.db.commit()
+        await interaction.response.send_message("🗑 Deleted.", ephemeral=True)
 
-            profile = get_profile(interaction.guild.id, name)
+    @embed.command(name="list", description="List saved embeds")
+    async def embed_list(self, interaction: discord.Interaction):
+        self.cursor.execute("SELECT name FROM embeds WHERE guild_id = ?", (interaction.guild.id,))
+        rows = self.cursor.fetchall()
 
-            if not profile:
-                await interaction.response.send_message("❌ Profile not found.", ephemeral=True)
-                return
+        if not rows:
+            await interaction.response.send_message("No embeds.", ephemeral=True)
+            return
 
-            if key in active_sessions:
-                try:
-                    old_msg = await interaction.channel.fetch_message(active_sessions[key])
-                    await old_msg.delete()
-                except:
-                    pass
+        names = "\n".join([r["name"] for r in rows])
+        await interaction.response.send_message(f"📦 Embeds:\n{names}", ephemeral=True)
 
-            view = EmbedBuilder(self.bot, interaction.guild.id, name, profile)
-            view.setup_buttons()
+    # =========================================================
+    # GREET SYSTEM
+    # =========================================================
 
-            await interaction.response.send_message(embed=view.build(interaction), view=view)
-            msg = await interaction.original_response()
-            active_sessions[key] = msg.id
+    greet = app_commands.Group(name="greet", description="Greet system", parent=p)
+
+    @greet.command(name="setup", description="Setup greet")
+    async def greet_setup(self, interaction: discord.Interaction, channel: discord.TextChannel, message: str):
+        self.ensure_guild(interaction.guild.id)
+        self.cursor.execute(
+            "UPDATE guilds SET greet_channel = ?, greet_message = ? WHERE guild_id = ?",
+            (channel.id, message, interaction.guild.id)
+        )
+        self.db.commit()
+        await interaction.response.send_message("✅ Greet configured.", ephemeral=True)
+
+    @greet.command(name="leave", description="Setup leave")
+    async def greet_leave(self, interaction: discord.Interaction, channel: discord.TextChannel, message: str):
+        self.ensure_guild(interaction.guild.id)
+        self.cursor.execute(
+            "UPDATE guilds SET leave_channel = ?, leave_message = ? WHERE guild_id = ?",
+            (channel.id, message, interaction.guild.id)
+        )
+        self.db.commit()
+        await interaction.response.send_message("✅ Leave configured.", ephemeral=True)
+
+    # =========================================================
+    # AUTOROLE
+    # =========================================================
+
+    autorole = app_commands.Group(name="autorole", description="Autorole system", parent=p)
+
+    @autorole.command(name="add", description="Add autorole")
+    async def autorole_add(self, interaction: discord.Interaction, role: discord.Role):
+        self.cursor.execute(
+            "INSERT INTO autoroles (guild_id, role_id) VALUES (?, ?)",
+            (interaction.guild.id, role.id)
+        )
+        self.db.commit()
+        await interaction.response.send_message("✅ Role added.", ephemeral=True)
+
+    @autorole.command(name="remove", description="Remove autorole")
+    async def autorole_remove(self, interaction: discord.Interaction, role: discord.Role):
+        self.cursor.execute(
+            "DELETE FROM autoroles WHERE guild_id = ? AND role_id = ?",
+            (interaction.guild.id, role.id)
+        )
+        self.db.commit()
+        await interaction.response.send_message("🗑 Role removed.", ephemeral=True)
+
+    @autorole.command(name="list", description="List autoroles")
+    async def autorole_list(self, interaction: discord.Interaction):
+        self.cursor.execute(
+            "SELECT role_id FROM autoroles WHERE guild_id = ?",
+            (interaction.guild.id,)
+        )
+        rows = self.cursor.fetchall()
+        if not rows:
+            await interaction.response.send_message("No autoroles.", ephemeral=True)
+            return
+        roles = "\n".join([f"<@&{r['role_id']}>" for r in rows])
+        await interaction.response.send_message(roles, ephemeral=True)
+
+    # =========================================================
+    # MODERATION
+    # =========================================================
+
+    moderation = app_commands.Group(name="moderation", description="Moderation system", parent=p)
+
+    @moderation.command(name="ban")
+    async def mod_ban(self, interaction: discord.Interaction, user: discord.Member, reason: str):
+        await user.ban(reason=reason)
+        await interaction.response.send_message("🔨 User banned.")
+
+    @moderation.command(name="kick")
+    async def mod_kick(self, interaction: discord.Interaction, user: discord.Member, reason: str):
+        await user.kick(reason=reason)
+        await interaction.response.send_message("👢 User kicked.")
+
+    @moderation.command(name="warn")
+    async def mod_warn(self, interaction: discord.Interaction, user: discord.Member, reason: str):
+        self.cursor.execute(
+            "INSERT INTO warnings (guild_id, user_id, moderator_id, reason, timestamp) VALUES (?, ?, ?, ?, ?)",
+            (
+                interaction.guild.id,
+                user.id,
+                interaction.user.id,
+                reason,
+                datetime.datetime.utcnow().isoformat()
+            )
+        )
+        self.db.commit()
+        await interaction.response.send_message("⚠ Warning issued.")
+
+    @moderation.command(name="history")
+    async def mod_history(self, interaction: discord.Interaction, user: discord.Member):
+        self.cursor.execute(
+            "SELECT reason, timestamp FROM warnings WHERE guild_id = ? AND user_id = ?",
+            (interaction.guild.id, user.id)
+        )
+        rows = self.cursor.fetchall()
+        if not rows:
+            await interaction.response.send_message("No warnings.", ephemeral=True)
+            return
+        text = "\n".join([f"{r['timestamp']} - {r['reason']}" for r in rows])
+        await interaction.response.send_message(text, ephemeral=True)
+
+    # =========================================================
+    # SYSTEM
+    # =========================================================
+
+    system = app_commands.Group(name="system", description="System info", parent=p)
+
+    @system.command(name="stats")
+    async def system_stats(self, interaction: discord.Interaction):
+        guilds = len(self.bot.guilds)
+        users = sum(g.member_count for g in self.bot.guilds)
+        await interaction.response.send_message(
+            f"Servers: {guilds}\nUsers: {users}"
+        )
+
+    @system.command(name="status")
+    async def system_status(self, interaction: discord.Interaction):
+        await interaction.response.send_message("🟢 Bot operational.")
+
+    # =========================================================
+    # EVENTS
+    # =========================================================
+
+    @commands.Cog.listener()
+    async def on_member_join(self, member: discord.Member):
+        self.cursor.execute("SELECT greet_channel, greet_message FROM guilds WHERE guild_id = ?", (member.guild.id,))
+        row = self.cursor.fetchone()
+
+        if row and row["greet_channel"] and row["greet_message"]:
+            channel = member.guild.get_channel(row["greet_channel"])
+            if channel:
+                msg = row["greet_message"].replace("{member}", member.mention)
+                await channel.send(msg)
+
+        self.cursor.execute("SELECT role_id FROM autoroles WHERE guild_id = ?", (member.guild.id,))
+        roles = self.cursor.fetchall()
+        for r in roles:
+            role = member.guild.get_role(r["role_id"])
+            if role:
+                await member.add_roles(role)
+
+    @commands.Cog.listener()
+    async def on_member_remove(self, member: discord.Member):
+        self.cursor.execute("SELECT leave_channel, leave_message FROM guilds WHERE guild_id = ?", (member.guild.id,))
+        row = self.cursor.fetchone()
+
+        if row and row["leave_channel"] and row["leave_message"]:
+            channel = member.guild.get_channel(row["leave_channel"])
+            if channel:
+                msg = row["leave_message"].replace("{member}", member.name)
+                await channel.send(msg)
+
+    # =========================================================
+    # ERROR HANDLER
+    # =========================================================
+
+    async def cog_app_command_error(self, interaction: discord.Interaction, error):
+        await interaction.response.send_message(f"❌ Error: {error}", ephemeral=True)
 
 
 async def setup(bot: commands.Bot):
