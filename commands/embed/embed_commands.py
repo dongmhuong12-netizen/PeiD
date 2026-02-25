@@ -5,24 +5,14 @@ from discord.ext import commands
 from systems.embed.manager import EmbedManager
 
 
-class EmbedCommands(commands.Cog):
+class EmbedCommands(commands.GroupCog, name="p"):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.manager = EmbedManager(bot.db)
 
-    # Tạo group /p
-    p_group = app_commands.Group(name="p", description="Pei main commands")
-
-    # Tạo subgroup /p embed
-    embed_group = app_commands.Group(
-        name="embed",
-        description="Quản lý embed"
-    )
-
-    # /p embed create
-    @embed_group.command(name="create", description="Tạo một embed mới")
+    @app_commands.command(name="embed_create", description="Tạo một embed mới")
     @app_commands.describe(name="Tên embed")
-    async def create_embed(
+    async def embed_create(
         self,
         interaction: discord.Interaction,
         name: str
@@ -50,12 +40,4 @@ class EmbedCommands(commands.Cog):
 
 
 async def setup(bot: commands.Bot):
-    cog = EmbedCommands(bot)
-
-    # Gắn subgroup embed vào group p
-    cog.p_group.add_command(cog.embed_group)
-
-    # Thêm group p vào tree
-    bot.tree.add_command(cog.p_group)
-
-    await bot.add_cog(cog)
+    await bot.add_cog(EmbedCommands(bot))
