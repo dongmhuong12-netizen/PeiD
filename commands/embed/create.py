@@ -1,6 +1,5 @@
 import discord
 from discord.ext import commands
-from core.root import Root
 from systems.embed_system import EmbedSystem
 from storage.embed_storage import EmbedStorage
 
@@ -9,8 +8,6 @@ class EmbedCreate(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
-        root: Root = bot.get_cog("Root")
-        root.embed.add_command(self.create)
 
     @discord.app_commands.command(
         name="create",
