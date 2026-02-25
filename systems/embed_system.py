@@ -1,31 +1,29 @@
-import re
 from storage.embed_storage import EmbedStorage
-
-EMBED_LIMIT = 15
 
 
 class EmbedSystem:
 
-    @staticmethod
-    def validate_name(name: str):
-        if len(name) > 32:
-            return False
-        return re.match(r"^[a-zA-Z0-9_-]+$", name)
+    LIMIT = 15
 
     @staticmethod
     def create_embed(guild_id: int, name: str):
 
-        if not EmbedSystem.validate_name(name):
+        if not name.isalnum():
             return False, "INVALID_NAME"
 
-        embeds = EmbedStorage.get_guild(guild_id)
+        guild_data = EmbedStorage.get_guild(guild_id)
 
-        if name in embeds:
+        if name in guild_data:
             return False, "EXISTS"
 
-        if len(embeds) >= EMBED_LIMIT:
+        if len(guild_data) >= EmbedSystem.LIMIT:
             return False, "LIMIT"
 
-        EmbedStorage.create(guild_id, name)
+        guild_data[name] = {
+            "title": None,
+            "description": None,
+            "color": "2F3136",
+            "image": None
+        }
 
         return True, None
