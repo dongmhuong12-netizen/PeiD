@@ -12,16 +12,7 @@ class Bot(commands.Bot):
         )
 
     async def setup_hook(self):
-        # Load root trước
         await self.load_extension("core.root")
-
-        # Sau đó load các command con
-        await self.load_extension("commands.embed.create")
-
-        # Clear old global commands
-        self.tree.clear_commands(guild=None)
-
-        # Sync lại global
         await self.tree.sync()
 
 
@@ -34,8 +25,4 @@ async def on_ready():
 
 
 TOKEN = os.getenv("TOKEN")
-
-if not TOKEN:
-    raise RuntimeError("TOKEN not found in environment variables.")
-
 bot.run(TOKEN)
