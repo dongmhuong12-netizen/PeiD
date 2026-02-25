@@ -2,9 +2,12 @@ import discord
 
 
 class EmbedEditorView(discord.ui.View):
-    def __init__(self, embed_data: dict):
+    def __init__(self, embed_data: dict, manager, guild_id: int, embed_name: str):
         super().__init__(timeout=None)
         self.embed_data = embed_data
+        self.manager = manager
+        self.guild_id = guild_id
+        self.embed_name = embed_name
 
     def build_embed(self) -> discord.Embed:
         return discord.Embed(
@@ -24,7 +27,7 @@ class EmbedEditorView(discord.ui.View):
 
     # ===== ROW 1 =====
 
-    @discord.ui.button(label="Edit Title", style=discord.ButtonStyle.primary, row=0)
+    @discord.ui.button(label="Edit Title", style=discord.ButtonStyle.secondary, row=0)
     async def edit_title(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(EditTitleModal(self))
 
@@ -38,7 +41,7 @@ class EmbedEditorView(discord.ui.View):
 
     # ===== ROW 2 =====
 
-    @discord.ui.button(label="Send Embed", style=discord.ButtonStyle.success, row=1)
+    @discord.ui.button(label="Send Embed", style=discord.ButtonStyle.secondary, row=1)
     async def send_embed(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.channel.send(embed=self.build_embed())
         await interaction.response.send_message(
@@ -46,13 +49,19 @@ class EmbedEditorView(discord.ui.View):
             ephemeral=True
         )
 
-    @discord.ui.button(label="Delete", style=discord.ButtonStyle.danger, row=1)
-    async def delete_editor(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label="Delete", style=discord.ButtonStyle.secondary, row=1)
+    async def delete_template(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Xoá khỏi database
+        await self.manager.delete_embed(self.guild_id, self.embed_name)
+
+        # Xoá message editor
         await interaction.message.delete()
 
     @discord.ui.button(label="Close", style=discord.ButtonStyle.secondary, row=1)
     async def close_editor(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.clear_items()
+        for item in self.children:
+            item.disabled = True
+
         await interaction.response.edit_message(view=self)
 
 
@@ -68,6 +77,14 @@ class EditTitleModal(discord.ui.Modal, title="Edit Title"):
 
     async def on_submit(self, interaction: discord.Interaction):
         self.view.embed_data["title"] = self.new_title.value
+
+        # Lưu DB
+        await self.view.manager.update_embed(
+            self.view.guild_id,
+            self.view.embed_name,
+            self.view.embed_data
+        )
+
         await interaction.response.edit_message(
             embed=self.view.build_embed(),
             view=self.view
@@ -87,6 +104,13 @@ class EditDescriptionModal(discord.ui.Modal, title="Edit Description"):
 
     async def on_submit(self, interaction: discord.Interaction):
         self.view.embed_data["description"] = self.new_description.value
+
+        await self.view.manager.update_embed(
+            self.view.guild_id,
+            self.view.embed_name,
+            self.view.embed_data
+        )
+
         await interaction.response.edit_message(
             embed=self.view.build_embed(),
             view=self.view
@@ -108,10 +132,17 @@ class EditColorModal(discord.ui.Modal, title="Edit Color (HEX)"):
             color_value = int(self.new_color.value, 16)
             self.view.embed_data["color"] = color_value
 
+            await self.view.manager.update_embed(
+                self.view.guild_id,
+                self.view.embed_name,
+                self.view.embed_data
+            )
+
             await interaction.response.edit_message(
                 embed=self.view.build_embed(),
                 view=self.view
             )
+
         except ValueError:
             await interaction.response.send_message(
                 "Invalid HEX color.",
