@@ -2,27 +2,26 @@ import discord
 from discord.ext import commands
 
 
-def create_bot():
+class MyBot(commands.Bot):
+    def __init__(self):
+        intents = discord.Intents.default()
+        intents.message_content = True
 
-    intents = discord.Intents.default()
-    intents.message_content = True
+        super().__init__(
+            command_prefix="!",
+            intents=intents
+        )
 
-    bot = commands.Bot(
-        command_prefix="!",
-        intents=intents
-    )
-
-    @bot.event
-    async def on_ready():
-        print(f"✅ Logged in as {bot.user}")
+    async def setup_hook(self):
+        # Load extensions
+        await self.load_extension("commands.embed_commands")
 
         # Sync slash commands
-        await bot.tree.sync()
-        print("✅ Slash commands synced")
+        await self.tree.sync()
 
-    async def load_extensions():
-        await bot.load_extension("commands.embed_commands")
+    async def on_ready(self):
+        print(f"✅ Logged in as {self.user}")
 
-    bot.loop.create_task(load_extensions())
 
-    return bot
+def create_bot():
+    return MyBot()
