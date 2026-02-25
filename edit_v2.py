@@ -1,233 +1,246 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
+import json
+import os
+import asyncio
+from datetime import datetime
+
+DB_FILE = "edit_v2_data.json"
+
+
+def load_db():
+    if not os.path.exists(DB_FILE):
+        return {}
+    with open(DB_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def save_db(data):
+    with open(DB_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4)
+
+
+def ensure_guild(db, gid):
+    if gid not in db:
+        db[gid] = {
+            "enabled": False,
+            "channel": None,
+            "greet": None,
+            "leave": None,
+            "dm_greet": False,
+            "delay": 0,
+            "cooldown": 0,
+            "last_join": 0,
+            "embeds": {},
+        }
+
+
+def parse_variables(text: str, member: discord.Member):
+    return (
+        text.replace("{user}", member.mention)
+        .replace("{username}", member.name)
+        .replace("{userid}", str(member.id))
+        .replace("{server}", member.guild.name)
+        .replace("{membercount}", str(member.guild.member_count))
+        .replace("{created_at}", member.created_at.strftime("%d/%m/%Y"))
+        .replace("{joined_at}", member.joined_at.strftime("%d/%m/%Y") if member.joined_at else "Unknown")
+    )
+
+
+def hex_to_color(hex_str):
+    try:
+        return discord.Color(int(hex_str.replace("#", ""), 16))
+    except:
+        return discord.Color.blue()
+
+
+class EditModal(discord.ui.Modal, title="Chỉnh sửa Description"):
+    new_desc = discord.ui.TextInput(label="Description mới", style=discord.TextStyle.paragraph)
+
+    def __init__(self, profile_name):
+        super().__init__()
+        self.profile_name = profile_name
+
+    async def on_submit(self, interaction: discord.Interaction):
+        db = load_db()
+        gid = str(interaction.guild.id)
+        db[gid]["embeds"][self.profile_name]["description"] = self.new_desc.value
+        save_db(db)
+        await interaction.response.send_message("Đã cập nhật description.", ephemeral=True)
+
+
+class TestView(discord.ui.View):
+    def __init__(self, profile):
+        super().__init__(timeout=60)
+        self.profile = profile
+
+    @discord.ui.button(label="Edit Description", style=discord.ButtonStyle.primary)
+    async def edit_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(EditModal(self.profile))
 
 
 class EditV2(commands.Cog):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot):
         self.bot = bot
-        self.guild_data = {}
 
-    # ===============================
-    # 🔧 DATA HELPER
-    # ===============================
+    # ================= TOGGLE =================
 
-    def get_guild_data(self, guild_id: int):
-        if guild_id not in self.guild_data:
-            self.guild_data[guild_id] = {
-                "embeds": {},
-                "message": {"content": None},
-                "greet": {
-                    "enabled": False,
-                    "channel_id": None,
-                    "embed_name": None,
-                },
-                "leave": {
-                    "enabled": False,
-                    "channel_id": None,
-                    "embed_name": None,
-                },
-            }
-        return self.guild_data[guild_id]
+    @app_commands.command(name="toggle")
+    async def toggle(self, interaction: discord.Interaction, mode: str):
+        db = load_db()
+        gid = str(interaction.guild.id)
+        ensure_guild(db, gid)
 
-    def build_embed(self, data: dict):
-        embed = discord.Embed(
-            title=data.get("title"),
-            description=data.get("description"),
-            color=data.get("color", 0x2F3136),
-        )
-        if data.get("footer"):
-            embed.set_footer(text=data["footer"])
-        if data.get("image"):
-            embed.set_image(url=data["image"])
-        if data.get("thumbnail"):
-            embed.set_thumbnail(url=data["thumbnail"])
-        return embed
+        db[gid]["enabled"] = mode.lower() == "on"
+        save_db(db)
+        await interaction.response.send_message(f"Hệ thống: {mode.upper()}", ephemeral=True)
 
-    # ===============================
-    # 📦 SLASH GROUP
-    # ===============================
+    # ================= SETTINGS =================
 
-    p = app_commands.Group(name="p", description="Panel system v2")
+    @app_commands.command(name="setchannel")
+    async def setchannel(self, interaction: discord.Interaction, channel: discord.TextChannel):
+        db = load_db()
+        gid = str(interaction.guild.id)
+        ensure_guild(db, gid)
 
-    # ===============================
-    # 📦 EMBED COMMANDS
-    # ===============================
+        db[gid]["channel"] = channel.id
+        save_db(db)
+        await interaction.response.send_message("Đã set kênh.", ephemeral=True)
 
-    @p.command(name="embed_create")
-    async def embed_create(self, interaction: discord.Interaction, name: str):
-        data = self.get_guild_data(interaction.guild.id)
+    @app_commands.command(name="setdelay")
+    async def setdelay(self, interaction: discord.Interaction, seconds: int):
+        db = load_db()
+        gid = str(interaction.guild.id)
+        ensure_guild(db, gid)
 
-        if name in data["embeds"]:
-            await interaction.response.send_message("Embed đã tồn tại.", ephemeral=True)
-            return
+        db[gid]["delay"] = seconds
+        save_db(db)
+        await interaction.response.send_message(f"Delay: {seconds}s", ephemeral=True)
 
-        data["embeds"][name] = {
-            "draft": {},
-            "saved": {},
-            "editor_message_id": None,
-            "editor_channel_id": None,
-            "bound_message": None,
+    @app_commands.command(name="setcooldown")
+    async def setcooldown(self, interaction: discord.Interaction, seconds: int):
+        db = load_db()
+        gid = str(interaction.guild.id)
+        ensure_guild(db, gid)
+
+        db[gid]["cooldown"] = seconds
+        save_db(db)
+        await interaction.response.send_message(f"Cooldown: {seconds}s", ephemeral=True)
+
+    @app_commands.command(name="setdm")
+    async def setdm(self, interaction: discord.Interaction, mode: str):
+        db = load_db()
+        gid = str(interaction.guild.id)
+        ensure_guild(db, gid)
+
+        db[gid]["dm_greet"] = mode.lower() == "on"
+        save_db(db)
+        await interaction.response.send_message("DM greet updated.", ephemeral=True)
+
+    # ================= EMBED =================
+
+    @app_commands.command(name="createembed")
+    async def createembed(self, interaction: discord.Interaction, name: str, title: str, description: str):
+        db = load_db()
+        gid = str(interaction.guild.id)
+        ensure_guild(db, gid)
+
+        db[gid]["embeds"][name] = {
+            "title": title,
+            "description": description,
+            "color": "#3498db",
         }
 
-        await interaction.response.send_message(f"Đã tạo embed `{name}`", ephemeral=True)
+        save_db(db)
+        await interaction.response.send_message("Embed created.", ephemeral=True)
 
-    @p.command(name="embed_show")
-    async def embed_show(self, interaction: discord.Interaction, name: str):
-        data = self.get_guild_data(interaction.guild.id)
+    @app_commands.command(name="testembed")
+    async def testembed(self, interaction: discord.Interaction, name: str):
+        db = load_db()
+        gid = str(interaction.guild.id)
 
-        if name not in data["embeds"]:
-            await interaction.response.send_message("Không tìm thấy embed.", ephemeral=True)
+        data = db.get(gid, {}).get("embeds", {}).get(name)
+        if not data:
+            await interaction.response.send_message("Không tồn tại.", ephemeral=True)
             return
 
-        saved = data["embeds"][name]["saved"]
-        if not saved:
-            await interaction.response.send_message("Embed chưa được save.", ephemeral=True)
-            return
+        embed = self.build_embed(data, interaction.user)
+        await interaction.response.send_message(embed=embed, view=TestView(name))
 
-        embed = self.build_embed(saved)
-        await interaction.response.send_message(embed=embed)
+    def build_embed(self, data, member):
+        embed = discord.Embed(
+            title=parse_variables(data["title"], member),
+            description=parse_variables(data["description"], member),
+            color=hex_to_color(data.get("color", "#3498db")),
+        )
+        return embed
 
-    # ===============================
-    # 📨 MESSAGE SYSTEM
-    # ===============================
-
-    @p.command(name="message_set")
-    async def message_set(self, interaction: discord.Interaction, content: str):
-        data = self.get_guild_data(interaction.guild.id)
-        data["message"]["content"] = content
-        await interaction.response.send_message("Đã set message.", ephemeral=True)
-
-    @p.command(name="message_bind")
-    async def message_bind(self, interaction: discord.Interaction, name: str):
-        data = self.get_guild_data(interaction.guild.id)
-
-        if name not in data["embeds"]:
-            await interaction.response.send_message("Không tìm thấy embed.", ephemeral=True)
-            return
-
-        data["embeds"][name]["bound_message"] = data["message"]["content"]
-        await interaction.response.send_message("Đã bind message vào embed.", ephemeral=True)
-
-    # ===============================
-    # 👋 GREET SYSTEM
-    # ===============================
-
-    @p.command(name="greet_on")
-    async def greet_on(self, interaction: discord.Interaction):
-        data = self.get_guild_data(interaction.guild.id)
-        data["greet"]["enabled"] = True
-        await interaction.response.send_message("Greet đã bật.", ephemeral=True)
-
-    @p.command(name="greet_off")
-    async def greet_off(self, interaction: discord.Interaction):
-        data = self.get_guild_data(interaction.guild.id)
-        data["greet"]["enabled"] = False
-        await interaction.response.send_message("Greet đã tắt.", ephemeral=True)
-
-    @p.command(name="greet_channel")
-    async def greet_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
-        data = self.get_guild_data(interaction.guild.id)
-        data["greet"]["channel_id"] = channel.id
-        await interaction.response.send_message("Đã set kênh greet.", ephemeral=True)
-
-    @p.command(name="greet_embed")
-    async def greet_embed(self, interaction: discord.Interaction, name: str):
-        data = self.get_guild_data(interaction.guild.id)
-
-        if name not in data["embeds"]:
-            await interaction.response.send_message("Không tìm thấy embed.", ephemeral=True)
-            return
-
-        data["greet"]["embed_name"] = name
-        await interaction.response.send_message("Đã set embed cho greet.", ephemeral=True)
-
-    # ===============================
-    # 👋 LEAVE SYSTEM
-    # ===============================
-
-    @p.command(name="leave_on")
-    async def leave_on(self, interaction: discord.Interaction):
-        data = self.get_guild_data(interaction.guild.id)
-        data["leave"]["enabled"] = True
-        await interaction.response.send_message("Leave đã bật.", ephemeral=True)
-
-    @p.command(name="leave_off")
-    async def leave_off(self, interaction: discord.Interaction):
-        data = self.get_guild_data(interaction.guild.id)
-        data["leave"]["enabled"] = False
-        await interaction.response.send_message("Leave đã tắt.", ephemeral=True)
-
-    @p.command(name="leave_channel")
-    async def leave_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
-        data = self.get_guild_data(interaction.guild.id)
-        data["leave"]["channel_id"] = channel.id
-        await interaction.response.send_message("Đã set kênh leave.", ephemeral=True)
-
-    @p.command(name="leave_embed")
-    async def leave_embed(self, interaction: discord.Interaction, name: str):
-        data = self.get_guild_data(interaction.guild.id)
-
-        if name not in data["embeds"]:
-            await interaction.response.send_message("Không tìm thấy embed.", ephemeral=True)
-            return
-
-        data["leave"]["embed_name"] = name
-        await interaction.response.send_message("Đã set embed cho leave.", ephemeral=True)
-
-    # ===============================
-    # 🎉 EVENTS
-    # ===============================
+    # ================= EVENTS =================
 
     @commands.Cog.listener()
-    async def on_member_join(self, member: discord.Member):
-        data = self.guild_data.get(member.guild.id)
-        if not data:
-            return
+    async def on_member_join(self, member):
+        try:
+            db = load_db()
+            gid = str(member.guild.id)
+            data = db.get(gid)
 
-        greet = data["greet"]
-        if not greet["enabled"]:
-            return
+            if not data or not data.get("enabled"):
+                return
 
-        if not greet["channel_id"] or not greet["embed_name"]:
-            return
+            now = datetime.utcnow().timestamp()
+            if now - data.get("last_join", 0) < data.get("cooldown", 0):
+                return
 
-        channel = self.bot.get_channel(greet["channel_id"])
-        embed_data = data["embeds"][greet["embed_name"]]["saved"]
+            data["last_join"] = now
+            save_db(db)
 
-        if not embed_data:
-            return
+            await asyncio.sleep(data.get("delay", 0))
 
-        embed = self.build_embed(embed_data)
-        await channel.send(
-            content=data["message"]["content"],
-            embed=embed,
-        )
+            profile = data.get("greet")
+            channel_id = data.get("channel")
+
+            if profile and channel_id:
+                embed_data = data["embeds"].get(profile)
+                if embed_data:
+                    channel = member.guild.get_channel(channel_id)
+                    if channel:
+                        embed = self.build_embed(embed_data, member)
+                        await channel.send(embed=embed)
+
+            if data.get("dm_greet"):
+                if profile:
+                    embed_data = data["embeds"].get(profile)
+                    if embed_data:
+                        embed = self.build_embed(embed_data, member)
+                        await member.send(embed=embed)
+
+        except:
+            pass
 
     @commands.Cog.listener()
-    async def on_member_remove(self, member: discord.Member):
-        data = self.guild_data.get(member.guild.id)
-        if not data:
-            return
+    async def on_member_remove(self, member):
+        try:
+            db = load_db()
+            gid = str(member.guild.id)
+            data = db.get(gid)
 
-        leave = data["leave"]
-        if not leave["enabled"]:
-            return
+            if not data or not data.get("enabled"):
+                return
 
-        if not leave["channel_id"] or not leave["embed_name"]:
-            return
+            profile = data.get("leave")
+            channel_id = data.get("channel")
 
-        channel = self.bot.get_channel(leave["channel_id"])
-        embed_data = data["embeds"][leave["embed_name"]]["saved"]
+            if profile and channel_id:
+                embed_data = data["embeds"].get(profile)
+                if embed_data:
+                    channel = member.guild.get_channel(channel_id)
+                    if channel:
+                        embed = self.build_embed(embed_data, member)
+                        await channel.send(embed=embed)
 
-        if not embed_data:
-            return
-
-        embed = self.build_embed(embed_data)
-        await channel.send(
-            content=data["message"]["content"],
-            embed=embed,
-        )
+        except:
+            pass
 
 
 async def setup(bot: commands.Bot):
