@@ -4,9 +4,11 @@ from core.root import Root
 
 
 class EmbedCreate(commands.Cog):
-
     def __init__(self, bot):
         self.bot = bot
+
+        root: Root = bot.get_cog("Root")
+        root.embed.add_command(self.create)
 
     @discord.app_commands.command(
         name="create",
@@ -21,10 +23,6 @@ class EmbedCreate(commands.Cog):
             f"✅ Embed `{name}` created.",
             ephemeral=True
         )
-
-    async def cog_load(self):
-        root: Root = self.bot.get_cog("Root")
-        root.embed.add_command(self.create)
 
 
 async def setup(bot):
