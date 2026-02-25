@@ -1,193 +1,251 @@
 import discord
-from discord.ui import View, Button
-from typing import Dict, Any
+
+# =========================================
+# UTIL
+# =========================================
+
+def hex_to_color(hex_code: str) -> discord.Color:
+    hex_code = hex_code.replace("#", "")
+    return discord.Color(int(hex_code, 16))
 
 
-class EmbedManagerView(View):
-    def __init__(self, bot, manager, guild_id: int, embed_name: str):
+# =========================================
+# MODALS
+# =========================================
+
+class EditTextModal(discord.ui.Modal):
+
+    def __init__(self, field_name: str, current_value: str = ""):
+        super().__init__(title=f"Set {field_name}")
+        self.field_name = field_name
+
+        self.input = discord.ui.TextInput(
+            label=field_name,
+            default=current_value,
+            style=discord.TextStyle.paragraph if field_name == "Description" else discord.TextStyle.short,
+            required=False,
+            max_length=2000
+        )
+
+        self.add_item(self.input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        view: EmbedManagerView = self.view
+        key = self.field_name.lower()
+
+        view.embed_data[key] = self.input.value
+        view.dirty = True
+
+        await interaction.response.edit_message(
+            embed=view.build_embed(),
+            view=view
+        )
+
+
+class SetImageModal(discord.ui.Modal):
+
+    def __init__(self, field: str):
+        super().__init__(title=f"Set {field}")
+        self.field = field
+
+        self.url = discord.ui.TextInput(
+            label="Image URL",
+            placeholder="https://example.com/image.gif",
+            required=False,
+            max_length=500
+        )
+
+        self.add_item(self.url)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        view: EmbedManagerView = self.view
+        view.embed_data[self.field] = self.url.value
+        view.dirty = True
+
+        await interaction.response.edit_message(
+            embed=view.build_embed(),
+            view=view
+        )
+
+
+class SetColorModal(discord.ui.Modal):
+
+    def __init__(self):
+        super().__init__(title="Set Embed Color")
+
+        self.hex_input = discord.ui.TextInput(
+            label="HEX Color",
+            placeholder="#5865F2",
+            required=True,
+            max_length=7
+        )
+
+        self.add_item(self.hex_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        view: EmbedManagerView = self.view
+
+        try:
+            view.embed_data["color"] = self.hex_input.value
+            view.dirty = True
+        except:
+            await interaction.response.send_message("Invalid HEX.", ephemeral=True)
+            return
+
+        await interaction.response.edit_message(
+            embed=view.build_embed(),
+            view=view
+        )
+
+
+class ConfirmDeleteModal(discord.ui.Modal):
+
+    def __init__(self):
+        super().__init__(title="Confirm Delete")
+
+        self.confirm = discord.ui.TextInput(
+            label="Type DELETE to confirm",
+            required=True
+        )
+
+        self.add_item(self.confirm)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        view: EmbedManagerView = self.view
+
+        if self.confirm.value != "DELETE":
+            await interaction.response.send_message("❌ Wrong confirmation.", ephemeral=True)
+            return
+
+        view.delete_callback(view.embed_name)
+
+        await interaction.response.edit_message(
+            content="🗑 Embed deleted permanently.",
+            embed=None,
+            view=None
+        )
+
+
+# =========================================
+# MAIN VIEW
+# =========================================
+
+class EmbedManagerView(discord.ui.View):
+
+    def __init__(self, embed_name, embed_data, save_callback, delete_callback):
         super().__init__(timeout=None)
 
-        self.bot = bot
-        self.manager = manager
-        self.guild_id = guild_id
         self.embed_name = embed_name
+        self.embed_data = embed_data
+        self.save_callback = save_callback
+        self.delete_callback = delete_callback
 
-        self.embed_data: Dict[str, Any] = {}
-        self.is_dirty = False
-        self.is_closed = False
+        self.dirty = False
+        self.closed = False
 
-    # ==========================
-    # LOAD DATA
-    # ==========================
+    # =========================================
+    # BUILD EMBED
+    # =========================================
 
-    async def load_data(self):
-        data = await self.manager.get_embed(self.guild_id, self.embed_name)
-        if data:
-            self.embed_data = data
+    def build_embed(self):
 
-    # ==========================
-    # STATUS HEADER
-    # ==========================
-
-    def build_manager_embed(self):
-
-        status = "🟢 Saved"
-
-        if self.is_closed:
-            status = "🔴 Closed"
-        elif self.is_dirty:
-            status = "🟡 Unsaved changes"
+        color = discord.Color.blurple()
+        if self.embed_data.get("color"):
+            try:
+                color = hex_to_color(self.embed_data["color"])
+            except:
+                pass
 
         embed = discord.Embed(
-            title=f"Embed Manager: {self.embed_name}",
-            description=f"Status: **{status}**",
-            color=0x2b2d31
+            title=self.embed_data.get("title", "No Title"),
+            description=self.embed_data.get("description", "No Description"),
+            color=color
         )
 
-        embed.add_field(
-            name="Info",
-            value="Save để lưu cấu hình.\nSend để gửi bản đã lưu.",
-            inline=False
-        )
+        if self.embed_data.get("image"):
+            embed.set_image(url=self.embed_data["image"])
+
+        if self.embed_data.get("thumbnail"):
+            embed.set_thumbnail(url=self.embed_data["thumbnail"])
 
         return embed
 
-    # ==========================
-    # SAVE
-    # ==========================
+    # =========================================
+    # BUTTONS
+    # =========================================
 
-    @discord.ui.button(label="Save", style=discord.ButtonStyle.secondary)
-    async def save_button(self, interaction: discord.Interaction, button: Button):
-
-        await self.manager.save_embed(
-            self.guild_id,
-            self.embed_name,
-            self.embed_data,
+    @discord.ui.button(label="Title", style=discord.ButtonStyle.secondary, row=0)
+    async def edit_title(self, interaction: discord.Interaction, button):
+        await interaction.response.send_modal(
+            EditTextModal("Title", self.embed_data.get("title", ""))
         )
 
-        self.is_dirty = False
-
-        await interaction.response.edit_message(
-            embed=self.build_manager_embed(),
-            view=self
+    @discord.ui.button(label="Description", style=discord.ButtonStyle.secondary, row=0)
+    async def edit_desc(self, interaction: discord.Interaction, button):
+        await interaction.response.send_modal(
+            EditTextModal("Description", self.embed_data.get("description", ""))
         )
 
-    # ==========================
-    # SEND
-    # ==========================
+    @discord.ui.button(label="Color", style=discord.ButtonStyle.secondary, row=0)
+    async def edit_color(self, interaction: discord.Interaction, button):
+        await interaction.response.send_modal(SetColorModal())
 
-    @discord.ui.button(label="Send", style=discord.ButtonStyle.secondary)
-    async def send_button(self, interaction: discord.Interaction, button: Button):
+    @discord.ui.button(label="Image", style=discord.ButtonStyle.secondary, row=1)
+    async def edit_image(self, interaction: discord.Interaction, button):
+        await interaction.response.send_modal(SetImageModal("image"))
 
-        if self.is_dirty:
+    @discord.ui.button(label="Thumbnail", style=discord.ButtonStyle.secondary, row=1)
+    async def edit_thumbnail(self, interaction: discord.Interaction, button):
+        await interaction.response.send_modal(SetImageModal("thumbnail"))
+
+    @discord.ui.button(label="Save", style=discord.ButtonStyle.success, row=2)
+    async def save(self, interaction: discord.Interaction, button):
+        self.save_callback(self.embed_name, self.embed_data)
+        self.dirty = False
+        await interaction.response.send_message("💾 Saved.", ephemeral=True)
+
+    @discord.ui.button(label="Send", style=discord.ButtonStyle.primary, row=2)
+    async def send(self, interaction: discord.Interaction, button):
+
+        if self.dirty:
             await interaction.response.send_message(
-                "⚠ Bạn chưa Save thay đổi gần nhất.\nEmbed sẽ gửi theo phiên bản đã lưu.",
-                ephemeral=True
-            )
-        else:
-            await interaction.response.defer(ephemeral=True)
-
-        data = await self.manager.get_embed(
-            self.guild_id,
-            self.embed_name
-        )
-
-        if not data:
-            await interaction.followup.send(
-                "❌ Không tìm thấy embed đã lưu.",
+                "⚠ You have unsaved changes.",
                 ephemeral=True
             )
             return
 
-        embed = self.build_preview_embed(data)
+        await interaction.channel.send(embed=self.build_embed())
+        await interaction.response.send_message("📤 Sent.", ephemeral=True)
 
-        await interaction.channel.send(embed=embed)
+    @discord.ui.button(label="Close", style=discord.ButtonStyle.danger, row=3)
+    async def close(self, interaction: discord.Interaction, button):
 
-    # ==========================
-    # DELETE
-    # ==========================
-
-    @discord.ui.button(label="Delete", style=discord.ButtonStyle.secondary)
-    async def delete_button(self, interaction: discord.Interaction, button: Button):
-
-        await self.manager.delete_embed(
-            self.guild_id,
-            self.embed_name
-        )
+        self.closed = True
 
         for item in self.children:
             item.disabled = True
 
-        await interaction.response.edit_message(
-            content=f"Embed `{self.embed_name}` đã bị xoá hoàn toàn.",
-            embed=None,
-            view=self
-        )
+        open_btn = OpenButton()
+        self.add_item(open_btn)
 
-        self.stop()
+        await interaction.response.edit_message(view=self)
 
-    # ==========================
-    # CLOSE
-    # ==========================
-
-    @discord.ui.button(label="Close", style=discord.ButtonStyle.secondary)
-    async def close_button(self, interaction: discord.Interaction, button: Button):
-
-        self.is_closed = True
-
-        for item in self.children:
-            item.disabled = True
-
-        self.add_item(OpenButton(self))
-
-        await interaction.response.edit_message(
-            embed=self.build_manager_embed(),
-            view=self
-        )
-
-    # ==========================
-    # BUILD PREVIEW
-    # ==========================
-
-    def build_preview_embed(self, data: Dict[str, Any]):
-
-        embed = discord.Embed(
-            title=data.get("title", "No title"),
-            description=data.get("description", "No description"),
-            color=data.get("color", 0x2b2d31)
-        )
-
-        if data.get("footer"):
-            embed.set_footer(text=data["footer"])
-
-        if data.get("thumbnail"):
-            embed.set_thumbnail(url=data["thumbnail"])
-
-        if data.get("image"):
-            embed.set_image(url=data["image"])
-
-        return embed
+    @discord.ui.button(label="Delete", style=discord.ButtonStyle.danger, row=3)
+    async def delete(self, interaction: discord.Interaction, button):
+        await interaction.response.send_modal(ConfirmDeleteModal())
 
 
-# ==============================
-# OPEN BUTTON
-# ==============================
-
-class OpenButton(Button):
-    def __init__(self, parent_view):
+class OpenButton(discord.ui.Button):
+    def __init__(self):
         super().__init__(label="Open", style=discord.ButtonStyle.secondary)
-        self.parent_view = parent_view
 
-    async def callback(self, interaction: discord.Interaction):
+    async def callback(self, interaction: discord.Interation):
+        view: EmbedManagerView = self.view
+        view.closed = False
 
-        self.parent_view.is_closed = False
+        view.remove_item(self)
 
-        for item in self.parent_view.children:
+        for item in view.children:
             item.disabled = False
 
-        self.parent_view.remove_item(self)
-
-        await interaction.response.edit_message(
-            embed=self.parent_view.build_manager_embed(),
-            view=self.parent_view
-        )
+        await interaction.response.edit_message(view=view)
