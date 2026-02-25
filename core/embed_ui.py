@@ -1,9 +1,16 @@
 import discord
-from core.embed_storage import save_embed, delete_embed
+from core.embed_storage import save_embed
 
 
-class TitleModal(discord.ui.Modal, title="Edit Title"):
-    title_input = discord.ui.TextInput(label="Title", max_length=256)
+class TitleModal(discord.ui.Modal):
+    def __init__(self):
+        super().__init__(title="Edit Title")
+
+        self.title_input = discord.ui.TextInput(
+            label="Title",
+            max_length=256
+        )
+        self.add_item(self.title_input)
 
     async def on_submit(self, interaction: discord.Interaction):
         embed = interaction.message.embeds[0]
@@ -11,12 +18,16 @@ class TitleModal(discord.ui.Modal, title="Edit Title"):
         await interaction.response.edit_message(embed=embed)
 
 
-class DescriptionModal(discord.ui.Modal, title="Edit Description"):
-    desc_input = discord.ui.TextInput(
-        label="Description",
-        style=discord.TextStyle.paragraph,
-        max_length=4000
-    )
+class DescriptionModal(discord.ui.Modal):
+    def __init__(self):
+        super().__init__(title="Edit Description")
+
+        self.desc_input = discord.ui.TextInput(
+            label="Description",
+            style=discord.TextStyle.paragraph,
+            max_length=4000
+        )
+        self.add_item(self.desc_input)
 
     async def on_submit(self, interaction: discord.Interaction):
         embed = interaction.message.embeds[0]
@@ -24,11 +35,15 @@ class DescriptionModal(discord.ui.Modal, title="Edit Description"):
         await interaction.response.edit_message(embed=embed)
 
 
-class ColorModal(discord.ui.Modal, title="Edit Color (HEX)"):
-    color_input = discord.ui.TextInput(
-        label="HEX Color",
-        placeholder="#5865F2"
-    )
+class ColorModal(discord.ui.Modal):
+    def __init__(self):
+        super().__init__(title="Edit Color (HEX)")
+
+        self.color_input = discord.ui.TextInput(
+            label="HEX Color",
+            placeholder="#5865F2"
+        )
+        self.add_item(self.color_input)
 
     async def on_submit(self, interaction: discord.Interaction):
         embed = interaction.message.embeds[0]
@@ -45,11 +60,14 @@ class ColorModal(discord.ui.Modal, title="Edit Color (HEX)"):
         await interaction.response.edit_message(embed=embed)
 
 
-class ImageModal(discord.ui.Modal, title="Set Image URL"):
-    image_input = discord.ui.TextInput(
-        label="Image URL (gif supported)",
-        placeholder="https://example.com/image.gif"
-    )
+class ImageModal(discord.ui.Modal):
+    def __init__(self):
+        super().__init__(title="Set Image URL")
+
+        self.image_input = discord.ui.TextInput(
+            label="Image URL (gif supported)"
+        )
+        self.add_item(self.image_input)
 
     async def on_submit(self, interaction: discord.Interaction):
         embed = interaction.message.embeds[0]
@@ -58,8 +76,9 @@ class ImageModal(discord.ui.Modal, title="Set Image URL"):
 
 
 class EmbedBuilderView(discord.ui.View):
-    def __init__(self):
+    def __init__(self, embed_name: str):
         super().__init__(timeout=None)
+        self.embed_name = embed_name
 
     @discord.ui.button(label="Title", style=discord.ButtonStyle.primary)
     async def edit_title(self, interaction, button):
@@ -88,18 +107,9 @@ class EmbedBuilderView(discord.ui.View):
             "image": embed.image.url if embed.image else None
         }
 
-        save_embed(data)
+        save_embed(self.embed_name, data)
 
         await interaction.response.send_message(
-            "✅ Embed saved.",
-            ephemeral=True
-        )
-
-    @discord.ui.button(label="Delete", style=discord.ButtonStyle.danger)
-    async def delete_button(self, interaction, button):
-        delete_embed()
-
-        await interaction.response.send_message(
-            "🗑 Embed deleted.",
+            f"✅ Embed `{self.embed_name}` saved.",
             ephemeral=True
         )
