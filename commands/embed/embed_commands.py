@@ -3,6 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from systems.embed.manager import EmbedManager
+from systems.embed.view import EmbedEditorView
 
 
 class PCommands(commands.GroupCog, name="p"):
@@ -11,13 +12,13 @@ class PCommands(commands.GroupCog, name="p"):
         self.bot = bot
         self.manager = EmbedManager(bot.db)
 
-    # Tạo subgroup /p embed
+    # Subgroup: /p embed
     embed = app_commands.Group(
         name="embed",
         description="Quản lý embed"
     )
 
-    # /p embed create
+    # Command: /p embed create
     @embed.command(name="create", description="Tạo một embed mới")
     @app_commands.describe(name="Tên embed")
     async def create(
@@ -33,11 +34,23 @@ class PCommands(commands.GroupCog, name="p"):
             return
 
         try:
+            # Lưu vào database
             await self.manager.create_embed(interaction.guild.id, name)
 
+            # Dữ liệu embed ban đầu
+            embed_data = {
+                "title": name,
+                "description": "Chưa có mô tả",
+                "color": 0x2F3136
+            }
+
+            # Tạo editor view
+            view = EmbedEditorView(embed_data)
+
+            # Gửi preview + UI
             await interaction.response.send_message(
-                f"Đã tạo embed `{name}` thành công.",
-                ephemeral=True
+                embed=view.build_embed(),
+                view=view
             )
 
         except ValueError as e:
