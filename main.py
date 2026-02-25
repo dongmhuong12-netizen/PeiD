@@ -8,7 +8,8 @@ TOKEN = os.getenv("TOKEN")
 intents = discord.Intents.default()
 intents.members = True
 
-class Bot(commands.Bot):
+
+class PBot(commands.Bot):
     def __init__(self):
         super().__init__(
             command_prefix="!",
@@ -19,7 +20,8 @@ class Bot(commands.Bot):
         await self.tree.sync()
         print("✅ Slash commands synced.")
 
-bot = Bot()
+
+bot = PBot()
 
 
 @bot.event
@@ -27,14 +29,18 @@ async def on_ready():
     print(f"🔥 Logged in as {bot.user}")
 
 
-# ====== P SYSTEM ROOT ======
-p = app_commands.Group(name="p", description="Main P system commands")
+# ===== P SYSTEM GROUP =====
+p = app_commands.Group(
+    name="p",
+    description="Main P system"
+)
+
 bot.tree.add_command(p)
 
 
-@p.command(name="ping", description="Test P system")
-async def p_ping(interaction: discord.Interaction):
-    await interaction.response.send_message("🏓 P system is alive.")
+@p.command(name="ping", description="Check bot status")
+async def ping(interaction: discord.Interaction):
+    await interaction.response.send_message("haii, pei is here!!´꒳`")
 
 
 bot.run(TOKEN)
