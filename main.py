@@ -1,12 +1,13 @@
 import discord
 from discord.ext import commands
 import asyncio
+import os
 
 # ==========================
-# 🔑 TOKEN
+# 🔑 TOKEN (Railway dùng biến môi trường)
 # ==========================
 
-TOKEN = "YOUR_BOT_TOKEN"
+TOKEN = os.getenv("TOKEN")
 
 # ==========================
 # 🚀 INTENTS
@@ -31,12 +32,11 @@ class PeiBot(commands.Bot):
     async def setup_hook(self):
         print("🔄 Loading extensions...")
 
-        # ===== Version 1 (GIỮ NGUYÊN) =====
+        # ===== Version 1 =====
         await self.load_extension("edit_v1")
 
         # ===== Version 2 =====
-        await self.load_extension("setupv2")
-        await self.load_extension("lenhbotv2")
+        await self.load_extension("edit_v2")
 
         print("✅ Extensions loaded.")
 
@@ -52,6 +52,7 @@ class PeiBot(commands.Bot):
         print(f"🆔 Bot ID: {self.user.id}")
         print(f"📡 Connected to {len(self.guilds)} guild(s)")
         print("===================================")
+
 
 # ==========================
 # 🟢 START BOT
