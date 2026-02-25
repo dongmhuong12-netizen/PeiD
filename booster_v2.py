@@ -134,5 +134,3 @@ async def imagelink(interaction: discord.Interaction, link: str):
     await interaction.response.send_message("Đã thêm gif!", ephemeral=True)
 
 # ========================
-
-bot.run(TOKEN)
