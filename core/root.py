@@ -7,21 +7,20 @@ class Root(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-        # /p
         self.p = discord.app_commands.Group(
             name="p",
             description="Main command group"
         )
 
-        # /p embed
         self.embed = discord.app_commands.Group(
             name="embed",
-            description="Embed management",
-            parent=self.p
+            description="Embed management"
         )
 
+        self.p.add_command(self.embed)
+
     async def cog_load(self):
-        # Register root group safely
+        # chỉ add khi cog load xong
         try:
             self.bot.tree.add_command(self.p)
         except discord.app_commands.CommandAlreadyRegistered:
