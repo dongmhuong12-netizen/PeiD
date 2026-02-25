@@ -5,12 +5,20 @@ from discord.ext import commands
 from systems.embed.manager import EmbedManager
 
 
-class EmbedGroup(app_commands.Group):
-    def __init__(self, manager: EmbedManager):
-        super().__init__(name="embed", description="Quản lý embed")
-        self.manager = manager
+class PCommands(commands.GroupCog, name="p"):
 
-    @app_commands.command(name="create", description="Tạo một embed mới")
+    def __init__(self, bot: commands.Bot):
+        self.bot = bot
+        self.manager = EmbedManager(bot.db)
+
+    # Tạo subgroup /p embed
+    embed = app_commands.Group(
+        name="embed",
+        description="Quản lý embed"
+    )
+
+    # /p embed create
+    @embed.command(name="create", description="Tạo một embed mới")
     @app_commands.describe(name="Tên embed")
     async def create(
         self,
@@ -37,16 +45,6 @@ class EmbedGroup(app_commands.Group):
                 str(e),
                 ephemeral=True
             )
-
-
-class PCommands(commands.GroupCog, name="p"):
-    def __init__(self, bot: commands.Bot):
-        self.bot = bot
-        self.manager = EmbedManager(bot.db)
-
-        # Thêm subgroup embed vào /p
-        self.embed = EmbedGroup(self.manager)
-        super().__init__()
 
 
 async def setup(bot: commands.Bot):
