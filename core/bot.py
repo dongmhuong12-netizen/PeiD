@@ -14,13 +14,13 @@ class PBot(commands.Bot):
             intents=intents
         )
 
-        # Gắn database vào bot
         self.db = JSONDatabase()
 
     async def setup_hook(self):
-    await self.load_extension("commands.embed.embed_commands")
-    await self.tree.sync()
-    print("✅ Slash commands synced.")
+        await self.load_extension("commands.embed.embed_commands")
+        await self.tree.sync()
+        print("✅ Slash commands synced.")
+
 
 def create_bot():
     return PBot()
