@@ -3,12 +3,6 @@ from discord.ext import commands
 from discord import app_commands
 import random
 
-TOKEN = "BOT_TOKEN_CUA_CAU"
-
-# ====== DEFAULT V1 ======
-DEFAULT_GUILD_ID = 1111391147030482944
-DEFAULT_CHANNEL_ID = 1139982707288440882
-DEFAULT_ROLE_ID = 1111607606964932709
 DEFAULT_COLOR = 0xf48fb1
 
 DEFAULT_MESSAGE = "then kiu {user} đã buff cho PeiD nha, iu nhắm nhắm ݁ ˖Ი𐑼⋆‧♡♡"
@@ -22,115 +16,103 @@ DEFAULT_GIFS = [
     "https://cdn.discordapp.com/attachments/1475931488485900288/1475931584002654230/D6107690-3456-4205-9563-EE691F4DFCB5.gif",
 ]
 
-# Lưu config từng server
-guild_config = {}
 
-intents = discord.Intents.default()
-intents.members = True
-intents.guilds = True
+class Booster(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+        self.guild_config = {}
 
-bot = commands.Bot(command_prefix="!", intents=intents)
+    def get_config(self, guild_id):
+        config = self.guild_config.get(guild_id, {})
+        return (
+            config.get("role"),
+            config.get("channel"),
+            config.get("message", DEFAULT_MESSAGE),
+            config.get("gifs", DEFAULT_GIFS.copy()),
+        )
 
-# ========================
+    async def send_boost_banner(self, member: discord.Member):
+        role_id, channel_id, message, gifs = self.get_config(member.guild.id)
 
-def get_config(guild_id):
-    config = guild_config.get(guild_id, {})
+        if not channel_id:
+            return
 
-    role_id = config.get("role", DEFAULT_ROLE_ID)
-    channel_id = config.get("channel", DEFAULT_CHANNEL_ID)
-    message = config.get("message", DEFAULT_MESSAGE)
-    gifs = config.get("gifs", DEFAULT_GIFS)
+        channel = member.guild.get_channel(channel_id)
+        if not channel:
+            return
 
-    return role_id, channel_id, message, gifs
+        embed = discord.Embed(
+            title="Woaaaa!! ⋆˚⟡˖ ࣪",
+            description=message.format(user=member.mention),
+            color=DEFAULT_COLOR
+        )
 
-async def send_boost_banner(member: discord.Member):
-    role_id, channel_id, message, gifs = get_config(member.guild.id)
+        embed.set_image(url=random.choice(gifs))
+        await channel.send(embed=embed)
 
-    role = member.guild.get_role(role_id)
-    channel = member.guild.get_channel(channel_id)
+        if role_id:
+            role = member.guild.get_role(role_id)
+            if role:
+                try:
+                    await member.add_roles(role)
+                except:
+                    pass
 
-    if not channel:
-        return
+    @commands.Cog.listener()
+    async def on_member_update(self, before, after):
+        if not before.premium_since and after.premium_since:
+            await self.send_boost_banner(after)
 
-    embed = discord.Embed(
-        title="Woaaaa!! ⋆˚⟡˖ ࣪",
-        description=message.format(user=member.mention),
-        color=DEFAULT_COLOR
-    )
+        if before.premium_since and not after.premium_since:
+            role_id, _, _, _ = self.get_config(after.guild.id)
+            if role_id:
+                role = after.guild.get_role(role_id)
+                if role:
+                    try:
+                        await after.remove_roles(role)
+                    except:
+                        pass
 
-    embed.set_image(url=random.choice(gifs))
+    # ===== SLASH COMMANDS =====
 
-    await channel.send(embed=embed)
+    @app_commands.command(name="testboost", description="Test banner boost")
+    async def testboost(self, interaction: discord.Interaction):
+        await interaction.response.send_message("Đã gửi banner test!", ephemeral=True)
+        await self.send_boost_banner(interaction.user)
 
-    if role:
-        try:
-            await member.add_roles(role)
-        except:
-            pass
+    @app_commands.command(name="setchannel", description="Set kênh gửi banner")
+    async def setchannel(self, interaction: discord.Interaction, channel: discord.TextChannel):
+        self.guild_config.setdefault(interaction.guild.id, {})
+        self.guild_config[interaction.guild.id]["channel"] = channel.id
+        await interaction.response.send_message("Đã set channel!", ephemeral=True)
 
-# ========================
+    @app_commands.command(name="setrole", description="Set role boost")
+    async def setrole(self, interaction: discord.Interaction, role: discord.Role):
+        self.guild_config.setdefault(interaction.guild.id, {})
+        self.guild_config[interaction.guild.id]["role"] = role.id
+        await interaction.response.send_message("Đã set role!", ephemeral=True)
 
-@bot.event
-async def on_ready():
-    await bot.tree.sync()
-    print(f"Bot đã online: {bot.user}")
+    @app_commands.command(name="setmessage", description="Set nội dung banner")
+    async def setmessage(self, interaction: discord.Interaction, message: str):
+        self.guild_config.setdefault(interaction.guild.id, {})
+        self.guild_config[interaction.guild.id]["message"] = message
+        await interaction.response.send_message("Đã set message!", ephemeral=True)
 
-# ========================
-# BOOST EVENT
+    @app_commands.command(name="imagelink", description="Thêm link GIF cho banner")
+    async def imagelink(self, interaction: discord.Interaction, link: str):
+        self.guild_config.setdefault(interaction.guild.id, {})
+        gifs = self.guild_config[interaction.guild.id].setdefault("gifs", DEFAULT_GIFS.copy())
 
-@bot.event
-async def on_member_update(before, after):
-    if not before.premium_since and after.premium_since:
-        await send_boost_banner(after)
+        gifs.append(link)
 
-    if before.premium_since and not after.premium_since:
-        role_id, _, _, _ = get_config(after.guild.id)
-        role = after.guild.get_role(role_id)
-        if role:
-            try:
-                await after.remove_roles(role)
-            except:
-                pass
+        await interaction.response.send_message("Đã thêm GIF mới!", ephemeral=True)
 
-# ========================
-# SLASH COMMANDS
-
-@bot.tree.command(name="testboost", description="Test banner boost")
-async def testboost(interaction: discord.Interaction):
-    await interaction.response.send_message("Đã gửi banner test!", ephemeral=True)
-    await send_boost_banner(interaction.user)
-
-
-@bot.tree.command(name="setchannel", description="Set kênh gửi banner")
-@app_commands.describe(channel="Chọn kênh")
-async def setchannel(interaction: discord.Interaction, channel: discord.TextChannel):
-    guild_config.setdefault(interaction.guild.id, {})
-    guild_config[interaction.guild.id]["channel"] = channel.id
-    await interaction.response.send_message("Đã set channel thành công!", ephemeral=True)
-
-
-@bot.tree.command(name="setrole", description="Set role boost")
-@app_commands.describe(role="Chọn role")
-async def setrole(interaction: discord.Interaction, role: discord.Role):
-    guild_config.setdefault(interaction.guild.id, {})
-    guild_config[interaction.guild.id]["role"] = role.id
-    await interaction.response.send_message("Đã set role thành công!", ephemeral=True)
-
-
-@bot.tree.command(name="setmessage", description="Set nội dung banner")
-@app_commands.describe(message="Nhập nội dung, dùng {user}")
-async def setmessage(interaction: discord.Interaction, message: str):
-    guild_config.setdefault(interaction.guild.id, {})
-    guild_config[interaction.guild.id]["message"] = message
-    await interaction.response.send_message("Đã set message thành công!", ephemeral=True)
+    @app_commands.command(name="resetgif", description="Reset lại GIF mặc định")
+    async def resetgif(self, interaction: discord.Interaction):
+        self.guild_config.setdefault(interaction.guild.id, {})
+        self.guild_config[interaction.guild.id]["gifs"] = DEFAULT_GIFS.copy()
+        await interaction.response.send_message("Đã reset về 6 GIF mặc định!", ephemeral=True)
 
 
-@bot.tree.command(name="imagelink", description="Thêm gif link")
-@app_commands.describe(link="Dán link gif")
-async def imagelink(interaction: discord.Interaction, link: str):
-    guild_config.setdefault(interaction.guild.id, {})
-    guild_config[interaction.guild.id].setdefault("gifs", DEFAULT_GIFS.copy())
-    guild_config[interaction.guild.id]["gifs"].append(link)
-    await interaction.response.send_message("Đã thêm gif!", ephemeral=True)
-
-# ========================
+async def setup(bot):
+    await bot.add_cog(Booster(bot))
