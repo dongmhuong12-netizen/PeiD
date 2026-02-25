@@ -6,7 +6,6 @@ from core.embed_ui import EmbedBuilderView
 from core.embed_storage import load_embed, delete_embed
 
 
-# ===== Embed Sub Group =====
 class EmbedGroup(app_commands.Group):
     def __init__(self):
         super().__init__(
@@ -14,7 +13,6 @@ class EmbedGroup(app_commands.Group):
             description="Embed management"
         )
 
-    # /p embed create <name>
     @app_commands.command(
         name="create",
         description="Create new embed"
@@ -29,11 +27,9 @@ class EmbedGroup(app_commands.Group):
 
         await interaction.response.send_message(
             embed=embed,
-            view=EmbedBuilderView(name),
-            ephemeral=True
+            view=EmbedBuilderView(name)
         )
 
-    # /p embed show <name>
     @app_commands.command(
         name="show",
         description="Show embed"
@@ -44,8 +40,7 @@ class EmbedGroup(app_commands.Group):
 
         if not data:
             await interaction.response.send_message(
-                "❌ Embed not found.",
-                ephemeral=True
+                "❌ Embed not found."
             )
             return
 
@@ -60,7 +55,6 @@ class EmbedGroup(app_commands.Group):
 
         await interaction.response.send_message(embed=embed)
 
-    # /p embed edit <name>
     @app_commands.command(
         name="edit",
         description="Edit embed"
@@ -71,8 +65,7 @@ class EmbedGroup(app_commands.Group):
 
         if not data:
             await interaction.response.send_message(
-                "❌ Embed not found.",
-                ephemeral=True
+                "❌ Embed not found."
             )
             return
 
@@ -87,11 +80,9 @@ class EmbedGroup(app_commands.Group):
 
         await interaction.response.send_message(
             embed=embed,
-            view=EmbedBuilderView(name),
-            ephemeral=True
+            view=EmbedBuilderView(name)
         )
 
-    # /p embed delete <name>
     @app_commands.command(
         name="delete",
         description="Delete embed"
@@ -100,17 +91,14 @@ class EmbedGroup(app_commands.Group):
 
         if delete_embed(name):
             await interaction.response.send_message(
-                f"🗑 Embed `{name}` deleted.",
-                ephemeral=True
+                f"🗑 Embed `{name}` deleted."
             )
         else:
             await interaction.response.send_message(
-                "❌ Embed not found.",
-                ephemeral=True
+                "❌ Embed not found."
             )
 
 
-# ===== Root Group (/p) =====
 class PGroup(app_commands.Group):
     def __init__(self):
         super().__init__(
@@ -121,7 +109,6 @@ class PGroup(app_commands.Group):
         self.add_command(EmbedGroup())
 
 
-# ===== Root Cog =====
 class Root(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
