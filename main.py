@@ -1,4 +1,5 @@
 import discord
+import os
 from discord.ext import commands
 
 
@@ -25,4 +26,5 @@ async def on_ready():
     print(f"Logged in as {bot.user}")
 
 
-bot.run("YOUR_TOKEN_HERE")
+TOKEN = os.getenv("TOKEN")
+bot.run(TOKEN)
