@@ -6,20 +6,19 @@ from systems.embed.manager import EmbedManager
 from systems.embed.view import EmbedEditorView
 
 
-class PCommands(commands.GroupCog, name="p"):
+class EmbedCommands(commands.GroupCog, name="p"):
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.manager = EmbedManager(bot.db)
+        self.manager = EmbedManager()
 
-    # Subgroup: /p embed
     embed = app_commands.Group(
         name="embed",
         description="Quản lý embed"
     )
 
-    # Command: /p embed create
-    @embed.command(name="create", description="Tạo một embed mới")
+    # /p embed create
+    @embed.command(name="create", description="Tạo embed mới")
     @app_commands.describe(name="Tên embed")
     async def create(
         self,
@@ -33,32 +32,65 @@ class PCommands(commands.GroupCog, name="p"):
             )
             return
 
-        try:
-            # Lưu vào database
-            await self.manager.create_embed(interaction.guild.id, name)
+        await self.manager.create_embed(
+            embed_id=name,
+            title="New Embed",
+            description="Chỉnh sửa nội dung sau.",
+        )
 
-            # Dữ liệu embed ban đầu
-            embed_data = {
-                "title": name,
-                "description": "Chưa có mô tả",
-                "color": 0x2F3136
-            }
+        await interaction.response.send_message(
+            f"✅ Đã tạo embed `{name}`",
+            ephemeral=True
+        )
 
-            # Tạo editor view
-            view = EmbedEditorView(embed_data)
+    # /p embed show
+    @embed.command(name="show", description="Hiển thị embed")
+    async def show(
+        self,
+        interaction: discord.Interaction,
+        name: str
+    ):
+        data = await self.manager.get_embed(name)
 
-            # Gửi preview + UI
+        if not data:
             await interaction.response.send_message(
-                embed=view.build_embed(),
-                view=view
-            )
-
-        except ValueError as e:
-            await interaction.response.send_message(
-                str(e),
+                "❌ Không tìm thấy embed.",
                 ephemeral=True
             )
+            return
+
+        embed = discord.Embed(
+            title=data["title"],
+            description=data["description"],
+            color=data["color"]
+        )
+
+        if data["image_url"]:
+            embed.set_image(url=data["image_url"])
+
+        await interaction.response.send_message(embed=embed)
+
+    # /p embed delete
+    @embed.command(name="delete", description="Xóa embed")
+    async def delete(
+        self,
+        interaction: discord.Interaction,
+        name: str
+    ):
+        success = await self.manager.delete_embed(name)
+
+        if not success:
+            await interaction.response.send_message(
+                "❌ Không tìm thấy embed.",
+                ephemeral=True
+            )
+            return
+
+        await interaction.response.send_message(
+            f"🗑 Đã xóa embed `{name}`",
+            ephemeral=True
+        )
 
 
 async def setup(bot: commands.Bot):
-    await bot.add_cog(PCommands(bot))
+    await bot.add_cog(EmbedCommands(bot))
