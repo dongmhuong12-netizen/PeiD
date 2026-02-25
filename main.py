@@ -4,7 +4,7 @@ import os
 
 TOKEN = os.getenv("TOKEN")  # Railway dùng biến môi trường
 
-GUILD_ID = 111139114703048XXXX  # 🔥 ĐỔI THÀNH ID SERVER CỦA BẠN
+GUILD_ID = 1111391147030482944  # 🔥 ĐỔI THÀNH ID SERVER CỦA BẠN
 
 class MyBot(commands.Bot):
     def __init__(self):
