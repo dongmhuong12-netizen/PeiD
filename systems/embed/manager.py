@@ -1,14 +1,12 @@
 import json
 import os
-import discord
 from typing import Optional
 
-DATA_FILE = "storage/embeds.json"
+DATA_FILE = "embed_data.json"
 
 
 class EmbedManager:
     def __init__(self):
-        os.makedirs("storage", exist_ok=True)
         if not os.path.exists(DATA_FILE):
             with open(DATA_FILE, "w") as f:
                 json.dump({}, f)
@@ -63,21 +61,6 @@ class EmbedManager:
         self._save(data)
         return True
 
-    async def get_embed(self, embed_id: str) -> Optional[discord.Embed]:
+    async def get_embed(self, embed_id: str):
         data = self._load()
-
-        if embed_id not in data:
-            return None
-
-        embed_data = data[embed_id]
-
-        embed = discord.Embed(
-            title=embed_data["title"],
-            description=embed_data["description"],
-            color=embed_data["color"],
-        )
-
-        if embed_data.get("image_url"):
-            embed.set_image(url=embed_data["image_url"])
-
-        return embed
+        return data.get(embed_id)
