@@ -3,25 +3,22 @@ from discord import app_commands
 from discord.ext import commands
 
 
-class Root(commands.Cog):
+class PGroup(app_commands.Group):
+    def __init__(self):
+        super().__init__(
+            name="p",
+            description="Main command group"
+        )
 
-    def __init__(self, bot):
+
+p_group = PGroup()
+
+
+class Root(commands.Cog):
+    def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-        self.p = app_commands.Group(
-            name="p",
-            description="Main command group",
-            default_permissions=discord.Permissions(manage_guild=True)
-        )
 
-        self.embed = app_commands.Group(
-            name="embed",
-            description="Embed management"
-        )
-
-        self.p.add_command(self.embed)
-        self.bot.tree.add_command(self.p)
-
-
-async def setup(bot):
+async def setup(bot: commands.Bot):
     await bot.add_cog(Root(bot))
+    bot.tree.add_command(p_group)
