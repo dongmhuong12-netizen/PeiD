@@ -16,8 +16,8 @@ class PeiBot(commands.Bot):
 
     async def setup_hook(self):
         # Load cogs
-        await self.load_extension("booster_v1")
-        await self.load_extension("booster_v2")
+        await self.load_extension("edit_v1")
+        await self.load_extension("edit_v2")
 
         # Sync global (V2)
         await self.tree.sync()
