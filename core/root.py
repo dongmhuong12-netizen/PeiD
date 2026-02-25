@@ -1,24 +1,28 @@
 import discord
-from discord import app_commands
 from discord.ext import commands
 
 
-class PGroup(app_commands.Group):
-    def __init__(self):
-        super().__init__(
+class Root(commands.Cog):
+
+    def __init__(self, bot):
+        self.bot = bot
+
+        # Main command: /p
+        self.p = discord.app_commands.Group(
             name="p",
             description="Main command group"
         )
 
+        # Sub group: /p embed
+        self.embed = discord.app_commands.Group(
+            name="embed",
+            description="Embed management",
+            parent=self.p
+        )
 
-p_group = PGroup()
+        # Register root group
+        self.bot.tree.add_command(self.p)
 
 
-class Root(commands.Cog):
-    def __init__(self, bot: commands.Bot):
-        self.bot = bot
-
-
-async def setup(bot: commands.Bot):
+async def setup(bot):
     await bot.add_cog(Root(bot))
-    bot.tree.add_command(p_group)
