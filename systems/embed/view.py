@@ -25,25 +25,25 @@ class EmbedEditorView(discord.ui.View):
 
     # ================= TITLE =================
 
-    @discord.ui.button(label="✏ Edit Title", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="Edit Title", style=discord.ButtonStyle.primary)
     async def edit_title(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(EditTitleModal(self))
 
     # ================= DESCRIPTION =================
 
-    @discord.ui.button(label="📝 Edit Description", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="Edit Description", style=discord.ButtonStyle.secondary)
     async def edit_description(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(EditDescriptionModal(self))
 
     # ================= COLOR =================
 
-    @discord.ui.button(label="🎨 Edit Color", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="Edit Color", style=discord.ButtonStyle.secondary)
     async def edit_color(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(EditColorModal(self))
 
     # ================= SEND =================
 
-    @discord.ui.button(label="📤 Send Embed", style=discord.ButtonStyle.success)
+    @discord.ui.button(label="Send Embed", style=discord.ButtonStyle.success)
     async def send_embed(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.channel.send(embed=self.build_embed())
         await interaction.response.send_message(
@@ -53,7 +53,7 @@ class EmbedEditorView(discord.ui.View):
 
     # ================= DELETE =================
 
-    @discord.ui.button(label="🗑 Delete", style=discord.ButtonStyle.danger)
+    @discord.ui.button(label="Delete", style=discord.ButtonStyle.danger)
     async def delete_editor(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.message.delete()
 
@@ -61,8 +61,8 @@ class EmbedEditorView(discord.ui.View):
 # ================= MODALS =================
 
 
-class EditTitleModal(discord.ui.Modal, title="Chỉnh sửa tiêu đề"):
-    new_title = discord.ui.TextInput(label="Tiêu đề mới", max_length=256)
+class EditTitleModal(discord.ui.Modal, title="Edit Title"):
+    new_title = discord.ui.TextInput(label="New Title", max_length=256)
 
     def __init__(self, view: EmbedEditorView):
         super().__init__()
@@ -76,9 +76,9 @@ class EditTitleModal(discord.ui.Modal, title="Chỉnh sửa tiêu đề"):
         )
 
 
-class EditDescriptionModal(discord.ui.Modal, title="Chỉnh sửa mô tả"):
+class EditDescriptionModal(discord.ui.Modal, title="Edit Description"):
     new_description = discord.ui.TextInput(
-        label="Mô tả mới",
+        label="New Description",
         style=discord.TextStyle.paragraph,
         max_length=4000
     )
@@ -95,9 +95,9 @@ class EditDescriptionModal(discord.ui.Modal, title="Chỉnh sửa mô tả"):
         )
 
 
-class EditColorModal(discord.ui.Modal, title="Chỉnh sửa màu (HEX)"):
+class EditColorModal(discord.ui.Modal, title="Edit Color (HEX)"):
     new_color = discord.ui.TextInput(
-        label="Nhập mã màu HEX (ví dụ: FF0000)",
+        label="HEX Color (example: FF0000)",
         max_length=6
     )
 
@@ -116,6 +116,6 @@ class EditColorModal(discord.ui.Modal, title="Chỉnh sửa màu (HEX)"):
             )
         except ValueError:
             await interaction.response.send_message(
-                "Mã màu không hợp lệ.",
+                "Invalid HEX color.",
                 ephemeral=True
             )
