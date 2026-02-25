@@ -62,7 +62,7 @@ class ColorModal(discord.ui.Modal):
 
 class ImageModal(discord.ui.Modal):
     def __init__(self):
-        super().__init__(title="Set Image URL")
+        super().__init__(title="Edit Image URL")
 
         self.image_input = discord.ui.TextInput(
             label="Image URL (gif supported)"
@@ -80,23 +80,23 @@ class EmbedBuilderView(discord.ui.View):
         super().__init__(timeout=None)
         self.embed_name = embed_name
 
-    @discord.ui.button(label="Title", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="Edit Title", style=discord.ButtonStyle.secondary)
     async def edit_title(self, interaction, button):
         await interaction.response.send_modal(TitleModal())
 
-    @discord.ui.button(label="Description", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="Edit Description", style=discord.ButtonStyle.secondary)
     async def edit_desc(self, interaction, button):
         await interaction.response.send_modal(DescriptionModal())
 
-    @discord.ui.button(label="Color", style=discord.ButtonStyle.success)
+    @discord.ui.button(label="Edit Color", style=discord.ButtonStyle.secondary)
     async def edit_color(self, interaction, button):
         await interaction.response.send_modal(ColorModal())
 
-    @discord.ui.button(label="Image", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="Edit Image", style=discord.ButtonStyle.secondary)
     async def edit_image(self, interaction, button):
         await interaction.response.send_modal(ImageModal())
 
-    @discord.ui.button(label="Save", style=discord.ButtonStyle.green)
+    @discord.ui.button(label="Save Embed", style=discord.ButtonStyle.secondary)
     async def save_button(self, interaction, button):
         embed = interaction.message.embeds[0]
 
