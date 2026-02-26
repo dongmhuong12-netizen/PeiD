@@ -1,6 +1,8 @@
-import sys
 import os
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+import sys
+
+# Thêm thư mục gốc project vào Python path
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
 import discord
 from discord.ext import commands
@@ -28,8 +30,9 @@ async def on_ready():
 
 async def main():
     async with bot:
-        await bot.load_extension("root", package="core")
+        await bot.load_extension("core.root")
         await bot.start(TOKEN)
 
 
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())
