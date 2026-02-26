@@ -1,6 +1,6 @@
 import discord
 from discord.ext import commands
-from discord import app_commands  # ✅ FIX LỖI NameError
+from discord import app_commands
 
 from core.embed_ui import EmbedBuilderView, ACTIVE_EMBED_VIEWS
 from core.embed_storage import load_embed, delete_embed
@@ -20,12 +20,12 @@ class EmbedGroup(app_commands.Group):
     @app_commands.command(name="create", description="Create a new embed UI")
     async def create(self, interaction: discord.Interaction, name: str):
 
-        # 🔥 Nếu đã có UI cùng tên → xoá UI cũ trước
+        # Đóng UI cũ nếu có
         if name in ACTIVE_EMBED_VIEWS:
             for view in ACTIVE_EMBED_VIEWS[name]:
                 try:
                     if view.message:
-                        await view.message.delete()
+                        await view.message.edit(view=None)
                 except:
                     pass
                 view.stop()
@@ -62,12 +62,12 @@ class EmbedGroup(app_commands.Group):
             )
             return
 
-        # 🔥 Nếu đã có UI cùng tên → xoá UI cũ trước
+        # Đóng UI cũ nếu có
         if name in ACTIVE_EMBED_VIEWS:
             for view in ACTIVE_EMBED_VIEWS[name]:
                 try:
                     if view.message:
-                        await view.message.delete()
+                        await view.message.edit(view=None)
                 except:
                     pass
                 view.stop()
@@ -98,15 +98,14 @@ class EmbedGroup(app_commands.Group):
     @app_commands.command(name="delete", description="Delete embed UI and storage")
     async def delete(self, interaction: discord.Interaction, name: str):
 
-        # Xoá storage
         delete_embed(name)
 
-        # 🔥 Xoá toàn bộ UI đang mở có cùng tên
+        # Xoá toàn bộ UI đang mở
         if name in ACTIVE_EMBED_VIEWS:
             for view in ACTIVE_EMBED_VIEWS[name]:
                 try:
                     if view.message:
-                        await view.message.delete()
+                        await view.message.edit(view=None)
                 except:
                     pass
                 view.stop()
@@ -114,7 +113,39 @@ class EmbedGroup(app_commands.Group):
             ACTIVE_EMBED_VIEWS[name] = []
 
         await interaction.response.send_message(
-            f"🗑 Embed `{name}` UI deleted everywhere.",
+            f"🗑 Embed `{name}` deleted.",
+            ephemeral=True
+        )
+
+    # -------------------------
+    # SHOW (🔥 LỆNH BẠN CẦN)
+    # -------------------------
+    @app_commands.command(name="show", description="Send saved embed to this channel")
+    async def show(self, interaction: discord.Interaction, name: str):
+
+        data = load_embed(name)
+
+        if not data:
+            await interaction.response.send_message(
+                "❌ Embed not found.",
+                ephemeral=True
+            )
+            return
+
+        embed = discord.Embed(
+            title=data.get("title"),
+            description=data.get("description"),
+            color=data.get("color")
+        )
+
+        if data.get("image"):
+            embed.set_image(url=data["image"])
+
+        # gửi vào channel
+        await interaction.channel.send(embed=embed)
+
+        await interaction.response.send_message(
+            f"✅ Embed `{name}` sent.",
             ephemeral=True
         )
 
@@ -130,7 +161,7 @@ class PGroup(app_commands.Group):
 
 
 # =============================
-# COG LOADER
+# COG
 # =============================
 
 class Root(commands.Cog):
