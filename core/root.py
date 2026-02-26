@@ -20,10 +20,23 @@ class EmbedGroup(app_commands.Group):
     @app_commands.command(name="create", description="Create a new embed UI")
     async def create(self, interaction: discord.Interaction, name: str):
 
+        # Nếu có UI cùng tên đang mở → đóng ngay
+        if name in ACTIVE_EMBED_VIEWS:
+            for view in ACTIVE_EMBED_VIEWS[name]:
+                try:
+                    if view.message:
+                        await view.message.delete()
+                except:
+                    pass
+                view.stop()
+
+            ACTIVE_EMBED_VIEWS[name] = []
+
         existing = load_embed(name)
         if existing:
             await interaction.response.send_message(
-                f"Đã có embed tồn tại với tên `{name}`.",
+                f"Đã có embed tồn tại với tên `{name}`. "
+                f"Nếu tạo embed mà không tìm thấy, thử tìm embed đó bằng cách dùng lệnh /p embed edit.",
                 ephemeral=True
             )
             return
@@ -129,7 +142,7 @@ class EmbedGroup(app_commands.Group):
 
         if not data:
             await interaction.response.send_message(
-                "Embed không tồn tại.",
+                f"Embed tên `{name}` không tồn tại, không thể gửi.",
                 ephemeral=True
             )
             return
@@ -167,14 +180,7 @@ class PGroup(app_commands.Group):
 class Root(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-
-    async def cog_load(self):
-        # Xoá command cũ nếu tồn tại để tránh duplicate
-        existing = discord.utils.get(self.bot.tree.get_commands(), name="p")
-        if existing:
-            self.bot.tree.remove_command(existing.name, type=existing.type)
-
-        self.bot.tree.add_command(PGroup())
+        bot.tree.add_command(PGroup())
 
 
 async def setup(bot: commands.Bot):
