@@ -11,7 +11,19 @@ class Root(commands.Cog):
         self.bot = bot
         self.embed_storage = EmbedStorage()
 
-    embed = app_commands.Group(name="embed", description="Embed management")
+    # =========================
+    # GROUP CHA /p
+    # =========================
+    p = app_commands.Group(name="p", description="Panel commands")
+
+    # =========================
+    # SUBGROUP /p embed
+    # =========================
+    embed = app_commands.Group(
+        name="embed",
+        description="Embed management",
+        parent=p
+    )
 
     # =========================
     # CREATE
@@ -109,7 +121,6 @@ class Root(commands.Cog):
             )
             return
 
-        # Xoá thật sự khỏi storage
         self.embed_storage.delete(name)
 
         await interaction.response.send_message(
