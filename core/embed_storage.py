@@ -47,3 +47,9 @@ def delete_embed(name: str):
 def embed_exists(name: str):
     data = _load_all()
     return name in data
+
+
+# 🔥 HÀM MỚI — LẤY DANH SÁCH TÊN EMBED
+def get_all_embed_names():
+    data = _load_all()
+    return list(data.keys())
