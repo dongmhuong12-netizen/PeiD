@@ -2,9 +2,11 @@ import discord
 from discord.ext import commands
 import asyncio
 
-TOKEN = "YOUR_BOT_TOKEN_HERE"  # <-- thay token
+TOKEN = "YOUR_BOT_TOKEN_HERE"  # thay token của bạn
 
 intents = discord.Intents.default()
+intents.message_content = True
+
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 
@@ -22,7 +24,7 @@ async def on_ready():
 
 async def main():
     async with bot:
-        await bot.load_extension("core.root")  # đúng tên folder bạn nói
+        await bot.load_extension("core.root")
         await bot.start(TOKEN)
 
 
