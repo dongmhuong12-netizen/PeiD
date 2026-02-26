@@ -1,54 +1,29 @@
-import os
-import asyncio
-import logging
 import discord
 from discord.ext import commands
+import asyncio
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s"
-)
-
-logger = logging.getLogger("bot")
+TOKEN = "YOUR_BOT_TOKEN_HERE"  # <-- thay token
 
 intents = discord.Intents.default()
-intents.message_content = True
-intents.members = True
+bot = commands.Bot(command_prefix="!", intents=intents)
 
-bot = commands.Bot(
-    command_prefix="!",
-    intents=intents
-)
-
-synced = False  # đảm bảo sync 1 lần duy nhất
 
 @bot.event
 async def on_ready():
-    global synced
+    print(f"Logged in as {bot.user} (ID: {bot.user.id})")
+    print("------")
 
-    logger.info(f"Bot is ready. Logged in as {bot.user}")
+    try:
+        synced = await bot.tree.sync()
+        print(f"Synced {len(synced)} slash commands globally.")
+    except Exception as e:
+        print(f"Sync error: {e}")
 
-    if not synced:
-        try:
-            await bot.tree.sync()
-            logger.info("Slash commands synced successfully.")
-            synced = True
-        except Exception as e:
-            logger.exception("Slash command sync failed.")
 
 async def main():
-    token = os.getenv("TOKEN")
-
-    if not token:
-        logger.error("TOKEN environment variable not found.")
-        return
-
     async with bot:
-        # Load Root Cog (đây là nơi đăng ký /p)
-        await bot.load_extension("core.root")
+        await bot.load_extension("core.root")  # đúng tên folder bạn nói
+        await bot.start(TOKEN)
 
-        # KHÔNG sync ở đây nữa
-        await bot.start(token)
 
-if __name__ == "__main__":
-    asyncio.run(main())
+asyncio.run(main())
