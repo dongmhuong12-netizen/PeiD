@@ -35,21 +35,15 @@ bot = commands.Bot(
 )
 
 # ==============================
-# SYNC SLASH COMMANDS
+# READY EVENT (NO AUTO SYNC)
 # ==============================
 
 @bot.event
 async def on_ready():
-    try:
-        await bot.tree.sync()
-        logger.info("Slash commands synced globally.")
-    except Exception:
-        logger.exception("Failed to sync slash commands.")
-
     logger.info(f"Bot is ready. Logged in as {bot.user}")
 
 # ==============================
-# LOAD COGS (safe)
+# LOAD COGS (SAFE)
 # ==============================
 
 async def load_extensions():
