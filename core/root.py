@@ -23,7 +23,7 @@ class EmbedGroup(app_commands.Group):
         existing = load_embed(name)
         if existing:
             await interaction.response.send_message(
-                f"Đã có embed tồn tại với tên `{name}`.",
+                f"Đã có embed tồn tại với tên `{name}`, không thể tạo. Nếu không tìm thấy embed với tên tương ứng, hãy dùng lệnh /p embed edit để tìm.",
                 ephemeral=True
             )
             return
