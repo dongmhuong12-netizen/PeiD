@@ -4,6 +4,13 @@ from .embed_storage import save_embed, delete_embed
 
 
 # =============================
+# GLOBAL ACTIVE VIEWS
+# =============================
+
+ACTIVE_EMBED_VIEWS = {}
+
+
+# =============================
 # EMBED UI VIEW
 # =============================
 
@@ -13,6 +20,12 @@ class EmbedUIView(View):
         self.name = name
         self.embed_data = embed_data
         self.saved = False
+        self.message = None
+
+        # Đảm bảo mỗi embed chỉ có 1 UI tồn tại
+        if name not in ACTIVE_EMBED_VIEWS:
+            ACTIVE_EMBED_VIEWS[name] = []
+        ACTIVE_EMBED_VIEWS[name].append(self)
 
     # =============================
     # BUILD EMBED
@@ -31,7 +44,7 @@ class EmbedUIView(View):
         return embed
 
     # =============================
-    # BUTTONS (ALL GRAY STYLE)
+    # BUTTONS
     # =============================
 
     @discord.ui.button(label="Edit Title", style=discord.ButtonStyle.gray)
@@ -64,10 +77,21 @@ class EmbedUIView(View):
     async def delete_button(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         delete_embed(self.name)
-        await interaction.message.delete()
+
+        # Đóng tất cả UI của embed này
+        if self.name in ACTIVE_EMBED_VIEWS:
+            for view in ACTIVE_EMBED_VIEWS[self.name]:
+                try:
+                    if view.message:
+                        await view.message.delete()
+                except:
+                    pass
+                view.stop()
+
+            ACTIVE_EMBED_VIEWS[self.name] = []
 
         await interaction.response.send_message(
-            f"Embed `{self.name}` đã được xoá vĩnh viễn, có thể tạo embed mới bằng tên của embed này.",
+            f"Embed `{self.name}` đã được xoá vĩnh viễn, có thể tạo embed mới bằng tên này.",
             ephemeral=True
         )
 
