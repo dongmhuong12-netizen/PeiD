@@ -20,7 +20,7 @@ class EmbedGroup(app_commands.Group):
     @app_commands.command(name="create", description="Create a new embed UI")
     async def create(self, interaction: discord.Interaction, name: str):
 
-        # 🔒 BƯỚC 1: Check đã save chưa — nếu đã save thì KHÔNG đụng UI
+        # BƯỚC 1: Nếu embed đã save → KHÔNG đụng UI
         existing = load_embed(name)
         if existing:
             await interaction.response.send_message(
@@ -30,7 +30,7 @@ class EmbedGroup(app_commands.Group):
             )
             return
 
-        # 🔥 BƯỚC 2: Chỉ khi chưa save mới đóng UI cũ (nếu có)
+        # BƯỚC 2: Nếu chưa save nhưng có UI đang mở → xoá UI cũ
         if name in ACTIVE_EMBED_VIEWS:
             for view in ACTIVE_EMBED_VIEWS[name]:
                 try:
@@ -52,7 +52,19 @@ class EmbedGroup(app_commands.Group):
         embed = view.build_embed()
 
         await interaction.response.send_message(
-            content=f"Đã tạo embed `{name}`.",
+            content=(
+                f"Đã tạo embed với tên `{name}`\n\n"
+                "Sử dụng các nút bên dưới để chỉnh sửa embed.\n\n"
+                "• Edit Title → Chỉnh sửa tiêu đề\n"
+                "• Edit Description → Chỉnh sửa mô tả\n"
+                "• Set Image → Đặt ảnh cho embed\n"
+                "• Edit Color → Đổi màu (mã hex)\n"
+                "• Save Embed → Lưu embed\n"
+                "• Delete Embed → Xoá embed vĩnh viễn\n\n"
+                "• Bạn có thể sử dụng embed này để tạo tin nhắn chào mừng, rời đi, hoặc các banner hệ thống khi dùng lệnh /p embed show.\n\n"
+                "• Lưu ý: hãy Save sau khi chỉnh sửa. Nếu không embed sẽ không được lưu lại, hoặc sẽ bị coi là không tồn tại nếu chưa từng Save.\n"
+                "• Nếu có thắc mắc, dùng lệnh `/help` hoặc tham gia server hỗ trợ."
+            ),
             embed=embed,
             view=view
         )
