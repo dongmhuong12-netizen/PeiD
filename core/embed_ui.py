@@ -1,12 +1,12 @@
-from core.embed_storage import save_embed, embed_exists
 import discord
+from core.embed_storage import save_embed, embed_exists
 
 
 class EmbedView(discord.ui.View):
-
     def __init__(self, author_id):
         super().__init__(timeout=600)
         self.author_id = author_id
+        self.message = None
 
         self.embed_data = {
             "title": "New Embed",
@@ -16,6 +16,10 @@ class EmbedView(discord.ui.View):
         }
 
         self.saved_name = None
+
+
+    async def interaction_check(self, interaction: discord.Interaction):
+        return interaction.user.id == self.author_id
 
 
     def build_embed(self):
@@ -31,10 +35,6 @@ class EmbedView(discord.ui.View):
         return embed
 
 
-    async def interaction_check(self, interaction: discord.Interaction):
-        return interaction.user.id == self.author_id
-
-
     @discord.ui.button(label="Save Embed", style=discord.ButtonStyle.green)
     async def save_button(self, interaction: discord.Interaction, button: discord.ui.Button):
 
@@ -45,7 +45,7 @@ class EmbedView(discord.ui.View):
             )
             return
 
-        # 🔒 CHỐNG TRÙNG TUYỆT ĐỐI
+        # 🔒 CHỐNG TRÙNG
         if embed_exists(self.saved_name):
             await interaction.response.send_message(
                 "❌ Tên embed này đã tồn tại. Ai save trước thì sống.",
@@ -59,3 +59,14 @@ class EmbedView(discord.ui.View):
             f"✅ Embed `{self.saved_name}` saved.",
             ephemeral=True
         )
+
+
+    async def on_timeout(self):
+        # ⚠️ Chỉ cảnh báo nếu chưa Save
+        if not self.saved_name:
+            try:
+                await self.message.channel.send(
+                    "⚠️ Bạn vừa xoá một embed chưa Save. Nó được coi như chưa từng tồn tại."
+                )
+            except:
+                pass
