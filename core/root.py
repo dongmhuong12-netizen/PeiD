@@ -6,6 +6,9 @@ from core.embed_ui import EmbedBuilderView
 from core.embed_storage import load_embed, delete_embed, embed_exists
 
 
+# =============================
+# EMBED GROUP (/p embed ...)
+# =============================
 class EmbedGroup(app_commands.Group):
     def __init__(self):
         super().__init__(
@@ -28,10 +31,16 @@ class EmbedGroup(app_commands.Group):
             color=discord.Color.blurple()
         )
 
+        view = EmbedBuilderView(name)
+
         await interaction.response.send_message(
             embed=embed,
-            view=EmbedBuilderView(name)
+            view=view
         )
+
+        # 🔒 LƯU MESSAGE ĐỂ TIMEOUT CẢNH BÁO HOẠT ĐỘNG
+        view.message = await interaction.original_response()
+
 
     # =============================
     # SHOW
@@ -61,6 +70,7 @@ class EmbedGroup(app_commands.Group):
 
         await interaction.response.send_message(embed=embed)
 
+
     # =============================
     # EDIT
     # =============================
@@ -87,13 +97,19 @@ class EmbedGroup(app_commands.Group):
         if data.get("image"):
             embed.set_image(url=data["image"])
 
+        view = EmbedBuilderView(name)
+
         await interaction.response.send_message(
             embed=embed,
-            view=EmbedBuilderView(name)
+            view=view
         )
 
+        # 🔒 LƯU MESSAGE CHO TIMEOUT
+        view.message = await interaction.original_response()
+
+
     # =============================
-    # DELETE (UPDATED LOGIC)
+    # DELETE
     # =============================
     @app_commands.command(
         name="delete",
@@ -109,7 +125,7 @@ class EmbedGroup(app_commands.Group):
             )
             return
 
-        # Nếu embed tồn tại thật trong storage
+        # Nếu tồn tại thật
         delete_embed(name)
 
         await interaction.response.send_message(
