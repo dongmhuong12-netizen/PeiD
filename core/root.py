@@ -9,7 +9,7 @@ from core.embed_storage import (
     get_all_embed_names
 )
 
-from greet_leave import GreetGroup, LeaveGroup, GreetLeaveListener
+from core.greet_leave import GreetGroup, LeaveGroup, GreetLeaveListener
 
 
 # =============================
