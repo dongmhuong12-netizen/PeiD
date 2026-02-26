@@ -2,71 +2,61 @@ import discord
 from core.embed_storage import save_embed, embed_exists
 
 
-class EmbedView(discord.ui.View):
-    def __init__(self, author_id):
+class EmbedBuilderView(discord.ui.View):
+
+    def __init__(self, name: str):
         super().__init__(timeout=600)
-        self.author_id = author_id
+
+        self.name = name
         self.message = None
+        self.saved = False
 
         self.embed_data = {
             "title": "New Embed",
             "description": "Edit using buttons below.",
-            "color": 0x5865F2,
+            "color": discord.Color.blurple().value,
             "image": None
         }
 
-        self.saved_name = None
-
 
     async def interaction_check(self, interaction: discord.Interaction):
-        return interaction.user.id == self.author_id
+        return True
 
 
-    def build_embed(self):
-        embed = discord.Embed(
-            title=self.embed_data["title"],
-            description=self.embed_data["description"],
-            color=self.embed_data["color"]
-        )
-
-        if self.embed_data["image"]:
-            embed.set_image(url=self.embed_data["image"])
-
-        return embed
-
-
+    # =============================
+    # SAVE BUTTON
+    # =============================
     @discord.ui.button(label="Save Embed", style=discord.ButtonStyle.green)
     async def save_button(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-        if not self.saved_name:
+        # 🔒 CHỐNG TRÙNG TUYỆT ĐỐI
+        if embed_exists(self.name):
             await interaction.response.send_message(
-                "❌ Bạn chưa đặt tên embed.",
+                "❌ Embed này đã tồn tại. Ai save trước thì sống.",
                 ephemeral=True
             )
             return
 
-        # 🔒 CHỐNG TRÙNG
-        if embed_exists(self.saved_name):
-            await interaction.response.send_message(
-                "❌ Tên embed này đã tồn tại. Ai save trước thì sống.",
-                ephemeral=True
-            )
-            return
-
-        save_embed(self.saved_name, self.embed_data)
+        save_embed(self.name, self.embed_data)
+        self.saved = True
 
         await interaction.response.send_message(
-            f"✅ Embed `{self.saved_name}` saved.",
+            f"✅ Embed `{self.name}` saved.",
             ephemeral=True
         )
 
 
+    # =============================
+    # TIMEOUT (CHƯA SAVE → CẢNH BÁO)
+    # =============================
     async def on_timeout(self):
-        # ⚠️ Chỉ cảnh báo nếu chưa Save
-        if not self.saved_name:
+
+        if not self.saved:
             try:
-                await self.message.channel.send(
-                    "⚠️ Bạn vừa xoá một embed chưa Save. Nó được coi như chưa từng tồn tại."
-                )
+                if self.message:
+                    await self.message.channel.send(
+                        "⚠️ Một embed chưa được save đã biến mất.\n"
+                        "Nó được coi như chưa từng tồn tại."
+                    )
             except:
                 pass
