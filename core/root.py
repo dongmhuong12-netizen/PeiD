@@ -168,6 +168,7 @@ class EmbedGroup(app_commands.Group):
     # SHOW
     # -------------------------
     @app_commands.command(name="show", description="Send embed to channel")
+    @app_commands.autocomplete(name=embed_name_autocomplete)
     async def show(self, interaction: discord.Interaction, name: str):
 
         data = load_embed(name)
