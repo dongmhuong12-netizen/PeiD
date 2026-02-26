@@ -1,5 +1,5 @@
 import discord
-from core.embed_storage import save_embed, embed_exists, delete_embed
+from core.embed_storage import save_embed, load_embed
 
 
 # =============================
@@ -10,14 +10,11 @@ class TitleModal(discord.ui.Modal, title="Edit Title"):
     def __init__(self, view):
         super().__init__()
         self.view = view
-
         self.title_input = discord.ui.TextInput(
             label="Title",
-            placeholder="Enter embed title",
             required=True,
             max_length=256
         )
-
         self.add_item(self.title_input)
 
     async def on_submit(self, interaction: discord.Interaction):
@@ -29,14 +26,11 @@ class DescriptionModal(discord.ui.Modal, title="Edit Description"):
     def __init__(self, view):
         super().__init__()
         self.view = view
-
         self.desc_input = discord.ui.TextInput(
             label="Description",
             style=discord.TextStyle.paragraph,
-            placeholder="Enter embed description",
             required=True
         )
-
         self.add_item(self.desc_input)
 
     async def on_submit(self, interaction: discord.Interaction):
@@ -48,13 +42,10 @@ class ImageModal(discord.ui.Modal, title="Set Image URL"):
     def __init__(self, view):
         super().__init__()
         self.view = view
-
         self.image_input = discord.ui.TextInput(
             label="Image URL",
-            placeholder="https://example.com/image.png",
             required=True
         )
-
         self.add_item(self.image_input)
 
     async def on_submit(self, interaction: discord.Interaction):
@@ -66,19 +57,14 @@ class ColorModal(discord.ui.Modal, title="Set Embed Color"):
     def __init__(self, view):
         super().__init__()
         self.view = view
-
         self.color_input = discord.ui.TextInput(
             label="Hex Color (ví dụ: #ff0000)",
-            placeholder="#5865F2",
-            required=True,
-            max_length=7
+            required=True
         )
-
         self.add_item(self.color_input)
 
     async def on_submit(self, interaction: discord.Interaction):
         value = self.color_input.value.strip().replace("#", "")
-
         try:
             color_int = int(value, 16)
         except ValueError:
@@ -98,31 +84,32 @@ class ColorModal(discord.ui.Modal, title="Set Embed Color"):
 
 class EmbedBuilderView(discord.ui.View):
 
-    def __init__(self, name: str):
+    def __init__(self, name: str, existing_data: dict | None = None):
         super().__init__(timeout=600)
 
         self.name = name
         self.message = None
         self.saved = False
 
-        self.embed_data = {
-            "title": "New Embed",
-            "description": "Edit using buttons below.",
-            "color": discord.Color.blurple().value,
-            "image": None
-        }
-
-    async def interaction_check(self, interaction: discord.Interaction):
-        return True
+        # ✅ FIX ghi nhớ data
+        if existing_data:
+            self.embed_data = existing_data
+        else:
+            self.embed_data = {
+                "title": "New Embed",
+                "description": "Edit using buttons below.",
+                "color": discord.Color.blurple().value,
+                "image": None
+            }
 
     def build_embed(self):
         embed = discord.Embed(
-            title=self.embed_data["title"],
-            description=self.embed_data["description"],
-            color=self.embed_data["color"]
+            title=self.embed_data.get("title"),
+            description=self.embed_data.get("description"),
+            color=self.embed_data.get("color")
         )
 
-        if self.embed_data["image"]:
+        if self.embed_data.get("image"):
             embed.set_image(url=self.embed_data["image"])
 
         return embed
@@ -134,7 +121,7 @@ class EmbedBuilderView(discord.ui.View):
         )
 
     # =============================
-    # EDIT BUTTONS
+    # BUTTONS
     # =============================
 
     @discord.ui.button(label="Edit Title", style=discord.ButtonStyle.blurple)
@@ -154,67 +141,81 @@ class EmbedBuilderView(discord.ui.View):
         await interaction.response.send_modal(ColorModal(self))
 
     # =============================
-    # SAVE BUTTON
+    # SAVE (FIX SONG SONG)
     # =============================
 
     @discord.ui.button(label="Save Embed", style=discord.ButtonStyle.green)
     async def save_button(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-        if embed_exists(self.name):
-            await interaction.response.send_message(
-                "❌ Embed này đã tồn tại. Ai save trước thì sống.",
-                ephemeral=True
-            )
-            return
+        old_data = load_embed(self.name)
+
+        # 🔥 Nếu đã tồn tại → xóa embed cũ trước
+        if old_data and "channel_id" in old_data and "message_id" in old_data:
+            try:
+                old_channel = interaction.client.get_channel(old_data["channel_id"])
+                if old_channel:
+                    old_msg = await old_channel.fetch_message(old_data["message_id"])
+                    await old_msg.delete()
+            except:
+                pass
+
+        # Gửi embed mới
+        embed = self.build_embed()
+        sent_msg = await interaction.channel.send(embed=embed)
+
+        # Lưu message id + channel id
+        self.embed_data["channel_id"] = interaction.channel.id
+        self.embed_data["message_id"] = sent_msg.id
 
         save_embed(self.name, self.embed_data)
         self.saved = True
 
         await interaction.response.send_message(
-            f"✅ Embed `{self.name}` saved.",
+            f"✅ Embed `{self.name}` saved & synced.",
             ephemeral=True
         )
 
     # =============================
-    # DELETE BUTTON
+    # DELETE
     # =============================
 
     @discord.ui.button(label="Delete Embed", style=discord.ButtonStyle.red)
     async def delete_button(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-        if not embed_exists(self.name):
+        data = load_embed(self.name)
+
+        if not data:
             await interaction.response.send_message(
-                "⚠ Embed này chưa từng được lưu.\n"
-                "Nó được coi như chưa từng tồn tại.",
+                "⚠ Embed này chưa từng được lưu.",
                 ephemeral=True
             )
             return
 
-        delete_embed(self.name)
+        if "channel_id" in data and "message_id" in data:
+            try:
+                ch = interaction.client.get_channel(data["channel_id"])
+                if ch:
+                    msg = await ch.fetch_message(data["message_id"])
+                    await msg.delete()
+            except:
+                pass
+
+        save_embed(self.name, None)
 
         await interaction.response.send_message(
             f"🗑 Embed `{self.name}` deleted completely.",
             ephemeral=True
         )
 
-        # Disable toàn bộ button sau khi xóa
-        for item in self.children:
-            item.disabled = True
-
-        await interaction.message.edit(view=self)
-
     # =============================
     # TIMEOUT
     # =============================
 
     async def on_timeout(self):
-
-        if not self.saved:
+        if not self.saved and self.message:
             try:
-                if self.message:
-                    await self.message.channel.send(
-                        "⚠️ Một embed chưa được save đã biến mất.\n"
-                        "Nó được coi như chưa từng tồn tại."
-                    )
+                await self.message.channel.send(
+                    "⚠️ Embed chưa được save đã biến mất."
+                )
             except:
                 pass
