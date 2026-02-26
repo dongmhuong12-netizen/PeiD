@@ -2,7 +2,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from greet_storage import get_section, update_guild_config
+from core.greet_storage import get_section, update_guild_config
 from core.embed_storage import load_embed
 
 
@@ -33,6 +33,7 @@ def parse_placeholders(text: str, member: discord.Member, channel: discord.TextC
 class GreetGroup(app_commands.Group):
     def __init__(self):
         super().__init__(name="greet", description="Greet system")
+        self.add_command(self.set_group)
 
     set_group = app_commands.Group(name="set", description="Set greet configuration")
 
@@ -91,6 +92,7 @@ class GreetGroup(app_commands.Group):
 class LeaveGroup(app_commands.Group):
     def __init__(self):
         super().__init__(name="leave", description="Leave system")
+        self.add_command(self.set_group)
 
     set_group = app_commands.Group(name="set", description="Set leave configuration")
 
