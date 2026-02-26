@@ -3,7 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from core.embed_ui import EmbedBuilderView
-from core.embed_storage import load_embed, delete_embed
+from core.embed_storage import load_embed, delete_embed, embed_exists
 
 
 class EmbedGroup(app_commands.Group):
@@ -13,6 +13,9 @@ class EmbedGroup(app_commands.Group):
             description="Embed management"
         )
 
+    # =============================
+    # CREATE
+    # =============================
     @app_commands.command(
         name="create",
         description="Create new embed"
@@ -30,6 +33,9 @@ class EmbedGroup(app_commands.Group):
             view=EmbedBuilderView(name)
         )
 
+    # =============================
+    # SHOW
+    # =============================
     @app_commands.command(
         name="show",
         description="Show embed"
@@ -55,6 +61,9 @@ class EmbedGroup(app_commands.Group):
 
         await interaction.response.send_message(embed=embed)
 
+    # =============================
+    # EDIT
+    # =============================
     @app_commands.command(
         name="edit",
         description="Edit embed"
@@ -83,22 +92,34 @@ class EmbedGroup(app_commands.Group):
             view=EmbedBuilderView(name)
         )
 
+    # =============================
+    # DELETE (UPDATED LOGIC)
+    # =============================
     @app_commands.command(
         name="delete",
         description="Delete embed"
     )
     async def delete(self, interaction: discord.Interaction, name: str):
 
-        if delete_embed(name):
+        # Nếu embed chưa từng được save
+        if not embed_exists(name):
             await interaction.response.send_message(
-                f"🗑 Embed `{name}` deleted."
+                "⚠ Embed này chưa từng được lưu.\n"
+                "Nó được coi như chưa từng tồn tại."
             )
-        else:
-            await interaction.response.send_message(
-                "❌ Embed not found."
-            )
+            return
+
+        # Nếu embed tồn tại thật trong storage
+        delete_embed(name)
+
+        await interaction.response.send_message(
+            f"🗑 Embed `{name}` deleted completely."
+        )
 
 
+# =============================
+# ROOT GROUP (/p)
+# =============================
 class PGroup(app_commands.Group):
     def __init__(self):
         super().__init__(
@@ -109,6 +130,9 @@ class PGroup(app_commands.Group):
         self.add_command(EmbedGroup())
 
 
+# =============================
+# ROOT COG
+# =============================
 class Root(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
