@@ -3,7 +3,28 @@ from discord.ext import commands
 from discord import app_commands
 
 from core.embed_ui import EmbedUIView, ACTIVE_EMBED_VIEWS
-from core.embed_storage import load_embed, delete_embed
+from core.embed_storage import (
+    load_embed,
+    delete_embed,
+    get_all_embed_names
+)
+
+
+# =============================
+# AUTOCOMPLETE
+# =============================
+
+async def embed_name_autocomplete(
+    interaction: discord.Interaction,
+    current: str
+):
+    names = get_all_embed_names()
+
+    return [
+        app_commands.Choice(name=name, value=name)
+        for name in names
+        if current.lower() in name.lower()
+    ][:25]
 
 
 # =============================
@@ -20,7 +41,6 @@ class EmbedGroup(app_commands.Group):
     @app_commands.command(name="create", description="Create a new embed UI")
     async def create(self, interaction: discord.Interaction, name: str):
 
-        # BƯỚC 1: Nếu embed đã save → KHÔNG đụng UI
         existing = load_embed(name)
         if existing:
             await interaction.response.send_message(
@@ -30,7 +50,6 @@ class EmbedGroup(app_commands.Group):
             )
             return
 
-        # BƯỚC 2: Nếu chưa save nhưng có UI đang mở → xoá UI cũ
         if name in ACTIVE_EMBED_VIEWS:
             for view in ACTIVE_EMBED_VIEWS[name]:
                 try:
@@ -76,6 +95,7 @@ class EmbedGroup(app_commands.Group):
     # EDIT
     # -------------------------
     @app_commands.command(name="edit", description="Edit existing embed")
+    @app_commands.autocomplete(name=embed_name_autocomplete)
     async def edit(self, interaction: discord.Interaction, name: str):
 
         data = load_embed(name)
@@ -114,6 +134,7 @@ class EmbedGroup(app_commands.Group):
     # DELETE
     # -------------------------
     @app_commands.command(name="delete", description="Delete embed")
+    @app_commands.autocomplete(name=embed_name_autocomplete)
     async def delete(self, interaction: discord.Interaction, name: str):
 
         data = load_embed(name)
