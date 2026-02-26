@@ -58,7 +58,7 @@ class Root(commands.Cog):
 
         view = EmbedUIView(name, embed_data)
 
-        msg = await interaction.response.send_message(
+        await interaction.response.send_message(
             f"Đã tạo embed `{name}`",
             embed=embed,
             view=view
@@ -147,4 +147,8 @@ class Root(commands.Cog):
 
 
 async def setup(bot: commands.Bot):
-    await bot.add_cog(Root(bot))
+    cog = Root(bot)
+    await bot.add_cog(cog)
+
+    # 👇 QUAN TRỌNG – thêm group vào tree
+    bot.tree.add_command(cog.p)
