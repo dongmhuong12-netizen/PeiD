@@ -20,7 +20,6 @@ class EmbedGroup(app_commands.Group):
     @app_commands.command(name="create", description="Create a new embed UI")
     async def create(self, interaction: discord.Interaction, name: str):
 
-        # 🔴 Nếu embed đã được SAVE trước đó -> chặn
         existing_data = load_embed(name)
         if existing_data:
             system_message = (
@@ -35,7 +34,7 @@ class EmbedGroup(app_commands.Group):
             )
             return
 
-        # 🟡 Nếu chỉ là draft UI chưa save -> đóng UI cũ
+        # Nếu chỉ là draft UI chưa save -> đóng UI cũ
         if name in ACTIVE_EMBED_VIEWS:
             for view in ACTIVE_EMBED_VIEWS[name]:
                 try:
@@ -82,7 +81,7 @@ class EmbedGroup(app_commands.Group):
 
         if not data:
             await interaction.response.send_message(
-                "Embed không tồn tại."
+                f"Embed `{name}` không tồn tại, không thể tìm."
             )
             return
 
@@ -130,6 +129,14 @@ class EmbedGroup(app_commands.Group):
     @app_commands.command(name="delete", description="Delete embed UI and storage")
     async def delete(self, interaction: discord.Interaction, name: str):
 
+        data = load_embed(name)
+
+        if not data:
+            await interaction.response.send_message(
+                f"Embed `{name}` không tồn tại, không thể dùng lệnh."
+            )
+            return
+
         delete_embed(name)
 
         # Xoá UI nếu đang mở
@@ -145,7 +152,7 @@ class EmbedGroup(app_commands.Group):
             ACTIVE_EMBED_VIEWS[name] = []
 
         await interaction.response.send_message(
-            f"Embed '{name}' đã được xoá vĩnh viễn, có thể tạo lại embed mới với tên của embed này."
+            f"Embed `{name}` đã được xoá vĩnh viễn, có thể tạo lại embed mới với tên này."
         )
 
     # -------------------------
@@ -174,7 +181,7 @@ class EmbedGroup(app_commands.Group):
         await interaction.channel.send(embed=embed)
 
         await interaction.response.send_message(
-            f"Embed '{name}' đã được gửi."
+            f"Embed `{name}` đã được gửi."
         )
 
 
