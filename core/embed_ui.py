@@ -1,6 +1,6 @@
 import discord
 from discord.ui import View, Modal, TextInput
-from utils.embed_storage import save_embed, delete_embed
+from .embed_storage import save_embed, delete_embed
 
 
 # =============================
