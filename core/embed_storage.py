@@ -9,11 +9,15 @@ def _load_all():
         return {}
 
     with open(FILE_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)
+        try:
+            return json.load(f)
+        except json.JSONDecodeError:
+            return {}
 
 
 def _save_all(data: dict):
     os.makedirs("data", exist_ok=True)
+
     with open(FILE_PATH, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4)
 
@@ -31,12 +35,15 @@ def load_embed(name: str):
 
 def delete_embed(name: str):
     data = _load_all()
-    if name in data:
-        del data[name]
-        _save_all(data)
-        return True
-    return False
+
+    if name not in data:
+        return False
+
+    del data[name]
+    _save_all(data)
+    return True
 
 
-def list_embeds():
-    return list(_load_all().keys())
+def embed_exists(name: str):
+    data = _load_all()
+    return name in data
