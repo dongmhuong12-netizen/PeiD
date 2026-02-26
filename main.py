@@ -35,7 +35,7 @@ bot = commands.Bot(
 )
 
 # ==============================
-# READY EVENT (NO AUTO SYNC)
+# READY EVENT
 # ==============================
 
 @bot.event
@@ -43,21 +43,23 @@ async def on_ready():
     logger.info(f"Bot is ready. Logged in as {bot.user}")
 
 # ==============================
-# LOAD COGS (SAFE)
+# LOAD EXTENSIONS (LOAD COMMANDS FOLDER)
 # ==============================
 
 async def load_extensions():
-    if not os.path.isdir("./cogs"):
-        logger.info("No cogs folder found, skipping extension loading.")
-        return
 
-    for filename in os.listdir("./cogs"):
-        if filename.endswith(".py"):
-            try:
-                await bot.load_extension(f"cogs.{filename[:-3]}")
-                logger.info(f"Loaded extension: {filename}")
-            except Exception:
-                logger.exception(f"Failed to load extension: {filename}")
+    # Load commands folder
+    if os.path.isdir("./commands"):
+        for filename in os.listdir("./commands"):
+            if filename.endswith(".py"):
+                try:
+                    await bot.load_extension(f"commands.{filename[:-3]}")
+                    logger.info(f"Loaded command: {filename}")
+                except Exception:
+                    logger.exception(f"Failed to load command: {filename}")
+
+    else:
+        logger.warning("commands folder not found.")
 
 # ==============================
 # MAIN
