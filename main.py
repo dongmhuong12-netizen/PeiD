@@ -35,31 +35,35 @@ bot = commands.Bot(
 )
 
 # ==============================
-# READY EVENT
+# IMPORT COMMAND MODULES
+# ==============================
+
+def load_command_modules():
+    if os.path.isdir("./commands"):
+        for root, dirs, files in os.walk("./commands"):
+            for file in files:
+                if file.endswith(".py"):
+                    module_path = (
+                        os.path.join(root, file)
+                        .replace("./", "")
+                        .replace("/", ".")
+                        .replace(".py", "")
+                    )
+                    try:
+                        __import__(module_path)
+                        logger.info(f"Imported module: {module_path}")
+                    except Exception:
+                        logger.exception(f"Failed to import: {module_path}")
+    else:
+        logger.warning("commands folder not found.")
+
+# ==============================
+# READY
 # ==============================
 
 @bot.event
 async def on_ready():
     logger.info(f"Bot is ready. Logged in as {bot.user}")
-
-# ==============================
-# LOAD EXTENSIONS (LOAD COMMANDS FOLDER)
-# ==============================
-
-async def load_extensions():
-
-    # Load commands folder
-    if os.path.isdir("./commands"):
-        for filename in os.listdir("./commands"):
-            if filename.endswith(".py"):
-                try:
-                    await bot.load_extension(f"commands.{filename[:-3]}")
-                    logger.info(f"Loaded command: {filename}")
-                except Exception:
-                    logger.exception(f"Failed to load command: {filename}")
-
-    else:
-        logger.warning("commands folder not found.")
 
 # ==============================
 # MAIN
@@ -72,8 +76,9 @@ async def main():
         logger.error("TOKEN environment variable not found.")
         return
 
+    load_command_modules()
+
     async with bot:
-        await load_extensions()
         await bot.start(token)
 
 if __name__ == "__main__":
