@@ -15,6 +15,8 @@ logging.basicConfig(
 
 logger = logging.getLogger("bot")
 
+print("APP STARTING...")
+
 # ==============================
 # INTENTS
 # ==============================
@@ -33,7 +35,21 @@ bot = commands.Bot(
 )
 
 # ==============================
-# LOAD COGS (an toàn nếu không có thư mục cogs)
+# SYNC SLASH COMMANDS
+# ==============================
+
+@bot.event
+async def on_ready():
+    try:
+        await bot.tree.sync()
+        logger.info("Slash commands synced globally.")
+    except Exception:
+        logger.exception("Failed to sync slash commands.")
+
+    logger.info(f"Bot is ready. Logged in as {bot.user}")
+
+# ==============================
+# LOAD COGS (safe)
 # ==============================
 
 async def load_extensions():
@@ -50,15 +66,7 @@ async def load_extensions():
                 logger.exception(f"Failed to load extension: {filename}")
 
 # ==============================
-# EVENTS
-# ==============================
-
-@bot.event
-async def on_ready():
-    logger.info(f"Bot is ready. Logged in as {bot.user}")
-
-# ==============================
-# MAIN START
+# MAIN
 # ==============================
 
 async def main():
