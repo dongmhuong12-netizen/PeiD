@@ -9,7 +9,7 @@ from core.embed_storage import (
     embed_exists
 )
 
-from core.ui import EmbedUIView
+from core.embed_ui import EmbedUIView
 
 
 class Root(commands.Cog):
