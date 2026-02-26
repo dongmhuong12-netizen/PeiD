@@ -20,7 +20,22 @@ class EmbedGroup(app_commands.Group):
     @app_commands.command(name="create", description="Create a new embed UI")
     async def create(self, interaction: discord.Interaction, name: str):
 
-        # Đóng UI cũ nếu có
+        # 🔴 Nếu embed đã được SAVE trước đó -> chặn
+        existing_data = load_embed(name)
+        if existing_data:
+            system_message = (
+                f"Đã có embed tồn tại với tên `{name}`.\n\n"
+                "• Không thể tạo embed mới với tên này.\n"
+                "• Vui lòng sử dụng tên khác.\n"
+                "• Hoặc dùng `/p embed edit` để chỉnh sửa embed đã tồn tại."
+            )
+
+            await interaction.response.send_message(
+                content=system_message
+            )
+            return
+
+        # 🟡 Nếu chỉ là draft UI chưa save -> đóng UI cũ
         if name in ACTIVE_EMBED_VIEWS:
             for view in ACTIVE_EMBED_VIEWS[name]:
                 try:
@@ -40,7 +55,17 @@ class EmbedGroup(app_commands.Group):
 
         view = EmbedBuilderView(name)
 
+        system_message = (
+            f"Đã tạo embed với tên `{name}`.\n\n"
+            "• Bạn có thể sử dụng embed này để tạo tin nhắn chào mừng, rời đi\n"
+            "  hoặc các banner hệ thống khi dùng lệnh `/p embed show`.\n"
+            "• Lưu ý: hãy Save sau khi chỉnh sửa. Nếu không embed sẽ không được lưu lại\n"
+            "  hoặc sẽ bị coi là không tồn tại.\n"
+            "• Nếu có thắc mắc, dùng lệnh `/help` hoặc tham gia server hỗ trợ."
+        )
+
         await interaction.response.send_message(
+            content=system_message,
             embed=embed,
             view=view
         )
@@ -57,12 +82,11 @@ class EmbedGroup(app_commands.Group):
 
         if not data:
             await interaction.response.send_message(
-                "❌ Embed not found.",
-                ephemeral=True
+                "Embed không tồn tại."
             )
             return
 
-        # Đóng UI cũ nếu có
+        # Đóng UI cũ nếu đang mở
         if name in ACTIVE_EMBED_VIEWS:
             for view in ACTIVE_EMBED_VIEWS[name]:
                 try:
@@ -85,7 +109,15 @@ class EmbedGroup(app_commands.Group):
 
         view = EmbedBuilderView(name, existing_data=data)
 
+        system_message = (
+            f"Bạn đang chỉnh sửa embed `{name}`.\n\n"
+            "• Sau khi chỉnh sửa, hãy Save để cập nhật thay đổi.\n"
+            "• Nếu thoát mà chưa save, thay đổi sẽ không được lưu lại.\n"
+            "• Dùng `/p embed show` để gửi embed này vào kênh."
+        )
+
         await interaction.response.send_message(
+            content=system_message,
             embed=embed,
             view=view
         )
@@ -100,7 +132,7 @@ class EmbedGroup(app_commands.Group):
 
         delete_embed(name)
 
-        # Xoá toàn bộ UI đang mở
+        # Xoá UI nếu đang mở
         if name in ACTIVE_EMBED_VIEWS:
             for view in ACTIVE_EMBED_VIEWS[name]:
                 try:
@@ -113,12 +145,11 @@ class EmbedGroup(app_commands.Group):
             ACTIVE_EMBED_VIEWS[name] = []
 
         await interaction.response.send_message(
-            f"🗑 Embed `{name}` deleted.",
-            ephemeral=True
+            f"Embed '{name}' đã được xoá vĩnh viễn, có thể tạo lại embed mới với tên của embed này."
         )
 
     # -------------------------
-    # SHOW (🔥 LỆNH BẠN CẦN)
+    # SHOW
     # -------------------------
     @app_commands.command(name="show", description="Send saved embed to this channel")
     async def show(self, interaction: discord.Interaction, name: str):
@@ -127,8 +158,7 @@ class EmbedGroup(app_commands.Group):
 
         if not data:
             await interaction.response.send_message(
-                "❌ Embed not found.",
-                ephemeral=True
+                "Embed không tồn tại."
             )
             return
 
@@ -141,12 +171,10 @@ class EmbedGroup(app_commands.Group):
         if data.get("image"):
             embed.set_image(url=data["image"])
 
-        # gửi vào channel
         await interaction.channel.send(embed=embed)
 
         await interaction.response.send_message(
-            f"✅ Embed `{name}` sent.",
-            ephemeral=True
+            f"Embed '{name}' đã được gửi."
         )
 
 
