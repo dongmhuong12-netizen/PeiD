@@ -217,8 +217,13 @@ class PGroup(app_commands.Group):
 class Root(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        bot.tree.add_command(PGroup())
+        self.group = PGroup()
 
+    async def cog_load(self):
+        self.bot.tree.add_command(self.group)
+
+    async def cog_unload(self):
+        self.bot.tree.remove_command(self.group.name, type=self.group.type)
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Root(bot))
