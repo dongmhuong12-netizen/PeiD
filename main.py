@@ -20,17 +20,21 @@ bot = commands.Bot(
     intents=intents
 )
 
-# ==============================
-# READY
-# ==============================
+synced = False  # đảm bảo sync 1 lần duy nhất
 
 @bot.event
 async def on_ready():
+    global synced
+
     logger.info(f"Bot is ready. Logged in as {bot.user}")
 
-# ==============================
-# MAIN
-# ==============================
+    if not synced:
+        try:
+            await bot.tree.sync()
+            logger.info("Slash commands synced successfully.")
+            synced = True
+        except Exception as e:
+            logger.exception("Slash command sync failed.")
 
 async def main():
     token = os.getenv("TOKEN")
@@ -40,12 +44,10 @@ async def main():
         return
 
     async with bot:
-        # 🔥 LOAD ROOT COG (QUAN TRỌNG)
+        # Load Root Cog (đây là nơi đăng ký /p)
         await bot.load_extension("core.root")
 
-        # 🔥 SYNC COMMAND TREE
-        await bot.tree.sync()
-
+        # KHÔNG sync ở đây nữa
         await bot.start(token)
 
 if __name__ == "__main__":
