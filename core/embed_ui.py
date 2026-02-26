@@ -68,7 +68,7 @@ class ColorModal(discord.ui.Modal, title="Set Embed Color"):
             color_int = int(value, 16)
         except ValueError:
             await interaction.response.send_message(
-                "❌ Mã màu không hợp lệ.",
+                "Mã màu không hợp lệ.",
                 ephemeral=True
             )
             return
@@ -100,7 +100,6 @@ class EmbedBuilderView(discord.ui.View):
                 "image": None
             }
 
-        # 🔥 Đăng ký vào registry
         if name not in ACTIVE_EMBED_VIEWS:
             ACTIVE_EMBED_VIEWS[name] = []
 
@@ -183,7 +182,7 @@ class EmbedBuilderView(discord.ui.View):
         self.saved = True
 
         await interaction.response.send_message(
-            f"✅ Embed `{self.name}` saved.",
+            f"Embed `{self.name}` đã được lưu.",
             ephemeral=True
         )
 
@@ -192,10 +191,9 @@ class EmbedBuilderView(discord.ui.View):
 
         delete_embed(self.name)
 
-        # 🔥 Xoá toàn bộ UI cùng tên
         await self.close_all_same_name()
 
         await interaction.response.send_message(
-            f"🗑 Embed `{self.name}` UI deleted everywhere.",
+            f"Embed `{self.name}` đã được xoá vĩnh viễn, có thể tạo embed mới bằng tên của embed này.",
             ephemeral=True
         )
