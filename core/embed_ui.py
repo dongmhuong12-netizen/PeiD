@@ -1,148 +1,28 @@
 import discord
-from core.embed_storage import save_embed, load_embed, delete_embed
-
-# =============================
-# GLOBAL REGISTRY
-# =============================
-
-ACTIVE_EMBED_VIEWS: dict[str, list["EmbedBuilderView"]] = {}
+from discord.ui import View, Modal, TextInput
+from utils.embed_storage import save_embed, delete_embed
 
 
 # =============================
-# MODALS
+# EMBED UI VIEW
 # =============================
 
-class TitleModal(discord.ui.Modal, title="Edit Title"):
-    def __init__(self, view):
-        super().__init__()
-        self.view = view
-        self.title_input = discord.ui.TextInput(label="Title", required=True)
-        self.add_item(self.title_input)
-
-    async def on_submit(self, interaction: discord.Interaction):
-        self.view.embed_data["title"] = self.title_input.value
-        await self.view.update_embed(interaction)
-
-
-class DescriptionModal(discord.ui.Modal, title="Edit Description"):
-    def __init__(self, view):
-        super().__init__()
-        self.view = view
-        self.desc_input = discord.ui.TextInput(
-            label="Description",
-            style=discord.TextStyle.paragraph,
-            required=True
-        )
-        self.add_item(self.desc_input)
-
-    async def on_submit(self, interaction: discord.Interaction):
-        self.view.embed_data["description"] = self.desc_input.value
-        await self.view.update_embed(interaction)
-
-
-class ImageModal(discord.ui.Modal, title="Set Image URL"):
-    def __init__(self, view):
-        super().__init__()
-        self.view = view
-        self.image_input = discord.ui.TextInput(label="Image URL", required=True)
-        self.add_item(self.image_input)
-
-    async def on_submit(self, interaction: discord.Interaction):
-        self.view.embed_data["image"] = self.image_input.value
-        await self.view.update_embed(interaction)
-
-
-class ColorModal(discord.ui.Modal, title="Set Embed Color"):
-    def __init__(self, view):
-        super().__init__()
-        self.view = view
-        self.color_input = discord.ui.TextInput(
-            label="Hex Color (#ff0000)",
-            required=True
-        )
-        self.add_item(self.color_input)
-
-    async def on_submit(self, interaction: discord.Interaction):
-        value = self.color_input.value.strip().replace("#", "")
-        try:
-            color_int = int(value, 16)
-        except ValueError:
-            await interaction.response.send_message(
-                "Mã màu không hợp lệ.",
-                ephemeral=True
-            )
-            return
-
-        self.view.embed_data["color"] = color_int
-        await self.view.update_embed(interaction)
-
-
-# =============================
-# MAIN VIEW
-# =============================
-
-class EmbedBuilderView(discord.ui.View):
-
-    def __init__(self, name: str, existing_data: dict | None = None):
-        super().__init__(timeout=600)
-
+class EmbedUIView(View):
+    def __init__(self, name: str, embed_data: dict):
+        super().__init__(timeout=None)
         self.name = name
-        self.message = None
+        self.embed_data = embed_data
         self.saved = False
 
-        if existing_data:
-            self.embed_data = existing_data
-        else:
-            self.embed_data = {
-                "title": "New Embed",
-                "description": "Edit using buttons below.",
-                "color": discord.Color.blurple().value,
-                "image": None
-            }
-
-        if name not in ACTIVE_EMBED_VIEWS:
-            ACTIVE_EMBED_VIEWS[name] = []
-
-        ACTIVE_EMBED_VIEWS[name].append(self)
-
     # =============================
-    # CLEANUP
-    # =============================
-
-    async def close_all_same_name(self):
-        if self.name in ACTIVE_EMBED_VIEWS:
-            for view in ACTIVE_EMBED_VIEWS[self.name]:
-                try:
-                    if view.message:
-                        await view.message.delete()
-                except:
-                    pass
-                view.stop()
-
-            ACTIVE_EMBED_VIEWS[self.name] = []
-
-    async def unregister(self):
-        if self.name in ACTIVE_EMBED_VIEWS:
-            if self in ACTIVE_EMBED_VIEWS[self.name]:
-                ACTIVE_EMBED_VIEWS[self.name].remove(self)
-
-    async def on_timeout(self):
-        await self.unregister()
-        try:
-            if self.message:
-                await self.message.delete()
-        except:
-            pass
-
-    # =============================
-    # BUILD
+    # BUILD EMBED
     # =============================
 
     def build_embed(self):
         embed = discord.Embed(
             title=self.embed_data.get("title"),
             description=self.embed_data.get("description"),
-            color=self.embed_data.get("color")
+            color=self.embed_data.get("color", 0x2F3136)
         )
 
         if self.embed_data.get("image"):
@@ -150,21 +30,15 @@ class EmbedBuilderView(discord.ui.View):
 
         return embed
 
-    async def update_embed(self, interaction: discord.Interaction):
-        await interaction.response.edit_message(
-            embed=self.build_embed(),
-            view=self
-        )
-
     # =============================
-    # BUTTONS
+    # BUTTONS (ALL GRAY STYLE)
     # =============================
 
-    @discord.ui.button(label="Edit Title", style=discord.ButtonStyle.blurple)
+    @discord.ui.button(label="Edit Title", style=discord.ButtonStyle.gray)
     async def edit_title(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(TitleModal(self))
 
-    @discord.ui.button(label="Edit Description", style=discord.ButtonStyle.blurple)
+    @discord.ui.button(label="Edit Description", style=discord.ButtonStyle.gray)
     async def edit_description(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(DescriptionModal(self))
 
@@ -176,7 +50,7 @@ class EmbedBuilderView(discord.ui.View):
     async def edit_color(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(ColorModal(self))
 
-    @discord.ui.button(label="Save Embed", style=discord.ButtonStyle.green)
+    @discord.ui.button(label="Save Embed", style=discord.ButtonStyle.gray)
     async def save_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         save_embed(self.name, self.embed_data)
         self.saved = True
@@ -186,14 +60,102 @@ class EmbedBuilderView(discord.ui.View):
             ephemeral=True
         )
 
-    @discord.ui.button(label="Delete Embed", style=discord.ButtonStyle.red)
+    @discord.ui.button(label="Delete Embed", style=discord.ButtonStyle.gray)
     async def delete_button(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         delete_embed(self.name)
-
-        await self.close_all_same_name()
+        await interaction.message.delete()
 
         await interaction.response.send_message(
             f"Embed `{self.name}` đã được xoá vĩnh viễn, có thể tạo embed mới bằng tên của embed này.",
             ephemeral=True
+        )
+
+
+# =============================
+# MODALS
+# =============================
+
+class TitleModal(Modal, title="Chỉnh sửa tiêu đề"):
+    def __init__(self, view: EmbedUIView):
+        super().__init__()
+        self.view = view
+
+        self.title_input = TextInput(
+            label="Tiêu đề",
+            default=view.embed_data.get("title"),
+            required=False
+        )
+        self.add_item(self.title_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        self.view.embed_data["title"] = self.title_input.value
+        await interaction.response.edit_message(
+            embed=self.view.build_embed(),
+            view=self.view
+        )
+
+
+class DescriptionModal(Modal, title="Chỉnh sửa mô tả"):
+    def __init__(self, view: EmbedUIView):
+        super().__init__()
+        self.view = view
+
+        self.desc_input = TextInput(
+            label="Mô tả",
+            style=discord.TextStyle.paragraph,
+            default=view.embed_data.get("description"),
+            required=False
+        )
+        self.add_item(self.desc_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        self.view.embed_data["description"] = self.desc_input.value
+        await interaction.response.edit_message(
+            embed=self.view.build_embed(),
+            view=self.view
+        )
+
+
+class ImageModal(Modal, title="Đặt ảnh Embed"):
+    def __init__(self, view: EmbedUIView):
+        super().__init__()
+        self.view = view
+
+        self.image_input = TextInput(
+            label="URL hình ảnh",
+            default=view.embed_data.get("image"),
+            required=False
+        )
+        self.add_item(self.image_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        self.view.embed_data["image"] = self.image_input.value
+        await interaction.response.edit_message(
+            embed=self.view.build_embed(),
+            view=self.view
+        )
+
+
+class ColorModal(Modal, title="Chỉnh sửa màu (Hex)"):
+    def __init__(self, view: EmbedUIView):
+        super().__init__()
+        self.view = view
+
+        self.color_input = TextInput(
+            label="Mã màu (VD: FF0000)",
+            required=False
+        )
+        self.add_item(self.color_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            color_value = int(self.color_input.value, 16)
+            self.view.embed_data["color"] = color_value
+        except:
+            pass
+
+        await interaction.response.edit_message(
+            embed=self.view.build_embed(),
+            view=self.view
         )
