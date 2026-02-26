@@ -5,6 +5,9 @@ from discord import app_commands
 from core.embed_ui import EmbedUIView
 from core.embed_storage import load_embed, delete_embed
 
+# Track active views
+ACTIVE_VIEWS = {}
+
 
 # =============================
 # EMBED SUBGROUP
@@ -23,10 +26,7 @@ class EmbedGroup(app_commands.Group):
         existing_data = load_embed(name)
         if existing_data:
             await interaction.response.send_message(
-                f"Đã có embed tồn tại với tên `{name}`.\n\n"
-                "• Không thể tạo embed mới với tên này.\n"
-                "• Vui lòng sử dụng tên khác.\n"
-                "• Hoặc dùng `/p embed edit` để chỉnh sửa embed đã tồn tại."
+                f"Đã có embed tồn tại với tên `{name}`."
             )
             return
 
@@ -45,17 +45,14 @@ class EmbedGroup(app_commands.Group):
         view = EmbedUIView(name, embed_data)
 
         await interaction.response.send_message(
-            content=(
-                f"Đã tạo embed với tên `{name}`.\n\n"
-                "• Bạn có thể chỉnh sửa embed bằng các nút bên dưới.\n"
-                "• Hãy Save sau khi chỉnh sửa.\n"
-                "• Nếu không Save, embed sẽ không được lưu."
-            ),
+            content=f"Đã tạo embed `{name}`.",
             embed=embed,
             view=view
         )
 
-        view.message = await interaction.original_response()
+        message = await interaction.original_response()
+        view.message = message
+        ACTIVE_VIEWS[name] = view
 
     # -------------------------
     # EDIT
@@ -67,7 +64,7 @@ class EmbedGroup(app_commands.Group):
 
         if not data:
             await interaction.response.send_message(
-                f"Embed `{name}` không tồn tại."
+                f"Embed tên `{name}` không tồn tại, không tìm thấy."
             )
             return
 
@@ -83,16 +80,14 @@ class EmbedGroup(app_commands.Group):
         view = EmbedUIView(name, data)
 
         await interaction.response.send_message(
-            content=(
-                f"Bạn đang chỉnh sửa embed `{name}`.\n\n"
-                "• Sau khi chỉnh sửa, hãy Save để cập nhật.\n"
-                "• Nếu thoát mà chưa Save, thay đổi sẽ không được lưu."
-            ),
+            content=f"Bạn đang chỉnh sửa embed `{name}`.",
             embed=embed,
             view=view
         )
 
-        view.message = await interaction.original_response()
+        message = await interaction.original_response()
+        view.message = message
+        ACTIVE_VIEWS[name] = view
 
     # -------------------------
     # DELETE
@@ -104,14 +99,27 @@ class EmbedGroup(app_commands.Group):
 
         if not data:
             await interaction.response.send_message(
-                f"Embed `{name}` không tồn tại."
+                f"Embed tên `{name}` không tồn tại, không thể dùng lệnh."
             )
             return
+
+        # Nếu UI đang mở → disable nó
+        if name in ACTIVE_VIEWS:
+            view = ACTIVE_VIEWS[name]
+
+            try:
+                if view.message:
+                    await view.message.edit(view=None)
+            except:
+                pass
+
+            view.stop()
+            del ACTIVE_VIEWS[name]
 
         delete_embed(name)
 
         await interaction.response.send_message(
-            f"Embed `{name}` đã được xoá vĩnh viễn, có thể tạo lại embed mới với tên này."
+            f"Embed `{name}` đã được xoá hoàn toàn."
         )
 
     # -------------------------
@@ -138,7 +146,6 @@ class EmbedGroup(app_commands.Group):
             embed.set_image(url=data["image"])
 
         await interaction.channel.send(embed=embed)
-
         await interaction.response.send_message(
             f"Embed `{name}` đã được gửi."
         )
