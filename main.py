@@ -1,11 +1,12 @@
 import os
+import asyncio
 import logging
 import discord
 from discord.ext import commands
 
-# =========================
-# LOGGING CONFIG
-# =========================
+# ==============================
+# LOGGING
+# ==============================
 
 logging.basicConfig(
     level=logging.INFO,
@@ -14,76 +15,62 @@ logging.basicConfig(
 
 logger = logging.getLogger("bot")
 
-# =========================
-# BOT SETUP
-# =========================
+# ==============================
+# INTENTS
+# ==============================
 
 intents = discord.Intents.default()
 intents.message_content = True
-intents.guilds = True
 intents.members = True
+
+# ==============================
+# BOT SETUP
+# ==============================
 
 bot = commands.Bot(
     command_prefix="!",
     intents=intents
 )
 
-# =========================
-# EVENTS
-# =========================
-
-@bot.event
-async def on_ready():
-    logger.info(f"Bot online: {bot.user} (ID: {bot.user.id})")
-    logger.info("Bot is ready and connected to Discord.")
-
-@bot.event
-async def on_disconnect():
-    logger.warning("Bot disconnected from Discord.")
-
-@bot.event
-async def on_resumed():
-    logger.info("Bot connection resumed.")
-
-@bot.event
-async def on_error(event, *args, **kwargs):
-    logger.exception(f"Unhandled error in event: {event}")
-
-# =========================
-# GLOBAL ERROR HANDLER
-# =========================
-
-@bot.tree.error
-async def on_app_command_error(interaction: discord.Interaction, error: discord.app_commands.AppCommandError):
-    logger.exception(f"Slash command error: {error}")
-
-    if interaction.response.is_done():
-        await interaction.followup.send("Đã xảy ra lỗi khi thực thi lệnh.", ephemeral=True)
-    else:
-        await interaction.response.send_message("Đã xảy ra lỗi khi thực thi lệnh.", ephemeral=True)
-
-# =========================
-# LOAD COGS (nếu có)
-# =========================
+# ==============================
+# LOAD COGS (an toàn nếu không có thư mục cogs)
+# ==============================
 
 async def load_extensions():
+    if not os.path.isdir("./cogs"):
+        logger.info("No cogs folder found, skipping extension loading.")
+        return
+
     for filename in os.listdir("./cogs"):
         if filename.endswith(".py"):
             try:
                 await bot.load_extension(f"cogs.{filename[:-3]}")
                 logger.info(f"Loaded extension: {filename}")
-            except Exception as e:
-                logger.exception(f"Failed to load extension {filename}: {e}")
+            except Exception:
+                logger.exception(f"Failed to load extension: {filename}")
 
-# =========================
+# ==============================
+# EVENTS
+# ==============================
+
+@bot.event
+async def on_ready():
+    logger.info(f"Bot is ready. Logged in as {bot.user}")
+
+# ==============================
 # MAIN START
-# =========================
+# ==============================
 
 async def main():
+    token = os.getenv("TOKEN")
+
+    if not token:
+        logger.error("TOKEN environment variable not found.")
+        return
+
     async with bot:
         await load_extensions()
-        await bot.start(os.getenv("TOKEN"))
+        await bot.start(token)
 
 if __name__ == "__main__":
-    import asyncio
     asyncio.run(main())
