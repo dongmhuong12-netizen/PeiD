@@ -9,6 +9,8 @@ from core.embed_storage import (
     get_all_embed_names
 )
 
+from greet_leave import GreetGroup, LeaveGroup, GreetLeaveListener
+
 
 # =============================
 # AUTOCOMPLETE
@@ -204,6 +206,8 @@ class PGroup(app_commands.Group):
     def __init__(self):
         super().__init__(name="p", description="Main command group")
         self.add_command(EmbedGroup())
+        self.add_command(GreetGroup())
+        self.add_command(LeaveGroup())
 
 
 # =============================
@@ -218,3 +222,4 @@ class Root(commands.Cog):
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Root(bot))
+    await bot.add_cog(GreetLeaveListener(bot))
