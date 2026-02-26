@@ -20,7 +20,17 @@ class EmbedGroup(app_commands.Group):
     @app_commands.command(name="create", description="Create a new embed UI")
     async def create(self, interaction: discord.Interaction, name: str):
 
-        # Nếu có UI cùng tên đang mở → đóng ngay
+        # 🔒 BƯỚC 1: Check đã save chưa — nếu đã save thì KHÔNG đụng UI
+        existing = load_embed(name)
+        if existing:
+            await interaction.response.send_message(
+                f"Đã có embed tồn tại với tên `{name}`. "
+                f"Nếu tạo embed mà không tìm thấy, thử tìm embed đó bằng cách dùng lệnh /p embed edit.",
+                ephemeral=True
+            )
+            return
+
+        # 🔥 BƯỚC 2: Chỉ khi chưa save mới đóng UI cũ (nếu có)
         if name in ACTIVE_EMBED_VIEWS:
             for view in ACTIVE_EMBED_VIEWS[name]:
                 try:
@@ -31,15 +41,6 @@ class EmbedGroup(app_commands.Group):
                 view.stop()
 
             ACTIVE_EMBED_VIEWS[name] = []
-
-        existing = load_embed(name)
-        if existing:
-            await interaction.response.send_message(
-                f"Đã có embed tồn tại với tên `{name}`. "
-                f"Nếu tạo embed mà không tìm thấy, thử tìm embed đó bằng cách dùng lệnh /p embed edit.",
-                ephemeral=True
-            )
-            return
 
         embed_data = {
             "title": "New Embed",
@@ -74,7 +75,6 @@ class EmbedGroup(app_commands.Group):
             )
             return
 
-        # Đóng tất cả UI cũ của embed này
         if name in ACTIVE_EMBED_VIEWS:
             for view in ACTIVE_EMBED_VIEWS[name]:
                 try:
@@ -113,7 +113,6 @@ class EmbedGroup(app_commands.Group):
             )
             return
 
-        # Đóng tất cả UI đang mở
         if name in ACTIVE_EMBED_VIEWS:
             for view in ACTIVE_EMBED_VIEWS[name]:
                 try:
