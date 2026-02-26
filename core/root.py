@@ -1,151 +1,180 @@
 import discord
-from discord import app_commands
 from discord.ext import commands
+from discord import app_commands
 
-from core.embed_storage import (
-    save_embed,
-    load_embed,
-    delete_embed,
-    embed_exists
-)
-
-from core.embed_ui import EmbedUIView
+from core.embed_ui import EmbedUIView, ACTIVE_EMBED_VIEWS
+from core.embed_storage import load_embed, delete_embed
 
 
-class Root(commands.Cog):
-    def __init__(self, bot: commands.Bot):
-        self.bot = bot
+# =============================
+# EMBED SUBGROUP
+# =============================
 
-    # =========================
-    # GROUP CHA /p
-    # =========================
-    p = app_commands.Group(name="p", description="Panel commands")
+class EmbedGroup(app_commands.Group):
+    def __init__(self):
+        super().__init__(name="embed", description="Embed management commands")
 
-    # =========================
-    # SUBGROUP /p embed
-    # =========================
-    embed = app_commands.Group(
-        name="embed",
-        description="Embed management",
-        parent=p
-    )
-
-    # =========================
+    # -------------------------
     # CREATE
-    # =========================
-    @embed.command(name="create", description="Tạo embed mới")
+    # -------------------------
+    @app_commands.command(name="create", description="Create a new embed UI")
     async def create(self, interaction: discord.Interaction, name: str):
-        name = name.lower()
 
-        if embed_exists(name):
+        existing = load_embed(name)
+        if existing:
             await interaction.response.send_message(
-                f"Đã có embed `{name}` tồn tại.",
+                f"Đã có embed tồn tại với tên `{name}`.",
                 ephemeral=True
             )
             return
 
         embed_data = {
-            "title": f"Embed: {name}",
-            "description": "Embed mới được tạo. Hãy chỉnh sửa nội dung.",
+            "title": "New Embed",
+            "description": "Edit using buttons below.",
             "color": 0x5865F2
         }
 
-        save_embed(name, embed_data)
-
-        embed = discord.Embed(
-            title=embed_data["title"],
-            description=embed_data["description"],
-            color=embed_data["color"]
-        )
-
         view = EmbedUIView(name, embed_data)
+        embed = view.build_embed()
 
         await interaction.response.send_message(
-            f"Đã tạo embed `{name}`",
+            content=f"Đã tạo embed `{name}`.",
             embed=embed,
             view=view
         )
 
-    # =========================
+        message = await interaction.original_response()
+        view.message = message
+
+    # -------------------------
     # EDIT
-    # =========================
-    @embed.command(name="edit", description="Chỉnh sửa embed")
+    # -------------------------
+    @app_commands.command(name="edit", description="Edit existing embed")
     async def edit(self, interaction: discord.Interaction, name: str):
-        name = name.lower()
 
-        if not embed_exists(name):
+        data = load_embed(name)
+
+        if not data:
             await interaction.response.send_message(
-                f"Embed `{name}` không tồn tại.",
+                f"Embed tên `{name}` không tồn tại, không tìm thấy.",
                 ephemeral=True
             )
             return
 
-        embed_data = load_embed(name)
+        # Đóng tất cả UI cũ của embed này
+        if name in ACTIVE_EMBED_VIEWS:
+            for view in ACTIVE_EMBED_VIEWS[name]:
+                try:
+                    if view.message:
+                        await view.message.delete()
+                except:
+                    pass
+                view.stop()
 
-        embed = discord.Embed(
-            title=embed_data.get("title"),
-            description=embed_data.get("description"),
-            color=embed_data.get("color", 0x5865F2)
-        )
+            ACTIVE_EMBED_VIEWS[name] = []
 
-        if embed_data.get("image"):
-            embed.set_image(url=embed_data["image"])
-
-        view = EmbedUIView(name, embed_data)
+        view = EmbedUIView(name, data)
+        embed = view.build_embed()
 
         await interaction.response.send_message(
-            f"Đang chỉnh sửa embed `{name}`",
+            content=f"Bạn đang chỉnh sửa embed `{name}`.",
             embed=embed,
             view=view
         )
 
-    # =========================
-    # DELETE
-    # =========================
-    @embed.command(name="delete", description="Xoá embed")
-    async def delete(self, interaction: discord.Interaction, name: str):
-        name = name.lower()
+        message = await interaction.original_response()
+        view.message = message
 
-        if not embed_exists(name):
+    # -------------------------
+    # DELETE
+    # -------------------------
+    @app_commands.command(name="delete", description="Delete embed")
+    async def delete(self, interaction: discord.Interaction, name: str):
+
+        data = load_embed(name)
+
+        if not data:
             await interaction.response.send_message(
-                f"Embed `{name}` không tồn tại.",
+                f"Embed tên `{name}` không tồn tại, không thể dùng lệnh.",
                 ephemeral=True
             )
             return
+
+        # Đóng tất cả UI đang mở
+        if name in ACTIVE_EMBED_VIEWS:
+            for view in ACTIVE_EMBED_VIEWS[name]:
+                try:
+                    if view.message:
+                        await view.message.delete()
+                except:
+                    pass
+                view.stop()
+
+            ACTIVE_EMBED_VIEWS[name] = []
 
         delete_embed(name)
 
         await interaction.response.send_message(
-            f"Đã xoá embed `{name}`.",
+            f"Embed `{name}` đã được xoá vĩnh viễn, có thể tạo embed mới bằng tên của embed này.",
             ephemeral=True
         )
 
-    # =========================
+    # -------------------------
     # SHOW
-    # =========================
-    @embed.command(name="show", description="Hiển thị embed")
+    # -------------------------
+    @app_commands.command(name="show", description="Send embed to channel")
     async def show(self, interaction: discord.Interaction, name: str):
-        name = name.lower()
 
-        if not embed_exists(name):
+        data = load_embed(name)
+
+        if not data:
             await interaction.response.send_message(
-                f"Embed `{name}` không tồn tại.",
+                "Embed không tồn tại.",
                 ephemeral=True
             )
             return
 
-        embed_data = load_embed(name)
-
         embed = discord.Embed(
-            title=embed_data.get("title"),
-            description=embed_data.get("description"),
-            color=embed_data.get("color", 0x5865F2)
+            title=data.get("title"),
+            description=data.get("description"),
+            color=data.get("color", 0x2F3136)
         )
 
-        if embed_data.get("image"):
-            embed.set_image(url=embed_data["image"])
+        if data.get("image"):
+            embed.set_image(url=data["image"])
 
-        await interaction.response.send_message(embed=embed)
+        await interaction.channel.send(embed=embed)
+        await interaction.response.send_message(
+            f"Embed `{name}` đã được gửi.",
+            ephemeral=True
+        )
+
+
+# =============================
+# MAIN /p GROUP
+# =============================
+
+class PGroup(app_commands.Group):
+    def __init__(self):
+        super().__init__(name="p", description="Main command group")
+        self.add_command(EmbedGroup())
+
+
+# =============================
+# COG
+# =============================
+
+class Root(commands.Cog):
+    def __init__(self, bot: commands.Bot):
+        self.bot = bot
+
+    async def cog_load(self):
+        # Xoá command cũ nếu tồn tại để tránh duplicate
+        existing = discord.utils.get(self.bot.tree.get_commands(), name="p")
+        if existing:
+            self.bot.tree.remove_command(existing.name, type=existing.type)
+
+        self.bot.tree.add_command(PGroup())
 
 
 async def setup(bot: commands.Bot):
