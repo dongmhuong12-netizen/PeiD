@@ -29,11 +29,24 @@ class EmbedGroup(app_commands.Group):
             return
 
         embed_data = {
-            "title": "New Embed",
-            "description": "Edit using buttons below.",
-            "color": 0x5865F2
-        }
-
+    "title": f"Embed: {name}",
+    "description": (
+        f"Đã tạo embed với tên `{name}`\n\n"
+        "Sử dụng các nút bên dưới để chỉnh sửa embed.\n\n"
+        "• Edit Title → Chỉnh sửa tiêu đề\n"
+        "• Edit Description → Chỉnh sửa mô tả\n"
+        "• Set Image → Đặt ảnh cho embed\n"
+        "• Edit Color → Đổi màu (mã hex)\n"
+        "• Save Embed → Lưu embed\n"
+        "• Delete Embed → Xoá embed vĩnh viễn\n\n"
+        "• Bạn có thể sử dụng embed này để tạo tin nhắn chào mừng, rời đi, "
+        "hoặc các banner hệ thống khi dùng lệnh `/p embed show`.\n\n"
+        "• Lưu ý: hãy **Save** sau khi chỉnh sửa. Nếu không embed sẽ không "
+        "được lưu lại, hoặc sẽ bị coi là không tồn tại nếu chưa từng Save.\n\n"
+        "• Nếu có thắc mắc, dùng lệnh `/help` hoặc tham gia server hỗ trợ."
+    ),
+    "color": 0x5865F2
+}
         view = EmbedUIView(name, embed_data)
 
         embed = view.build_embed()
