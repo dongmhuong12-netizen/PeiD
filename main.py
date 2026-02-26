@@ -6,7 +6,7 @@ import discord
 from discord.ext import commands
 import asyncio
 
-TOKEN = "YOUR_BOT_TOKEN_HERE"  # thay token của bạn
+TOKEN = "YOUR_BOT_TOKEN_HERE"
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -28,7 +28,7 @@ async def on_ready():
 
 async def main():
     async with bot:
-        await bot.load_extension("core.root")
+        await bot.load_extension("root", package="core")
         await bot.start(TOKEN)
 
 
