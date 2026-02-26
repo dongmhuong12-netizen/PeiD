@@ -50,6 +50,8 @@ class Root(commands.Cog):
             "color": 0x5865F2
         }
 
+        save_embed(name, embed_data)
+
         embed = discord.Embed(
             title=embed_data["title"],
             description=embed_data["description"],
@@ -147,8 +149,4 @@ class Root(commands.Cog):
 
 
 async def setup(bot: commands.Bot):
-    cog = Root(bot)
-    await bot.add_cog(cog)
-
-    # 👇 QUAN TRỌNG – thêm group vào tree
-    bot.tree.add_command(cog.p)
+    await bot.add_cog(Root(bot))
