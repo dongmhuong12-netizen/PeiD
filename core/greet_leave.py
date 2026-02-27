@@ -27,7 +27,7 @@ def parse_placeholders(text: str, member: discord.Member, channel: discord.TextC
 
 
 # ======================
-# GREET GROUP
+# GREET SET GROUP
 # ======================
 
 class GreetSetGroup(app_commands.Group):
@@ -35,14 +35,14 @@ class GreetSetGroup(app_commands.Group):
         super().__init__(name="set", description="Set greet configuration")
 
     @app_commands.command(name="channel", description="Set greet channel")
-    async def channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
+    async def set_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
         update_guild_config(interaction.guild.id, "greet", "channel", channel.id)
         await interaction.response.send_message(
             f"Đã set kênh greet: {channel.mention}", ephemeral=True
         )
 
     @app_commands.command(name="embed", description="Set greet embed")
-    async def embed(self, interaction: discord.Interaction, name: str):
+    async def set_embed(self, interaction: discord.Interaction, name: str):
         if not load_embed(name):
             await interaction.response.send_message(
                 f"Embed `{name}` không tồn tại.", ephemeral=True
@@ -55,12 +55,16 @@ class GreetSetGroup(app_commands.Group):
         )
 
     @app_commands.command(name="message", description="Set greet message")
-    async def message(self, interaction: discord.Interaction, text: str):
+    async def set_message(self, interaction: discord.Interaction, text: str):
         update_guild_config(interaction.guild.id, "greet", "message", text)
         await interaction.response.send_message(
             "Đã set message greet.", ephemeral=True
         )
 
+
+# ======================
+# GREET GROUP
+# ======================
 
 class GreetGroup(app_commands.Group):
     def __init__(self):
@@ -76,12 +80,16 @@ class GreetGroup(app_commands.Group):
         message_text = config.get("message")
 
         if not channel_id:
-            await interaction.response.send_message("Chưa set kênh greet.", ephemeral=True)
+            await interaction.response.send_message(
+                "Chưa set kênh greet.", ephemeral=True
+            )
             return
 
         channel = interaction.guild.get_channel(channel_id)
         if not channel:
-            await interaction.response.send_message("Không tìm thấy kênh greet.", ephemeral=True)
+            await interaction.response.send_message(
+                "Không tìm thấy kênh greet.", ephemeral=True
+            )
             return
 
         parsed_text = parse_placeholders(message_text, interaction.user, channel)
@@ -93,11 +101,13 @@ class GreetGroup(app_commands.Group):
                 embed = discord.Embed.from_dict(embed_data)
 
         await channel.send(content=parsed_text, embed=embed)
-        await interaction.response.send_message("Đã gửi test greet.", ephemeral=True)
+        await interaction.response.send_message(
+            "Đã gửi test greet.", ephemeral=True
+        )
 
 
 # ======================
-# LEAVE GROUP
+# LEAVE SET GROUP
 # ======================
 
 class LeaveSetGroup(app_commands.Group):
@@ -105,14 +115,14 @@ class LeaveSetGroup(app_commands.Group):
         super().__init__(name="set", description="Set leave configuration")
 
     @app_commands.command(name="channel", description="Set leave channel")
-    async def channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
+    async def set_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
         update_guild_config(interaction.guild.id, "leave", "channel", channel.id)
         await interaction.response.send_message(
             f"Đã set kênh leave: {channel.mention}", ephemeral=True
         )
 
     @app_commands.command(name="embed", description="Set leave embed")
-    async def embed(self, interaction: discord.Interaction, name: str):
+    async def set_embed(self, interaction: discord.Interaction, name: str):
         if not load_embed(name):
             await interaction.response.send_message(
                 f"Embed `{name}` không tồn tại.", ephemeral=True
@@ -125,12 +135,16 @@ class LeaveSetGroup(app_commands.Group):
         )
 
     @app_commands.command(name="message", description="Set leave message")
-    async def message(self, interaction: discord.Interaction, text: str):
+    async def set_message(self, interaction: discord.Interaction, text: str):
         update_guild_config(interaction.guild.id, "leave", "message", text)
         await interaction.response.send_message(
             "Đã set message leave.", ephemeral=True
         )
 
+
+# ======================
+# LEAVE GROUP
+# ======================
 
 class LeaveGroup(app_commands.Group):
     def __init__(self):
@@ -146,12 +160,16 @@ class LeaveGroup(app_commands.Group):
         message_text = config.get("message")
 
         if not channel_id:
-            await interaction.response.send_message("Chưa set kênh leave.", ephemeral=True)
+            await interaction.response.send_message(
+                "Chưa set kênh leave.", ephemeral=True
+            )
             return
 
         channel = interaction.guild.get_channel(channel_id)
         if not channel:
-            await interaction.response.send_message("Không tìm thấy kênh leave.", ephemeral=True)
+            await interaction.response.send_message(
+                "Không tìm thấy kênh leave.", ephemeral=True
+            )
             return
 
         parsed_text = parse_placeholders(message_text, interaction.user, channel)
@@ -163,11 +181,13 @@ class LeaveGroup(app_commands.Group):
                 embed = discord.Embed.from_dict(embed_data)
 
         await channel.send(content=parsed_text, embed=embed)
-        await interaction.response.send_message("Đã gửi test leave.", ephemeral=True)
+        await interaction.response.send_message(
+            "Đã gửi test leave.", ephemeral=True
+        )
 
 
 # ======================
-# EVENT LISTENER
+# LISTENER
 # ======================
 
 class GreetLeaveListener(commands.Cog):
