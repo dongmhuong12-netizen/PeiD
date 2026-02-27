@@ -41,7 +41,7 @@ async def send_config_message(guild, member, section_name):
         return False
 
     channel = guild.get_channel(channel_id)
-    if not channel:
+    if not channel or not isinstance(channel, discord.TextChannel):
         return False
 
     parsed_text = parse_placeholders(message_text, member, channel) if message_text else None
@@ -73,10 +73,16 @@ class GreetGroup(app_commands.Group):
     def __init__(self):
         super().__init__(name="greet", description="Greet system")
 
-    # 🔒 CHỈ ADMIN (Manage Guild)
     @app_commands.command(name="channel", description="Set greet channel")
     @app_commands.default_permissions(manage_guild=True)
-    async def channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
+    async def channel(self, interaction: discord.Interaction, channel: discord.abc.GuildChannel):
+
+        if not isinstance(channel, discord.TextChannel):
+            await interaction.response.send_message(
+                "Chỉ được chọn text channel.", ephemeral=True
+            )
+            return
+
         update_guild_config(interaction.guild.id, "greet", "channel", channel.id)
         await interaction.response.send_message(
             f"Đã set kênh greet: {channel.mention}", ephemeral=True
@@ -104,7 +110,6 @@ class GreetGroup(app_commands.Group):
             "Đã set message greet.", ephemeral=True
         )
 
-    # ✅ Member dùng được
     @app_commands.command(name="test", description="Test greet message")
     async def test(self, interaction: discord.Interaction):
         member = interaction.guild.get_member(interaction.user.id)
@@ -129,10 +134,16 @@ class LeaveGroup(app_commands.Group):
     def __init__(self):
         super().__init__(name="leave", description="Leave system")
 
-    # 🔒 CHỈ ADMIN (Manage Guild)
     @app_commands.command(name="channel", description="Set leave channel")
     @app_commands.default_permissions(manage_guild=True)
-    async def channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
+    async def channel(self, interaction: discord.Interaction, channel: discord.abc.GuildChannel):
+
+        if not isinstance(channel, discord.TextChannel):
+            await interaction.response.send_message(
+                "Chỉ được chọn text channel.", ephemeral=True
+            )
+            return
+
         update_guild_config(interaction.guild.id, "leave", "channel", channel.id)
         await interaction.response.send_message(
             f"Đã set kênh leave: {channel.mention}", ephemeral=True
@@ -160,7 +171,6 @@ class LeaveGroup(app_commands.Group):
             "Đã set message leave.", ephemeral=True
         )
 
-    # ✅ Member dùng được
     @app_commands.command(name="test", description="Test leave message")
     async def test(self, interaction: discord.Interaction):
         member = interaction.guild.get_member(interaction.user.id)
