@@ -66,6 +66,19 @@ class EmbedUIView(View):
             title = parse(title)
             description = parse(description)
 
+        # ===== CLEAN KÝ TỰ ẨN / MARKDOWN PHÁ PARSE =====
+        def clean_text(text):
+            if not isinstance(text, str):
+                return text
+            text = text.replace("\u200b", "")   # zero width space
+            text = text.replace("\ufeff", "")   # BOM
+            text = text.replace("\r", "")
+            text = text.strip()
+            return text
+
+        title = clean_text(title)
+        description = clean_text(description)
+
         embed = discord.Embed(
             title=title,
             description=description,
