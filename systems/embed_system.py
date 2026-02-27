@@ -1,4 +1,4 @@
-from storage.embed_storage import EmbedStorage
+from core.embed_storage import save_embed, load_embed
 
 
 class EmbedSystem:
@@ -11,19 +11,17 @@ class EmbedSystem:
         if not name.isalnum():
             return False, "INVALID_NAME"
 
-        guild_data = EmbedStorage.get_guild(guild_id)
-
-        if name in guild_data:
+        if load_embed(name):
             return False, "EXISTS"
 
-        if len(guild_data) >= EmbedSystem.LIMIT:
-            return False, "LIMIT"
+        # Optional: nếu muốn giới hạn 15 embed thì phải đếm từ JSON
+        # Hiện tại bạn chưa có get_all per guild nên bỏ LIMIT hoặc tự bổ sung
 
-        guild_data[name] = {
+        save_embed(name, {
             "title": None,
             "description": None,
-            "color": "2F3136",
+            "color": 0x2F3136,
             "image": None
-        }
+        })
 
         return True, None
