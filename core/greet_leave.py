@@ -34,7 +34,7 @@ def parse_placeholders(text: str, member: discord.Member, channel: discord.TextC
 
 
 # ======================
-# FIXED LINK TOKEN PARSER
+# LINK TOKEN PARSER
 # ======================
 
 def extract_link_tokens(text: str):
@@ -134,3 +134,64 @@ async def send_config_message(guild, member, section_name):
         return False
 
     return True
+
+
+# =====================================================
+#                COMMAND GROUPS
+# =====================================================
+
+class GreetGroup(app_commands.Group):
+    def __init__(self):
+        super().__init__(name="greet", description="Greeting system")
+
+    @app_commands.command(name="channel")
+    async def set_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
+        update_guild_config(interaction.guild.id, "greet", "channel", channel.id)
+        await interaction.response.send_message("Đã cập nhật kênh chào mừng.", ephemeral=True)
+
+    @app_commands.command(name="message")
+    async def set_message(self, interaction: discord.Interaction, message: str):
+        update_guild_config(interaction.guild.id, "greet", "message", message)
+        await interaction.response.send_message("Đã cập nhật nội dung chào mừng.", ephemeral=True)
+
+    @app_commands.command(name="embed")
+    async def set_embed(self, interaction: discord.Interaction, name: str):
+        update_guild_config(interaction.guild.id, "greet", "embed", name)
+        await interaction.response.send_message("Đã cập nhật embed chào mừng.", ephemeral=True)
+
+
+class LeaveGroup(app_commands.Group):
+    def __init__(self):
+        super().__init__(name="leave", description="Leave system")
+
+    @app_commands.command(name="channel")
+    async def set_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
+        update_guild_config(interaction.guild.id, "leave", "channel", channel.id)
+        await interaction.response.send_message("Đã cập nhật kênh rời đi.", ephemeral=True)
+
+    @app_commands.command(name="message")
+    async def set_message(self, interaction: discord.Interaction, message: str):
+        update_guild_config(interaction.guild.id, "leave", "message", message)
+        await interaction.response.send_message("Đã cập nhật nội dung rời đi.", ephemeral=True)
+
+    @app_commands.command(name="embed")
+    async def set_embed(self, interaction: discord.Interaction, name: str):
+        update_guild_config(interaction.guild.id, "leave", "embed", name)
+        await interaction.response.send_message("Đã cập nhật embed rời đi.", ephemeral=True)
+
+
+# =====================================================
+#                LISTENER
+# =====================================================
+
+class GreetLeaveListener(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+
+    @commands.Cog.listener()
+    async def on_member_join(self, member):
+        await send_config_message(member.guild, member, "greet")
+
+    @commands.Cog.listener()
+    async def on_member_remove(self, member):
+        await send_config_message(member.guild, member, "leave")
