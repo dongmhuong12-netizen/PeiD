@@ -212,13 +212,7 @@ class Root(commands.Cog):
 
 
 async def setup(bot: commands.Bot):
-    root = Root(bot)
-    await bot.add_cog(root)
-
-    # tránh add trùng command khi reload
-    try:
-        bot.tree.remove_command("p", type=app_commands.AppCommandType.chat_input)
-    except:
-        pass
+    await bot.add_cog(Root(bot))
+    await bot.add_cog(GreetLeaveListener(bot))
 
     bot.tree.add_command(PGroup())
