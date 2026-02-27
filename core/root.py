@@ -170,11 +170,9 @@ class EmbedGroup(app_commands.Group):
             )
             return
 
-        # ===== FIX DUY NHẤT: xử lý color None =====
         color_value = data.get("color")
         if color_value is None:
             color_value = 0x2F3136
-        # ==========================================
 
         embed = discord.Embed(
             title=data.get("title"),
@@ -224,4 +222,4 @@ class Root(commands.Cog):
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Root(bot))
-    await bot.add_cog(GreetLeaveListener(bot))
+    # await bot.add_cog(GreetLeaveListener(bot))  # TẠM TẮT để tránh crash
