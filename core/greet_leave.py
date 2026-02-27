@@ -44,7 +44,10 @@ async def send_config_message(guild, member, section_name):
     if not channel or not isinstance(channel, discord.TextChannel):
         return False
 
-    parsed_text = parse_placeholders(message_text, member, channel) if message_text else None
+    # 🔥 FIX: phân biệt None và ""
+    parsed_text = None
+    if message_text is not None:
+        parsed_text = parse_placeholders(message_text, member, channel)
 
     embed = None
     if embed_name:
@@ -58,8 +61,8 @@ async def send_config_message(guild, member, section_name):
             if embed_data.get("image"):
                 embed.set_image(url=embed_data["image"])
 
-    # ✅ SỬA PHẦN LOGIC GỬI TIN NHẮN Ở ĐÂY
-    if not parsed_text and not embed:
+    # 🔥 LOGIC GỬI MỚI (cho phép text hoặc embed hoạt động độc lập)
+    if parsed_text is None and embed is None:
         return False
 
     if parsed_text and embed:
@@ -132,7 +135,7 @@ class GreetGroup(app_commands.Group):
 
         if not success:
             await interaction.response.send_message(
-                "Chưa cấu hình greet đầy đủ.", ephemeral=True
+                "Chưa cấu hình greet.", ephemeral=True
             )
         else:
             await interaction.response.send_message(
@@ -200,7 +203,7 @@ class LeaveGroup(app_commands.Group):
 
         if not success:
             await interaction.response.send_message(
-                "Chưa cấu hình leave đầy đủ.", ephemeral=True
+                "Chưa cấu hình leave.", ephemeral=True
             )
         else:
             await interaction.response.send_message(
