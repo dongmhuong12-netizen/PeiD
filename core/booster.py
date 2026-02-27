@@ -13,9 +13,18 @@ from core.greet_leave import send_config_message
 
 class BoosterGroup(app_commands.Group):
     def __init__(self):
-        super().__init__(name="booster", description="Booster system")
+        super().__init__(
+            name="booster",
+            description="Hệ thống xử lý khi thành viên Boost server"
+        )
 
-    @app_commands.command(name="channel", description="Set booster channel (Channel ID)")
+    @app_commands.command(
+        name="channel",
+        description="Đặt kênh gửi thông báo khi có người boost"
+    )
+    @app_commands.describe(
+        channel_id="ID của kênh text sẽ gửi thông báo boost"
+    )
     @app_commands.default_permissions(manage_guild=True)
     async def channel(self, interaction: discord.Interaction, channel_id: str):
 
@@ -31,23 +40,34 @@ class BoosterGroup(app_commands.Group):
         update_guild_config(interaction.guild.id, "booster", "channel", channel.id)
 
         await interaction.response.send_message(
-            f"Đã set kênh booster: {channel.mention}",
+            f"Đã đặt kênh booster: {channel.mention}",
             ephemeral=True
         )
 
-    @app_commands.command(name="message", description="Set booster message")
+    @app_commands.command(
+        name="message",
+        description="Đặt nội dung tin nhắn khi có người boost"
+    )
+    @app_commands.describe(
+        text="Nội dung tin nhắn (có thể dùng {user}, {server})"
+    )
     @app_commands.default_permissions(manage_guild=True)
     async def message(self, interaction: discord.Interaction, text: str):
 
-        # Lưu nguyên text (link_label" và link_url" được xử lý ở greet_leave)
         update_guild_config(interaction.guild.id, "booster", "message", text)
 
         await interaction.response.send_message(
-            "Đã set message booster.",
+            "Đã cập nhật nội dung booster.",
             ephemeral=True
         )
 
-    @app_commands.command(name="embed", description="Set booster embed")
+    @app_commands.command(
+        name="embed",
+        description="Gán embed đã tạo cho thông báo booster"
+    )
+    @app_commands.describe(
+        name="Tên embed đã lưu bằng lệnh /p embed create"
+    )
     @app_commands.default_permissions(manage_guild=True)
     async def embed(self, interaction: discord.Interaction, name: str):
 
@@ -61,11 +81,17 @@ class BoosterGroup(app_commands.Group):
         update_guild_config(interaction.guild.id, "booster", "embed", name)
 
         await interaction.response.send_message(
-            f"Đã set embed booster: `{name}`",
+            f"Đã đặt embed booster: `{name}`",
             ephemeral=True
         )
 
-    @app_commands.command(name="role", description="Set booster role")
+    @app_commands.command(
+        name="role",
+        description="Đặt role sẽ được gán cho người boost"
+    )
+    @app_commands.describe(
+        role_input="ID hoặc mention của role cần gán"
+    )
     @app_commands.default_permissions(manage_guild=True)
     async def role(self, interaction: discord.Interaction, role_input: str):
 
@@ -95,11 +121,14 @@ class BoosterGroup(app_commands.Group):
         update_guild_config(guild.id, "booster", "role", role.id)
 
         await interaction.response.send_message(
-            f"Đã set booster role: {role.mention}",
+            f"Đã đặt booster role: {role.mention}",
             ephemeral=True
         )
 
-    @app_commands.command(name="test", description="Test booster system")
+    @app_commands.command(
+        name="test",
+        description="Kiểm tra hệ thống booster (gán role + gửi tin nhắn thử)"
+    )
     async def test(self, interaction: discord.Interaction):
 
         await interaction.response.defer(ephemeral=True)
@@ -193,10 +222,6 @@ class BoosterListener(commands.Cog):
 
         await send_config_message(member.guild, member, "booster")
 
-    # ======================
-    # STATE SYNC (SELF-HEALING)
-    # ======================
-
     @tasks.loop(minutes=10)
     async def booster_sync(self):
 
@@ -211,14 +236,12 @@ class BoosterListener(commands.Cog):
 
             for member in guild.members:
 
-                # Đang boost nhưng thiếu role → gán lại
                 if member.premium_since and role not in member.roles:
                     try:
                         await member.add_roles(role, reason="Booster Sync")
                     except:
                         pass
 
-                # Không boost nhưng vẫn còn role → remove
                 if not member.premium_since and role in member.roles:
                     try:
                         await member.remove_roles(role, reason="Booster Sync")
