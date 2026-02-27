@@ -27,7 +27,7 @@ def parse_placeholders(text: str, member: discord.Member, channel: discord.TextC
 
 
 # ======================
-# SEND FUNCTION (FIX DỨT ĐIỂM)
+# SEND FUNCTION (FIX CACHE CHANNEL)
 # ======================
 
 async def send_config_message(guild, member, section_name):
@@ -40,8 +40,16 @@ async def send_config_message(guild, member, section_name):
     if not channel_id:
         return False
 
+    # ===== FIX CHANNEL CACHE =====
     channel = guild.get_channel(channel_id)
-    if not channel or not isinstance(channel, discord.TextChannel):
+
+    if not channel:
+        try:
+            channel = await guild.fetch_channel(channel_id)
+        except:
+            return False
+
+    if not isinstance(channel, discord.TextChannel):
         return False
 
     # ===== TEXT =====
@@ -54,7 +62,6 @@ async def send_config_message(guild, member, section_name):
     if isinstance(embed_name, str) and embed_name.strip():
         embed_data = load_embed(embed_name)
 
-        # CHỈ tạo embed nếu load thành công
         if isinstance(embed_data, dict):
             embed = discord.Embed(
                 title=embed_data.get("title"),
@@ -65,8 +72,7 @@ async def send_config_message(guild, member, section_name):
             if embed_data.get("image"):
                 embed.set_image(url=embed_data["image"])
 
-    # ===== GỬI MESSAGE =====
-
+    # ===== SEND =====
     if parsed_text and embed:
         await channel.send(content=parsed_text, embed=embed)
 
