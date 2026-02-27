@@ -195,11 +195,13 @@ class EmbedGroup(app_commands.Group):
 # =============================
 
 class PGroup(app_commands.Group):
-    def __init__(self):
-        super().__init__(name="p", description="Main command group")
-        self.add_command(EmbedGroup())
-        self.add_command(GreetGroup())
-        self.add_command(LeaveGroup())
+    pass
+
+
+p_group = PGroup(name="p", description="Main command group")
+p_group.add_command(EmbedGroup())
+p_group.add_command(GreetGroup())
+p_group.add_command(LeaveGroup())
 
 
 # =============================
@@ -212,8 +214,7 @@ class Root(commands.Cog):
 
 
 async def setup(bot: commands.Bot):
-    root = Root(bot)
-    await bot.add_cog(root)
+    await bot.add_cog(Root(bot))
 
-    bot.tree.add_command(PGroup())
+    bot.tree.add_command(p_group)
     # await bot.add_cog(GreetLeaveListener(bot))  # vẫn tắt nếu bạn muốn
