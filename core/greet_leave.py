@@ -66,14 +66,16 @@ async def send_config_message(guild, member, section_name):
 
 
 # ======================
-# GREET GROUP (NO MORE SET GROUP)
+# GREET GROUP
 # ======================
 
 class GreetGroup(app_commands.Group):
     def __init__(self):
         super().__init__(name="greet", description="Greet system")
 
+    # 🔒 CHỈ ADMIN (Manage Guild)
     @app_commands.command(name="channel", description="Set greet channel")
+    @app_commands.default_permissions(manage_guild=True)
     async def channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
         update_guild_config(interaction.guild.id, "greet", "channel", channel.id)
         await interaction.response.send_message(
@@ -81,6 +83,7 @@ class GreetGroup(app_commands.Group):
         )
 
     @app_commands.command(name="embed", description="Set greet embed")
+    @app_commands.default_permissions(manage_guild=True)
     async def embed(self, interaction: discord.Interaction, name: str):
         if not load_embed(name):
             await interaction.response.send_message(
@@ -94,12 +97,14 @@ class GreetGroup(app_commands.Group):
         )
 
     @app_commands.command(name="message", description="Set greet message")
+    @app_commands.default_permissions(manage_guild=True)
     async def message(self, interaction: discord.Interaction, text: str):
         update_guild_config(interaction.guild.id, "greet", "message", text)
         await interaction.response.send_message(
             "Đã set message greet.", ephemeral=True
         )
 
+    # ✅ Member dùng được
     @app_commands.command(name="test", description="Test greet message")
     async def test(self, interaction: discord.Interaction):
         member = interaction.guild.get_member(interaction.user.id)
@@ -117,14 +122,16 @@ class GreetGroup(app_commands.Group):
 
 
 # ======================
-# LEAVE GROUP (NO MORE SET GROUP)
+# LEAVE GROUP
 # ======================
 
 class LeaveGroup(app_commands.Group):
     def __init__(self):
         super().__init__(name="leave", description="Leave system")
 
+    # 🔒 CHỈ ADMIN (Manage Guild)
     @app_commands.command(name="channel", description="Set leave channel")
+    @app_commands.default_permissions(manage_guild=True)
     async def channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
         update_guild_config(interaction.guild.id, "leave", "channel", channel.id)
         await interaction.response.send_message(
@@ -132,6 +139,7 @@ class LeaveGroup(app_commands.Group):
         )
 
     @app_commands.command(name="embed", description="Set leave embed")
+    @app_commands.default_permissions(manage_guild=True)
     async def embed(self, interaction: discord.Interaction, name: str):
         if not load_embed(name):
             await interaction.response.send_message(
@@ -145,12 +153,14 @@ class LeaveGroup(app_commands.Group):
         )
 
     @app_commands.command(name="message", description="Set leave message")
+    @app_commands.default_permissions(manage_guild=True)
     async def message(self, interaction: discord.Interaction, text: str):
         update_guild_config(interaction.guild.id, "leave", "message", text)
         await interaction.response.send_message(
             "Đã set message leave.", ephemeral=True
         )
 
+    # ✅ Member dùng được
     @app_commands.command(name="test", description="Test leave message")
     async def test(self, interaction: discord.Interaction):
         member = interaction.guild.get_member(interaction.user.id)
