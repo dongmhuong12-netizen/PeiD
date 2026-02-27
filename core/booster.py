@@ -196,7 +196,7 @@ class BoosterListener(commands.Cog):
     # STATE SYNC (SELF-HEALING)
     # ======================
 
-    @tasks.loop(minutes=3)
+    @tasks.loop(minutes=10)
     async def booster_sync(self):
 
         for guild in self.bot.guilds:
