@@ -1,16 +1,12 @@
-import os
-import sys
-
-# Thêm thư mục gốc project vào Python path
-sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
-
 import discord
 from discord.ext import commands
 import asyncio
+import os
 
 TOKEN = os.getenv("TOKEN")
 
 intents = discord.Intents.default()
+intents.members = True
 intents.message_content = True
 
 bot = commands.Bot(
@@ -19,25 +15,43 @@ bot = commands.Bot(
 )
 
 
+# =========================
+# LOAD EXTENSIONS
+# =========================
+
+async def load_extensions():
+    await bot.load_extension("core.root")
+
+
+# =========================
+# READY EVENT
+# =========================
+
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user} (ID: {bot.user.id})")
     print("------")
 
-    # Sync sau khi bot đã ready
     try:
+        # ❌ KHÔNG clear
+        # ❌ KHÔNG guild sync
+        # ✅ Global sync chuẩn
+
         synced = await bot.tree.sync()
-        print(f"Synced {len(synced)} slash commands globally.")
+        print(f"Synced {len(synced)} global commands.")
+
     except Exception as e:
         print(f"Sync error: {e}")
 
 
+# =========================
+# START BOT
+# =========================
+
 async def main():
     async with bot:
-        # Load extension trước khi start
-        await bot.load_extension("core.root")
+        await load_extensions()
         await bot.start(TOKEN)
 
 
-if __name__ == "__main__":
-    asyncio.run(main())
+asyncio.run(main())
