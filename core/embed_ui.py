@@ -28,21 +28,21 @@ class EmbedUIView(View):
         ACTIVE_EMBED_VIEWS[name].append(self)
 
     # =============================
-    # LINK TOKEN PARSER
+    # FIXED LINK TOKEN PARSER
     # =============================
 
     def extract_link_tokens(self, text: str):
         if not text:
             return text, None, None
 
-        label_match = re.search(r'link_label"(.*?)"', text)
-        url_match = re.search(r'link_url"(.*?)"', text)
+        label_match = re.search(r'link_label\s*"(.*?)"', text, re.IGNORECASE)
+        url_match = re.search(r'link_url\s*"(.*?)"', text, re.IGNORECASE)
 
-        label = label_match.group(1) if label_match else None
-        url = url_match.group(1) if url_match else None
+        label = label_match.group(1).strip() if label_match else None
+        url = url_match.group(1).strip() if url_match else None
 
-        text = re.sub(r'link_label".*?"', '', text)
-        text = re.sub(r'link_url".*?"', '', text)
+        text = re.sub(r'link_label\s*".*?"', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'link_url\s*".*?"', '', text, flags=re.IGNORECASE)
 
         return text.strip(), label, url
 
@@ -61,7 +61,7 @@ class EmbedUIView(View):
         link_label = None
         link_url = None
 
-        # Parse placeholder nếu có interaction
+        # ===== Placeholder Parse (preview only) =====
         if interaction:
             member = interaction.user
             channel = interaction.channel
@@ -89,7 +89,7 @@ class EmbedUIView(View):
             title = parse(title)
             description = parse(description)
 
-        # ===== EXTRACT LINK TOKEN (chỉ trong description) =====
+        # ===== EXTRACT LINK TOKEN =====
         if isinstance(description, str):
             description, link_label, link_url = self.extract_link_tokens(description)
 
@@ -100,8 +100,7 @@ class EmbedUIView(View):
             text = text.replace("\u200b", "")
             text = text.replace("\ufeff", "")
             text = text.replace("\r", "")
-            text = text.strip()
-            return text
+            return text.strip()
 
         title = clean_text(title)
         description = clean_text(description)
@@ -115,7 +114,10 @@ class EmbedUIView(View):
         if self.embed_data.get("image"):
             embed.set_image(url=self.embed_data["image"])
 
-        # ===== BUILD VIEW WITH LINK BUTTON =====
+        if self.embed_data.get("thumbnail"):
+            embed.set_thumbnail(url=self.embed_data["thumbnail"])
+
+        # ===== BUILD VIEW =====
         self.clear_items()
         self._add_default_buttons()
 
