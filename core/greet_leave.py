@@ -98,7 +98,13 @@ class GreetGroup(app_commands.Group):
         if embed_name:
             embed_data = load_embed(embed_name)
             if embed_data:
-                embed = discord.Embed.from_dict(embed_data)
+                embed = discord.Embed(
+                    title=embed_data.get("title"),
+                    description=embed_data.get("description"),
+                    color=embed_data.get("color") or 0x2F3136
+                )
+                if embed_data.get("image"):
+                    embed.set_image(url=embed_data["image"])
 
         await channel.send(content=parsed_text, embed=embed)
         await interaction.response.send_message(
@@ -178,7 +184,13 @@ class LeaveGroup(app_commands.Group):
         if embed_name:
             embed_data = load_embed(embed_name)
             if embed_data:
-                embed = discord.Embed.from_dict(embed_data)
+                embed = discord.Embed(
+                    title=embed_data.get("title"),
+                    description=embed_data.get("description"),
+                    color=embed_data.get("color") or 0x2F3136
+                )
+                if embed_data.get("image"):
+                    embed.set_image(url=embed_data["image"])
 
         await channel.send(content=parsed_text, embed=embed)
         await interaction.response.send_message(
@@ -215,7 +227,13 @@ class GreetLeaveListener(commands.Cog):
         if embed_name:
             embed_data = load_embed(embed_name)
             if embed_data:
-                embed = discord.Embed.from_dict(embed_data)
+                embed = discord.Embed(
+                    title=embed_data.get("title"),
+                    description=embed_data.get("description"),
+                    color=embed_data.get("color") or 0x2F3136
+                )
+                if embed_data.get("image"):
+                    embed.set_image(url=embed_data["image"])
 
         await channel.send(content=parsed_text, embed=embed)
 
@@ -240,6 +258,12 @@ class GreetLeaveListener(commands.Cog):
         if embed_name:
             embed_data = load_embed(embed_name)
             if embed_data:
-                embed = discord.Embed.from_dict(embed_data)
+                embed = discord.Embed(
+                    title=embed_data.get("title"),
+                    description=embed_data.get("description"),
+                    color=embed_data.get("color") or 0x2F3136
+                )
+                if embed_data.get("image"):
+                    embed.set_image(url=embed_data["image"])
 
         await channel.send(content=parsed_text, embed=embed)
