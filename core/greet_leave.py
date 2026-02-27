@@ -159,6 +159,12 @@ class GreetGroup(app_commands.Group):
         update_guild_config(interaction.guild.id, "greet", "embed", name)
         await interaction.response.send_message("Đã cập nhật embed chào mừng.", ephemeral=True)
 
+    @app_commands.command(name="test")
+    async def test_greet(self, interaction: discord.Interaction):
+        member = interaction.user
+        await send_config_message(interaction.guild, member, "greet")
+        await interaction.response.send_message("Test greet xong.", ephemeral=True)
+
 
 class LeaveGroup(app_commands.Group):
     def __init__(self):
@@ -178,6 +184,12 @@ class LeaveGroup(app_commands.Group):
     async def set_embed(self, interaction: discord.Interaction, name: str):
         update_guild_config(interaction.guild.id, "leave", "embed", name)
         await interaction.response.send_message("Đã cập nhật embed rời đi.", ephemeral=True)
+
+    @app_commands.command(name="test")
+    async def test_leave(self, interaction: discord.Interaction):
+        member = interaction.user
+        await send_config_message(interaction.guild, member, "leave")
+        await interaction.response.send_message("Test leave xong.", ephemeral=True)
 
 
 # =====================================================
