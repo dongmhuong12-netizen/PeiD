@@ -47,7 +47,6 @@ def extract_link_tokens(text: str):
     label = label_match.group(1) if label_match else None
     url = url_match.group(1) if url_match else None
 
-    # xoá token khỏi text nhưng giữ nguyên nội dung còn lại
     text = re.sub(r'link_label".*?"', '', text)
     text = re.sub(r'link_url".*?"', '', text)
 
@@ -79,23 +78,20 @@ async def send_config_message(guild, member, section_name):
         return False
 
     view = None
+    parsed_text = None
+    embed = None
+    link_label = None
+    link_url = None
 
     # -------- TEXT --------
 
-    parsed_text = None
     if isinstance(message_text, str) and message_text.strip():
 
         parsed_text = parse_placeholders(message_text, member, channel)
-
         parsed_text, link_label, link_url = extract_link_tokens(parsed_text)
-
-        if link_label and link_url:
-            view = discord.ui.View()
-            view.add_item(discord.ui.Button(label=link_label, url=link_url))
 
     # -------- EMBED --------
 
-    embed = None
     if isinstance(embed_name, str) and embed_name.strip():
         embed_data = load_embed(embed_name)
 
@@ -113,6 +109,14 @@ async def send_config_message(guild, member, section_name):
                 channel
             )
 
+            # 🔥 SỬA Ở ĐÂY: tách link trong embed luôn
+            description, embed_label, embed_url = extract_link_tokens(description)
+
+            # nếu text không có link thì lấy link từ embed
+            if not link_label and embed_label:
+                link_label = embed_label
+                link_url = embed_url
+
             embed = discord.Embed(
                 title=title,
                 description=description,
@@ -124,6 +128,12 @@ async def send_config_message(guild, member, section_name):
 
             if embed_data.get("thumbnail"):
                 embed.set_thumbnail(url=embed_data["thumbnail"])
+
+    # -------- BUTTON --------
+
+    if link_label and link_url:
+        view = discord.ui.View()
+        view.add_item(discord.ui.Button(label=link_label, url=link_url))
 
     # -------- SEND --------
 
