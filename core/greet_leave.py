@@ -66,22 +66,22 @@ async def send_config_message(guild, member, section_name):
 
 
 # ======================
-# GREET SET GROUP
+# GREET GROUP (NO MORE SET GROUP)
 # ======================
 
-class GreetSetGroup(app_commands.Group):
+class GreetGroup(app_commands.Group):
     def __init__(self):
-        super().__init__(name="set", description="Set greet configuration")
+        super().__init__(name="greet", description="Greet system")
 
     @app_commands.command(name="channel", description="Set greet channel")
-    async def set_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
+    async def channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
         update_guild_config(interaction.guild.id, "greet", "channel", channel.id)
         await interaction.response.send_message(
             f"Đã set kênh greet: {channel.mention}", ephemeral=True
         )
 
     @app_commands.command(name="embed", description="Set greet embed")
-    async def set_embed(self, interaction: discord.Interaction, name: str):
+    async def embed(self, interaction: discord.Interaction, name: str):
         if not load_embed(name):
             await interaction.response.send_message(
                 f"Embed `{name}` không tồn tại.", ephemeral=True
@@ -94,21 +94,11 @@ class GreetSetGroup(app_commands.Group):
         )
 
     @app_commands.command(name="message", description="Set greet message")
-    async def set_message(self, interaction: discord.Interaction, text: str):
+    async def message(self, interaction: discord.Interaction, text: str):
         update_guild_config(interaction.guild.id, "greet", "message", text)
         await interaction.response.send_message(
             "Đã set message greet.", ephemeral=True
         )
-
-
-# ======================
-# GREET GROUP
-# ======================
-
-class GreetGroup(app_commands.Group):
-    def __init__(self):
-        super().__init__(name="greet", description="Greet system")
-        self.add_command(GreetSetGroup())
 
     @app_commands.command(name="test", description="Test greet message")
     async def test(self, interaction: discord.Interaction):
@@ -127,22 +117,22 @@ class GreetGroup(app_commands.Group):
 
 
 # ======================
-# LEAVE SET GROUP
+# LEAVE GROUP (NO MORE SET GROUP)
 # ======================
 
-class LeaveSetGroup(app_commands.Group):
+class LeaveGroup(app_commands.Group):
     def __init__(self):
-        super().__init__(name="set", description="Set leave configuration")
+        super().__init__(name="leave", description="Leave system")
 
     @app_commands.command(name="channel", description="Set leave channel")
-    async def set_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
+    async def channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
         update_guild_config(interaction.guild.id, "leave", "channel", channel.id)
         await interaction.response.send_message(
             f"Đã set kênh leave: {channel.mention}", ephemeral=True
         )
 
     @app_commands.command(name="embed", description="Set leave embed")
-    async def set_embed(self, interaction: discord.Interaction, name: str):
+    async def embed(self, interaction: discord.Interaction, name: str):
         if not load_embed(name):
             await interaction.response.send_message(
                 f"Embed `{name}` không tồn tại.", ephemeral=True
@@ -155,21 +145,11 @@ class LeaveSetGroup(app_commands.Group):
         )
 
     @app_commands.command(name="message", description="Set leave message")
-    async def set_message(self, interaction: discord.Interaction, text: str):
+    async def message(self, interaction: discord.Interaction, text: str):
         update_guild_config(interaction.guild.id, "leave", "message", text)
         await interaction.response.send_message(
             "Đã set message leave.", ephemeral=True
         )
-
-
-# ======================
-# LEAVE GROUP
-# ======================
-
-class LeaveGroup(app_commands.Group):
-    def __init__(self):
-        super().__init__(name="leave", description="Leave system")
-        self.add_command(LeaveSetGroup())
 
     @app_commands.command(name="test", description="Test leave message")
     async def test(self, interaction: discord.Interaction):
