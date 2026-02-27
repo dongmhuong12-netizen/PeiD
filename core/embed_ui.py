@@ -32,10 +32,14 @@ class EmbedUIView(View):
     # =============================
 
     def build_embed(self):
+        color_value = self.embed_data.get("color")
+        if color_value is None:
+            color_value = 0x2F3136
+
         embed = discord.Embed(
             title=self.embed_data.get("title"),
             description=self.embed_data.get("description"),
-            color=self.embed_data.get("color", 0x2F3136)
+            color=color_value
         )
 
         if self.embed_data.get("image"):
