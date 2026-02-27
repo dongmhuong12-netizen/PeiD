@@ -215,4 +215,6 @@ async def setup(bot: commands.Bot):
     await bot.add_cog(Root(bot))
     await bot.add_cog(GreetLeaveListener(bot))
 
-    bot.tree.add_command(PGroup())
+    # 🔒 ĐẢM BẢO KHÔNG BAO GIỜ ADD TRÙNG GROUP p
+    if bot.tree.get_command("p") is None:
+        bot.tree.add_command(PGroup())
