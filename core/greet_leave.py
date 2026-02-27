@@ -4,6 +4,7 @@ from discord.ext import commands
 
 from core.greet_storage import get_section, update_guild_config
 from core.embed_storage import load_embed
+from core.embed_sender import send_embed
 from core.variable_engine import apply_variables
 
 
@@ -26,23 +27,30 @@ async def send_config_message(guild: discord.Guild, member: discord.Member, sect
     if not channel:
         return False
 
-    # Apply variables to message
-    if message_text:
-        message_text = apply_variables(message_text, guild, member)
-
-    embed_obj = None
-
-    # Apply variables to embed
-    if embed_name:
-        embed_data = load_embed(embed_name)
-        if embed_data:
-            embed_data = apply_variables(embed_data, guild, member)
-            embed_obj = discord.Embed.from_dict(embed_data)
-
     try:
-        await channel.send(content=message_text, embed=embed_obj)
-        return True
-    except:
+        sent_anything = False
+
+        # 🔥 Nếu có embed → luôn đi qua send_embed (auto replace biến)
+        if embed_name:
+            embed_data = load_embed(embed_name)
+            if embed_data:
+                await send_embed(
+                    channel,
+                    embed_data,
+                    guild,
+                    member
+                )
+                sent_anything = True
+
+        # 🔥 Nếu có message thường
+        if message_text:
+            message_text = apply_variables(message_text, guild, member)
+            await channel.send(content=message_text)
+            sent_anything = True
+
+        return sent_anything
+
+    except Exception:
         return False
 
 
