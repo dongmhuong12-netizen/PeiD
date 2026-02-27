@@ -27,7 +27,7 @@ def parse_placeholders(text: str, member: discord.Member, channel: discord.TextC
 
 
 # ======================
-# HELPER SEND FUNCTION
+# HELPER SEND FUNCTION (FINAL STABLE VERSION)
 # ======================
 
 async def send_config_message(guild, member, section_name):
@@ -59,28 +59,22 @@ async def send_config_message(guild, member, section_name):
                 description=embed_data.get("description"),
                 color=embed_data.get("color") or 0x2F3136
             )
-
             if embed_data.get("image"):
                 embed.set_image(url=embed_data["image"])
 
-    # ===== SEND LOGIC (FIXED) =====
-
-    # Không có cả text lẫn embed
-    if parsed_text is None and embed is None:
+    # ===== SIMPLE SEND LOGIC =====
+    # Nếu không có gì để gửi
+    if embed is None and parsed_text is None:
         return False
 
-    # Nếu có embed -> luôn gửi embed (có thể kèm text)
-    if embed is not None:
-        await channel.send(
-            content=parsed_text if parsed_text else None,
-            embed=embed
-        )
-    else:
-        # Chỉ có text
-        if parsed_text:
-            await channel.send(content=parsed_text)
-        else:
-            return False
+    # Discord tự xử lý:
+    # content=None + embed -> gửi embed
+    # content="text" + embed=None -> gửi text
+    # cả hai có -> gửi cả hai
+    await channel.send(
+        content=parsed_text,
+        embed=embed
+    )
 
     return True
 
