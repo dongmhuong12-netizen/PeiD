@@ -8,6 +8,7 @@ from core.embed_storage import (
     delete_embed,
     get_all_embed_names
 )
+from core.embed_sender import send_embed  # 🔥 THÊM DÒNG NÀY
 
 from core.greet_leave import GreetGroup, LeaveGroup, GreetLeaveListener
 from core.booster import BoosterGroup, BoosterListener
@@ -158,6 +159,7 @@ class EmbedGroup(app_commands.Group):
             ephemeral=True
         )
 
+    # 🔥🔥🔥 FIX Ở ĐÂY
     @app_commands.command(name="show", description="Send embed to channel")
     @app_commands.autocomplete(name=embed_name_autocomplete)
     async def show(self, interaction: discord.Interaction, name: str):
@@ -171,26 +173,13 @@ class EmbedGroup(app_commands.Group):
             )
             return
 
-        color_value = data.get("color")
-        if color_value is None:
-            color_value = 0x2F3136
-
-        # =============================
-        # FIX: KHÔNG PHÁ MARKDOWN NỮA
-        # =============================
-
-        description = data.get("description") or ""
-
-        embed = discord.Embed(
-            title=data.get("title"),
-            description=description,
-            color=color_value
+        # 🔥 DÙNG send_embed ĐỂ AUTO REPLACE BIẾN
+        await send_embed(
+            interaction.channel,
+            data,
+            interaction.guild,
+            interaction.user
         )
-
-        if data.get("image"):
-            embed.set_image(url=data["image"])
-
-        await interaction.channel.send(embed=embed)
 
         await interaction.response.send_message(
             f"Embed `{name}` đã được gửi.",
@@ -225,6 +214,5 @@ async def setup(bot: commands.Bot):
     await bot.add_cog(GreetLeaveListener(bot))
     await bot.add_cog(BoosterListener(bot))
 
-    # 🔒 ĐẢM BẢO KHÔNG BAO GIỜ ADD TRÙNG GROUP p
     if bot.tree.get_command("p") is None:
         bot.tree.add_command(PGroup())
