@@ -175,13 +175,11 @@ class EmbedGroup(app_commands.Group):
         if color_value is None:
             color_value = 0x2F3136
 
-        # ===== FIX MARKDOWN DỨT ĐIỂM =====
+        # =============================
+        # FIX: KHÔNG PHÁ MARKDOWN NỮA
+        # =============================
+
         description = data.get("description") or ""
-        description = description.replace("```", "")
-        description = description.replace("`", "")
-        description = description.replace("\u200b", "")
-        description = description.replace("\ufeff", "")
-        description = description.strip()
 
         embed = discord.Embed(
             title=data.get("title"),
@@ -193,6 +191,7 @@ class EmbedGroup(app_commands.Group):
             embed.set_image(url=data["image"])
 
         await interaction.channel.send(embed=embed)
+
         await interaction.response.send_message(
             f"Embed `{name}` đã được gửi.",
             ephemeral=True
