@@ -4,6 +4,7 @@ from discord.ext import commands
 
 from core.greet_storage import get_section, update_guild_config
 from core.embed_storage import load_embed
+from core.variable_engine import apply_variables
 
 
 # ======================
@@ -25,46 +26,18 @@ async def send_config_message(guild: discord.Guild, member: discord.Member, sect
     if not channel:
         return False
 
+    # Apply variables to message
+    if message_text:
+        message_text = apply_variables(message_text, guild, member)
+
     embed_obj = None
 
+    # Apply variables to embed
     if embed_name:
         embed_data = load_embed(embed_name)
         if embed_data:
+            embed_data = apply_variables(embed_data, guild, member)
             embed_obj = discord.Embed.from_dict(embed_data)
-
-    # ======================
-    # BIẾN HỆ THỐNG
-    # ======================
-
-    if message_text:
-        message_text = (
-            message_text
-
-            # ===== USER =====
-            .replace("{user}", member.mention)
-            .replace("{user_name}", member.name)
-            .replace("{user_display}", member.display_name)
-            .replace("{user_id}", str(member.id))
-            .replace("{user_avatar}", member.display_avatar.url)
-            .replace("{account_created}", member.created_at.strftime("%d/%m/%Y"))
-            .replace(
-                "{joined_at}",
-                member.joined_at.strftime("%d/%m/%Y") if member.joined_at else "Không rõ"
-            )
-
-            # ===== SERVER =====
-            .replace("{server}", guild.name)
-            .replace("{server_id}", str(guild.id))
-            .replace("{member_count}", str(guild.member_count))
-            .replace("{boost_count}", str(guild.premium_subscription_count))
-            .replace("{boost_level}", str(guild.premium_tier))
-            .replace("{role_count}", str(len(guild.roles)))
-            .replace("{channel_count}", str(len(guild.channels)))
-            .replace(
-                "{online_count}",
-                str(len([m for m in guild.members if m.status != discord.Status.offline]))
-            )
-        )
 
     try:
         await channel.send(content=message_text, embed=embed_obj)
@@ -84,13 +57,7 @@ class GreetGroup(app_commands.Group):
             description="Hệ thống chào mừng thành viên mới"
         )
 
-    @app_commands.command(
-        name="channel",
-        description="Đặt kênh gửi tin nhắn chào mừng"
-    )
-    @app_commands.describe(
-        channel="Chọn kênh sẽ gửi tin nhắn khi có thành viên mới"
-    )
+    @app_commands.command(name="channel", description="Đặt kênh gửi tin nhắn chào mừng")
     @app_commands.default_permissions(manage_guild=True)
     async def channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
 
@@ -101,13 +68,7 @@ class GreetGroup(app_commands.Group):
             ephemeral=True
         )
 
-    @app_commands.command(
-        name="message",
-        description="Đặt nội dung tin nhắn chào mừng"
-    )
-    @app_commands.describe(
-        message="Có thể dùng các biến như {user}, {server}, {member_count}, {joined_at}, {account_created}..."
-    )
+    @app_commands.command(name="message", description="Đặt nội dung tin nhắn chào mừng")
     @app_commands.default_permissions(manage_guild=True)
     async def message(self, interaction: discord.Interaction, message: str):
 
@@ -118,13 +79,7 @@ class GreetGroup(app_commands.Group):
             ephemeral=True
         )
 
-    @app_commands.command(
-        name="embed",
-        description="Gán embed đã tạo cho hệ thống chào mừng"
-    )
-    @app_commands.describe(
-        name="Tên embed đã lưu bằng lệnh /p embed create"
-    )
+    @app_commands.command(name="embed", description="Gán embed cho hệ thống chào mừng")
     @app_commands.default_permissions(manage_guild=True)
     async def embed(self, interaction: discord.Interaction, name: str):
 
@@ -142,10 +97,7 @@ class GreetGroup(app_commands.Group):
             ephemeral=True
         )
 
-    @app_commands.command(
-        name="test",
-        description="Kiểm tra hệ thống chào mừng (gửi thử tin nhắn)"
-    )
+    @app_commands.command(name="test", description="Gửi thử tin nhắn chào mừng")
     async def test(self, interaction: discord.Interaction):
 
         await interaction.response.defer(ephemeral=True)
@@ -156,16 +108,10 @@ class GreetGroup(app_commands.Group):
             "greet"
         )
 
-        if not success:
-            await interaction.followup.send(
-                "Chưa cấu hình hệ thống chào mừng.",
-                ephemeral=True
-            )
-        else:
-            await interaction.followup.send(
-                "Đã gửi tin nhắn chào mừng thử.",
-                ephemeral=True
-            )
+        await interaction.followup.send(
+            "Đã gửi thử." if success else "Chưa cấu hình.",
+            ephemeral=True
+        )
 
 
 # ======================
@@ -179,13 +125,7 @@ class LeaveGroup(app_commands.Group):
             description="Hệ thống thông báo khi thành viên rời đi"
         )
 
-    @app_commands.command(
-        name="channel",
-        description="Đặt kênh gửi tin nhắn khi thành viên rời đi"
-    )
-    @app_commands.describe(
-        channel="Chọn kênh sẽ gửi tin nhắn khi có người rời server"
-    )
+    @app_commands.command(name="channel", description="Đặt kênh gửi tin nhắn rời đi")
     @app_commands.default_permissions(manage_guild=True)
     async def channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
 
@@ -196,13 +136,7 @@ class LeaveGroup(app_commands.Group):
             ephemeral=True
         )
 
-    @app_commands.command(
-        name="message",
-        description="Đặt nội dung tin nhắn rời đi"
-    )
-    @app_commands.describe(
-        message="Có thể dùng các biến như {user}, {server}, {member_count}, {joined_at}..."
-    )
+    @app_commands.command(name="message", description="Đặt nội dung tin nhắn rời đi")
     @app_commands.default_permissions(manage_guild=True)
     async def message(self, interaction: discord.Interaction, message: str):
 
@@ -213,13 +147,7 @@ class LeaveGroup(app_commands.Group):
             ephemeral=True
         )
 
-    @app_commands.command(
-        name="embed",
-        description="Gán embed đã tạo cho hệ thống rời đi"
-    )
-    @app_commands.describe(
-        name="Tên embed đã lưu bằng lệnh /p embed create"
-    )
+    @app_commands.command(name="embed", description="Gán embed cho hệ thống rời đi")
     @app_commands.default_permissions(manage_guild=True)
     async def embed(self, interaction: discord.Interaction, name: str):
 
@@ -237,10 +165,7 @@ class LeaveGroup(app_commands.Group):
             ephemeral=True
         )
 
-    @app_commands.command(
-        name="test",
-        description="Kiểm tra hệ thống rời đi (gửi thử tin nhắn)"
-    )
+    @app_commands.command(name="test", description="Gửi thử tin nhắn rời đi")
     async def test(self, interaction: discord.Interaction):
 
         await interaction.response.defer(ephemeral=True)
@@ -251,20 +176,14 @@ class LeaveGroup(app_commands.Group):
             "leave"
         )
 
-        if not success:
-            await interaction.followup.send(
-                "Chưa cấu hình hệ thống rời đi.",
-                ephemeral=True
-            )
-        else:
-            await interaction.followup.send(
-                "Đã gửi tin nhắn rời đi thử.",
-                ephemeral=True
-            )
+        await interaction.followup.send(
+            "Đã gửi thử." if success else "Chưa cấu hình.",
+            ephemeral=True
+        )
 
 
 # ======================
-# LISTENER (AUTO)
+# LISTENER
 # ======================
 
 class GreetLeaveListener(commands.Cog):
