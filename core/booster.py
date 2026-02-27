@@ -104,6 +104,7 @@ class BoosterGroup(app_commands.Group):
 
         member = interaction.user
         guild = interaction.guild
+        bot_member = guild.me
 
         config = get_section(guild.id, "booster")
 
@@ -111,20 +112,38 @@ class BoosterGroup(app_commands.Group):
         role = guild.get_role(role_id) if role_id else None
 
         if role:
+            if role >= bot_member.top_role:
+                await interaction.response.send_message(
+                    "Bot không thể gán role này vì role cao hơn hoặc bằng role của bot.",
+                    ephemeral=True
+                )
+                return
+
+            if role in member.roles:
+                await interaction.response.send_message(
+                    "Bạn đã có role này rồi.",
+                    ephemeral=True
+                )
+                return
+
             try:
                 await member.add_roles(role, reason="Booster Test")
-            except:
-                pass
+            except Exception as e:
+                await interaction.response.send_message(
+                    f"Lỗi khi gán role: {e}",
+                    ephemeral=True
+                )
+                return
 
         success = await send_config_message(guild, member, "booster")
 
         if not success:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 "Chưa cấu hình booster.",
                 ephemeral=True
             )
         else:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 "Đã test booster (role + message).",
                 ephemeral=True
             )
