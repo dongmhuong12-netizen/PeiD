@@ -11,7 +11,7 @@ from core.embed_storage import load_embed
 # ======================
 
 def parse_placeholders(text: str, member: discord.Member, channel: discord.TextChannel):
-    if not text:
+    if text is None:
         return None
 
     return (
@@ -24,6 +24,45 @@ def parse_placeholders(text: str, member: discord.Member, channel: discord.TextC
         .replace("{top_role}", member.top_role.mention if member.top_role else "")
         .replace("{server_icon}", member.guild.icon.url if member.guild.icon else "")
     )
+
+
+# ======================
+# HELPER SEND FUNCTION
+# ======================
+
+async def send_config_message(guild, member, section_name):
+    config = get_section(guild.id, section_name)
+
+    channel_id = config.get("channel")
+    embed_name = config.get("embed")
+    message_text = config.get("message")
+
+    if not channel_id:
+        return False
+
+    channel = guild.get_channel(channel_id)
+    if not channel:
+        return False
+
+    parsed_text = parse_placeholders(message_text, member, channel) if message_text else None
+
+    embed = None
+    if embed_name:
+        embed_data = load_embed(embed_name)
+        if embed_data:
+            embed = discord.Embed(
+                title=embed_data.get("title"),
+                description=embed_data.get("description"),
+                color=embed_data.get("color") or 0x2F3136
+            )
+            if embed_data.get("image"):
+                embed.set_image(url=embed_data["image"])
+
+    if not parsed_text and not embed:
+        return False
+
+    await channel.send(content=parsed_text, embed=embed)
+    return True
 
 
 # ======================
@@ -73,43 +112,18 @@ class GreetGroup(app_commands.Group):
 
     @app_commands.command(name="test", description="Test greet message")
     async def test(self, interaction: discord.Interaction):
-        config = get_section(interaction.guild.id, "greet")
+        member = interaction.guild.get_member(interaction.user.id)
 
-        channel_id = config.get("channel")
-        embed_name = config.get("embed")
-        message_text = config.get("message")
+        success = await send_config_message(interaction.guild, member, "greet")
 
-        if not channel_id:
+        if not success:
             await interaction.response.send_message(
-                "Chưa set kênh greet.", ephemeral=True
+                "Chưa cấu hình greet đầy đủ.", ephemeral=True
             )
-            return
-
-        channel = interaction.guild.get_channel(channel_id)
-        if not channel:
+        else:
             await interaction.response.send_message(
-                "Không tìm thấy kênh greet.", ephemeral=True
+                "Đã gửi test greet.", ephemeral=True
             )
-            return
-
-        parsed_text = parse_placeholders(message_text, interaction.user, channel)
-
-        embed = None
-        if embed_name:
-            embed_data = load_embed(embed_name)
-            if embed_data:
-                embed = discord.Embed(
-                    title=embed_data.get("title"),
-                    description=embed_data.get("description"),
-                    color=embed_data.get("color") or 0x2F3136
-                )
-                if embed_data.get("image"):
-                    embed.set_image(url=embed_data["image"])
-
-        await channel.send(content=parsed_text, embed=embed)
-        await interaction.response.send_message(
-            "Đã gửi test greet.", ephemeral=True
-        )
 
 
 # ======================
@@ -159,43 +173,18 @@ class LeaveGroup(app_commands.Group):
 
     @app_commands.command(name="test", description="Test leave message")
     async def test(self, interaction: discord.Interaction):
-        config = get_section(interaction.guild.id, "leave")
+        member = interaction.guild.get_member(interaction.user.id)
 
-        channel_id = config.get("channel")
-        embed_name = config.get("embed")
-        message_text = config.get("message")
+        success = await send_config_message(interaction.guild, member, "leave")
 
-        if not channel_id:
+        if not success:
             await interaction.response.send_message(
-                "Chưa set kênh leave.", ephemeral=True
+                "Chưa cấu hình leave đầy đủ.", ephemeral=True
             )
-            return
-
-        channel = interaction.guild.get_channel(channel_id)
-        if not channel:
+        else:
             await interaction.response.send_message(
-                "Không tìm thấy kênh leave.", ephemeral=True
+                "Đã gửi test leave.", ephemeral=True
             )
-            return
-
-        parsed_text = parse_placeholders(message_text, interaction.user, channel)
-
-        embed = None
-        if embed_name:
-            embed_data = load_embed(embed_name)
-            if embed_data:
-                embed = discord.Embed(
-                    title=embed_data.get("title"),
-                    description=embed_data.get("description"),
-                    color=embed_data.get("color") or 0x2F3136
-                )
-                if embed_data.get("image"):
-                    embed.set_image(url=embed_data["image"])
-
-        await channel.send(content=parsed_text, embed=embed)
-        await interaction.response.send_message(
-            "Đã gửi test leave.", ephemeral=True
-        )
 
 
 # ======================
@@ -208,62 +197,8 @@ class GreetLeaveListener(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
-        config = get_section(member.guild.id, "greet")
-
-        channel_id = config.get("channel")
-        embed_name = config.get("embed")
-        message_text = config.get("message")
-
-        if not channel_id:
-            return
-
-        channel = member.guild.get_channel(channel_id)
-        if not channel:
-            return
-
-        parsed_text = parse_placeholders(message_text, member, channel)
-
-        embed = None
-        if embed_name:
-            embed_data = load_embed(embed_name)
-            if embed_data:
-                embed = discord.Embed(
-                    title=embed_data.get("title"),
-                    description=embed_data.get("description"),
-                    color=embed_data.get("color") or 0x2F3136
-                )
-                if embed_data.get("image"):
-                    embed.set_image(url=embed_data["image"])
-
-        await channel.send(content=parsed_text, embed=embed)
+        await send_config_message(member.guild, member, "greet")
 
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):
-        config = get_section(member.guild.id, "leave")
-
-        channel_id = config.get("channel")
-        embed_name = config.get("embed")
-        message_text = config.get("message")
-
-        if not channel_id:
-            return
-
-        channel = member.guild.get_channel(channel_id)
-        if not channel:
-            return
-
-        parsed_text = parse_placeholders(message_text, member, channel)
-
-        embed = None
-        if embed_name:
-            embed_data = load_embed(embed_name)
-            if embed_data:
-                embed = discord.Embed(
-                    title=embed_data.get("title"),
-                    description=embed_data.get("description"),
-                    color=embed_data.get("color") or 0x2F3136
-                )
-                if embed_data.get("image"):
-                    embed.set_image(url=embed_data["image"])
-
-        await channel.send(content=parsed_text, embed=embed)
+        await send_config_message(member.guild, member, "leave")
