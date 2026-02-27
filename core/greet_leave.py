@@ -7,27 +7,33 @@ from core.embed_storage import load_embed
 
 
 # ======================
-# PLACEHOLDER PARSER
+# PLACEHOLDER PARSER (FIX BIẾN)
 # ======================
 
 def parse_placeholders(text: str, member: discord.Member, channel: discord.TextChannel):
-    if not text:
-        return None
+    if not text or not member:
+        return text
 
-    return (
-        text
-        .replace("{user}", member.mention)
-        .replace("{username}", member.name)
-        .replace("{server}", member.guild.name)
-        .replace("{membercount}", str(member.guild.member_count))
-        .replace("{channel}", channel.mention)
-        .replace("{top_role}", member.top_role.mention if member.top_role else "")
-        .replace("{server_icon}", member.guild.icon.url if member.guild.icon else "")
-    )
+    guild = member.guild
+
+    replacements = {
+        "{user}": member.mention,
+        "{username}": member.name,
+        "{server}": guild.name if guild else "",
+        "{membercount}": str(guild.member_count) if guild else "0",
+        "{channel}": channel.mention if channel else "",
+        "{top_role}": member.top_role.mention if hasattr(member, "top_role") else "",
+        "{server_icon}": guild.icon.url if guild and guild.icon else ""
+    }
+
+    for key, value in replacements.items():
+        text = text.replace(key, value)
+
+    return text
 
 
 # ======================
-# SEND FUNCTION (FIX CACHE CHANNEL)
+# SEND FUNCTION (FIX CACHE + BIẾN)
 # ======================
 
 async def send_config_message(guild, member, section_name):
@@ -40,7 +46,7 @@ async def send_config_message(guild, member, section_name):
     if not channel_id:
         return False
 
-    # ===== FIX CHANNEL CACHE =====
+    # ===== FIX CACHE CHANNEL =====
     channel = guild.get_channel(channel_id)
 
     if not channel:
@@ -148,7 +154,8 @@ class GreetGroup(app_commands.Group):
     @app_commands.command(name="test", description="Test greet message")
     async def test(self, interaction: discord.Interaction):
 
-        member = interaction.guild.get_member(interaction.user.id)
+        member = interaction.user  # FIX BIẾN
+
         success = await send_config_message(interaction.guild, member, "greet")
 
         if not success:
