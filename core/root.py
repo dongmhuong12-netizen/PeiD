@@ -37,9 +37,6 @@ class EmbedGroup(app_commands.Group):
     def __init__(self):
         super().__init__(name="embed", description="Embed management commands")
 
-    # -------------------------
-    # CREATE
-    # -------------------------
     @app_commands.command(name="create", description="Create a new embed UI")
     async def create(self, interaction: discord.Interaction, name: str):
 
@@ -93,9 +90,6 @@ class EmbedGroup(app_commands.Group):
         message = await interaction.original_response()
         view.message = message
 
-    # -------------------------
-    # EDIT
-    # -------------------------
     @app_commands.command(name="edit", description="Edit existing embed")
     @app_commands.autocomplete(name=embed_name_autocomplete)
     async def edit(self, interaction: discord.Interaction, name: str):
@@ -132,9 +126,6 @@ class EmbedGroup(app_commands.Group):
         message = await interaction.original_response()
         view.message = message
 
-    # -------------------------
-    # DELETE
-    # -------------------------
     @app_commands.command(name="delete", description="Delete embed")
     @app_commands.autocomplete(name=embed_name_autocomplete)
     async def delete(self, interaction: discord.Interaction, name: str):
@@ -166,9 +157,6 @@ class EmbedGroup(app_commands.Group):
             ephemeral=True
         )
 
-    # -------------------------
-    # SHOW
-    # -------------------------
     @app_commands.command(name="show", description="Send embed to channel")
     @app_commands.autocomplete(name=embed_name_autocomplete)
     async def show(self, interaction: discord.Interaction, name: str):
@@ -221,9 +209,11 @@ class Root(commands.Cog):
 
     async def cog_load(self):
         self.bot.tree.add_command(self.group)
+        await self.bot.tree.sync()  # FIX KHÔNG HIỆN LỆNH
 
     async def cog_unload(self):
         self.bot.tree.remove_command(self.group.name, type=self.group.type)
+        await self.bot.tree.sync()
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Root(bot))
