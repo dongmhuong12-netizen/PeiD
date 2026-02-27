@@ -175,9 +175,17 @@ class EmbedGroup(app_commands.Group):
         if color_value is None:
             color_value = 0x2F3136
 
+        # ===== FIX MARKDOWN DỨT ĐIỂM =====
+        description = data.get("description") or ""
+        description = description.replace("```", "")
+        description = description.replace("`", "")
+        description = description.replace("\u200b", "")
+        description = description.replace("\ufeff", "")
+        description = description.strip()
+
         embed = discord.Embed(
             title=data.get("title"),
-            description=data.get("description"),
+            description=description,
             color=color_value
         )
 
