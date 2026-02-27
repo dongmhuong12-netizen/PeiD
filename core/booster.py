@@ -102,6 +102,8 @@ class BoosterGroup(app_commands.Group):
     @app_commands.command(name="test", description="Test booster system")
     async def test(self, interaction: discord.Interaction):
 
+        await interaction.response.defer(ephemeral=True)
+
         member = interaction.user
         guild = interaction.guild
         bot_member = guild.me
@@ -113,14 +115,14 @@ class BoosterGroup(app_commands.Group):
 
         if role:
             if role >= bot_member.top_role:
-                await interaction.response.send_message(
+                await interaction.followup.send(
                     "Bot không thể gán role này vì role cao hơn hoặc bằng role của bot.",
                     ephemeral=True
                 )
                 return
 
             if role in member.roles:
-                await interaction.response.send_message(
+                await interaction.followup.send(
                     "Bạn đã có role này rồi.",
                     ephemeral=True
                 )
@@ -129,7 +131,7 @@ class BoosterGroup(app_commands.Group):
             try:
                 await member.add_roles(role, reason="Booster Test")
             except Exception as e:
-                await interaction.response.send_message(
+                await interaction.followup.send(
                     f"Lỗi khi gán role: {e}",
                     ephemeral=True
                 )
