@@ -1,4 +1,3 @@
-import json
 import discord
 from typing import Union
 
@@ -39,22 +38,26 @@ def build_variables(
 
 
 def apply_variables(
-    data: Union[str, dict],
+    data: Union[str, dict, list],
     guild: discord.Guild,
     member: discord.Member | None = None
-) -> Union[str, dict]:
+) -> Union[str, dict, list]:
 
     variables = build_variables(guild, member)
 
-    if isinstance(data, str):
-        for key, value in variables.items():
-            data = data.replace(key, value)
-        return data
+    def replace_value(value):
+        if isinstance(value, str):
+            for key, val in variables.items():
+                value = value.replace(key, val)
+            return value
 
-    if isinstance(data, dict):
-        data_str = json.dumps(data)
-        for key, value in variables.items():
-            data_str = data_str.replace(key, value)
-        return json.loads(data_str)
+        elif isinstance(value, dict):
+            return {k: replace_value(v) for k, v in value.items()}
 
-    return data
+        elif isinstance(value, list):
+            return [replace_value(v) for v in value]
+
+        else:
+            return value
+
+    return replace_value(data)
