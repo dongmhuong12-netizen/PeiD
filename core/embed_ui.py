@@ -22,23 +22,53 @@ class EmbedUIView(View):
         self.saved = False
         self.message = None
 
-        # Đảm bảo mỗi embed chỉ có 1 UI tồn tại
         if name not in ACTIVE_EMBED_VIEWS:
             ACTIVE_EMBED_VIEWS[name] = []
         ACTIVE_EMBED_VIEWS[name].append(self)
 
     # =============================
-    # BUILD EMBED
+    # BUILD EMBED (FIX PLACEHOLDER)
     # =============================
 
-    def build_embed(self):
+    def build_embed(self, interaction: discord.Interaction = None):
         color_value = self.embed_data.get("color")
         if color_value is None:
             color_value = 0x2F3136
 
+        title = self.embed_data.get("title")
+        description = self.embed_data.get("description")
+
+        # Parse placeholder nếu có interaction
+        if interaction:
+            member = interaction.user
+            channel = interaction.channel
+            guild = interaction.guild
+
+            def parse(text):
+                if not isinstance(text, str):
+                    return ""
+
+                replacements = {
+                    "{user}": member.mention,
+                    "{username}": member.name,
+                    "{server}": guild.name if guild else "",
+                    "{membercount}": str(guild.member_count) if guild else "0",
+                    "{channel}": channel.mention if channel else "",
+                    "{top_role}": member.top_role.mention if member.top_role else "",
+                    "{server_icon}": guild.icon.url if guild and guild.icon else ""
+                }
+
+                for k, v in replacements.items():
+                    text = text.replace(k, v)
+
+                return text
+
+            title = parse(title)
+            description = parse(description)
+
         embed = discord.Embed(
-            title=self.embed_data.get("title"),
-            description=self.embed_data.get("description"),
+            title=title,
+            description=description,
             color=color_value
         )
 
@@ -82,7 +112,6 @@ class EmbedUIView(View):
 
         delete_embed(self.name)
 
-        # Đóng tất cả UI của embed này
         if self.name in ACTIVE_EMBED_VIEWS:
             for view in ACTIVE_EMBED_VIEWS[self.name]:
                 try:
@@ -95,7 +124,7 @@ class EmbedUIView(View):
             ACTIVE_EMBED_VIEWS[self.name] = []
 
         await interaction.response.send_message(
-            f"Embed `{self.name}` đã được xoá vĩnh viễn, có thể tạo embed mới bằng tên này.",
+            f"Embed `{self.name}` đã được xoá vĩnh viễn.",
             ephemeral=True
         )
 
@@ -119,7 +148,7 @@ class TitleModal(Modal, title="Chỉnh sửa tiêu đề"):
     async def on_submit(self, interaction: discord.Interaction):
         self.view.embed_data["title"] = self.title_input.value
         await interaction.response.edit_message(
-            embed=self.view.build_embed(),
+            embed=self.view.build_embed(interaction),
             view=self.view
         )
 
@@ -140,7 +169,7 @@ class DescriptionModal(Modal, title="Chỉnh sửa mô tả"):
     async def on_submit(self, interaction: discord.Interaction):
         self.view.embed_data["description"] = self.desc_input.value
         await interaction.response.edit_message(
-            embed=self.view.build_embed(),
+            embed=self.view.build_embed(interaction),
             view=self.view
         )
 
@@ -160,7 +189,7 @@ class ImageModal(Modal, title="Đặt ảnh Embed"):
     async def on_submit(self, interaction: discord.Interaction):
         self.view.embed_data["image"] = self.image_input.value
         await interaction.response.edit_message(
-            embed=self.view.build_embed(),
+            embed=self.view.build_embed(interaction),
             view=self.view
         )
 
@@ -184,6 +213,6 @@ class ColorModal(Modal, title="Chỉnh sửa màu (Hex)"):
             pass
 
         await interaction.response.edit_message(
-            embed=self.view.build_embed(),
+            embed=self.view.build_embed(interaction),
             view=self.view
         )
