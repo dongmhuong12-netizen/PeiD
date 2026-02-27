@@ -12,6 +12,7 @@ from core.embed_sender import send_embed  # 🔥 THÊM DÒNG NÀY
 
 from core.greet_leave import GreetGroup, LeaveGroup, GreetLeaveListener
 from core.booster import BoosterGroup, BoosterListener
+from core.wellcome import WellcomeGroup, WellcomeListener  # 🔥 THÊM DÒNG NÀY
 
 
 # =============================
@@ -198,6 +199,7 @@ class PGroup(app_commands.Group):
         self.add_command(GreetGroup())
         self.add_command(LeaveGroup())
         self.add_command(BoosterGroup())
+        self.add_command(WellcomeGroup())  # 🔥 THÊM DÒNG NÀY
 
 
 # =============================
@@ -213,6 +215,7 @@ async def setup(bot: commands.Bot):
     await bot.add_cog(Root(bot))
     await bot.add_cog(GreetLeaveListener(bot))
     await bot.add_cog(BoosterListener(bot))
+    await bot.add_cog(WellcomeListener(bot))  # 🔥 THÊM DÒNG NÀY
 
     if bot.tree.get_command("p") is None:
         bot.tree.add_command(PGroup())
