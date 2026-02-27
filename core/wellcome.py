@@ -30,6 +30,13 @@ async def send_wellcome(guild: discord.Guild, member: discord.Member):
     try:
         sent_anything = False
 
+        # GỬI MESSAGE TRƯỚC
+        if message_text:
+            message_text = apply_variables(message_text, guild, member)
+            await channel.send(content=message_text)
+            sent_anything = True
+
+        # SAU ĐÓ MỚI GỬI EMBED
         if embed_name:
             embed_data = load_embed(embed_name)
             if embed_data:
@@ -40,11 +47,6 @@ async def send_wellcome(guild: discord.Guild, member: discord.Member):
                     member
                 )
                 sent_anything = True
-
-        if message_text:
-            message_text = apply_variables(message_text, guild, member)
-            await channel.send(content=message_text)
-            sent_anything = True
 
         return sent_anything
 
