@@ -1,5 +1,6 @@
 import discord
 from discord.ui import View, Modal, TextInput
+import re
 from .embed_storage import save_embed, delete_embed
 
 
@@ -27,7 +28,26 @@ class EmbedUIView(View):
         ACTIVE_EMBED_VIEWS[name].append(self)
 
     # =============================
-    # BUILD EMBED (FIX PLACEHOLDER)
+    # LINK TOKEN PARSER
+    # =============================
+
+    def extract_link_tokens(self, text: str):
+        if not text:
+            return text, None, None
+
+        label_match = re.search(r'link_label"(.*?)"', text)
+        url_match = re.search(r'link_url"(.*?)"', text)
+
+        label = label_match.group(1) if label_match else None
+        url = url_match.group(1) if url_match else None
+
+        text = re.sub(r'link_label".*?"', '', text)
+        text = re.sub(r'link_url".*?"', '', text)
+
+        return text.strip(), label, url
+
+    # =============================
+    # BUILD EMBED
     # =============================
 
     def build_embed(self, interaction: discord.Interaction = None):
@@ -37,6 +57,9 @@ class EmbedUIView(View):
 
         title = self.embed_data.get("title")
         description = self.embed_data.get("description")
+
+        link_label = None
+        link_url = None
 
         # Parse placeholder nếu có interaction
         if interaction:
@@ -66,12 +89,16 @@ class EmbedUIView(View):
             title = parse(title)
             description = parse(description)
 
-        # ===== CLEAN KÝ TỰ ẨN / MARKDOWN PHÁ PARSE =====
+        # ===== EXTRACT LINK TOKEN (chỉ trong description) =====
+        if isinstance(description, str):
+            description, link_label, link_url = self.extract_link_tokens(description)
+
+        # ===== CLEAN TEXT =====
         def clean_text(text):
             if not isinstance(text, str):
                 return text
-            text = text.replace("\u200b", "")   # zero width space
-            text = text.replace("\ufeff", "")   # BOM
+            text = text.replace("\u200b", "")
+            text = text.replace("\ufeff", "")
             text = text.replace("\r", "")
             text = text.strip()
             return text
@@ -88,7 +115,26 @@ class EmbedUIView(View):
         if self.embed_data.get("image"):
             embed.set_image(url=self.embed_data["image"])
 
+        # ===== BUILD VIEW WITH LINK BUTTON =====
+        self.clear_items()
+        self._add_default_buttons()
+
+        if link_label and link_url:
+            self.add_item(discord.ui.Button(label=link_label, url=link_url))
+
         return embed
+
+    # =============================
+    # DEFAULT BUTTONS
+    # =============================
+
+    def _add_default_buttons(self):
+        self.add_item(self.edit_title)
+        self.add_item(self.edit_description)
+        self.add_item(self.set_image)
+        self.add_item(self.edit_color)
+        self.add_item(self.save_button)
+        self.add_item(self.delete_button)
 
     # =============================
     # BUTTONS
