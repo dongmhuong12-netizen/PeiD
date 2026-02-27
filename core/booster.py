@@ -1,6 +1,6 @@
 import discord
 from discord import app_commands
-from discord.ext import commands
+from discord.ext import commands, tasks
 
 from core.greet_storage import get_section, update_guild_config
 from core.embed_storage import load_embed
@@ -70,7 +70,6 @@ class BoosterGroup(app_commands.Group):
 
         guild = interaction.guild
 
-        # Nếu là mention <@&123>
         if role_input.startswith("<@&") and role_input.endswith(">"):
             role_id = role_input.replace("<@&", "").replace(">", "")
         else:
@@ -158,15 +157,17 @@ class BoosterGroup(app_commands.Group):
 class BoosterListener(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        self.booster_sync.start()
+
+    def cog_unload(self):
+        self.booster_sync.cancel()
 
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member):
 
-        # Bắt đầu boost
         if not before.premium_since and after.premium_since:
             await self.handle_boost(after, True)
 
-        # Hết boost
         if before.premium_since and not after.premium_since:
             await self.handle_boost(after, False)
 
@@ -190,3 +191,39 @@ class BoosterListener(commands.Cog):
                 pass
 
         await send_config_message(member.guild, member, "booster")
+
+    # ======================
+    # STATE SYNC (SELF-HEALING)
+    # ======================
+
+    @tasks.loop(minutes=3)
+    async def booster_sync(self):
+
+        for guild in self.bot.guilds:
+
+            config = get_section(guild.id, "booster")
+            role_id = config.get("role")
+            role = guild.get_role(role_id) if role_id else None
+
+            if not role:
+                continue
+
+            for member in guild.members:
+
+                # Đang boost nhưng thiếu role → gán lại
+                if member.premium_since and role not in member.roles:
+                    try:
+                        await member.add_roles(role, reason="Booster Sync")
+                    except:
+                        pass
+
+                # Không boost nhưng vẫn còn role → remove
+                if not member.premium_since and role in member.roles:
+                    try:
+                        await member.remove_roles(role, reason="Booster Sync")
+                    except:
+                        pass
+
+    @booster_sync.before_loop
+    async def before_booster_sync(self):
+        await self.bot.wait_until_ready()
