@@ -37,6 +37,13 @@ async def send_config_message(guild, member, section_name):
     embed_name = config.get("embed")
     message_text = config.get("message")
 
+    # ÉP RỖNG → None
+    if isinstance(message_text, str) and message_text.strip() == "":
+        message_text = None
+
+    if isinstance(embed_name, str) and embed_name.strip() == "":
+        embed_name = None
+
     if not channel_id:
         return False
 
@@ -46,12 +53,12 @@ async def send_config_message(guild, member, section_name):
 
     # ===== TEXT =====
     parsed_text = None
-    if message_text is not None and str(message_text).strip() != "":
+    if message_text is not None:
         parsed_text = parse_placeholders(message_text, member, channel)
 
     # ===== EMBED =====
     embed = None
-    if embed_name and str(embed_name).strip() != "":
+    if embed_name is not None:
         embed_data = load_embed(embed_name)
         if embed_data:
             embed = discord.Embed(
@@ -61,9 +68,9 @@ async def send_config_message(guild, member, section_name):
             )
 
             if embed_data.get("image"):
-                embed.set_image(url=embed_data["image"])
+                embed.set_image(url=embed_data.get("image"))
 
-    # Nếu không có gì hợp lệ để gửi
+    # Nếu cả 2 đều None thì không gửi
     if embed is None and parsed_text is None:
         return False
 
@@ -83,7 +90,7 @@ class GreetGroup(app_commands.Group):
     def __init__(self):
         super().__init__(name="greet", description="Greet system")
 
-    @app_commands.command(name="channel", description="Set greet channel")
+    @app_commands.command(name="channel", description="Set greet channel (nhập Channel ID)")
     @app_commands.default_permissions(manage_guild=True)
     async def channel(self, interaction: discord.Interaction, channel_id: str):
 
@@ -156,7 +163,7 @@ class LeaveGroup(app_commands.Group):
     def __init__(self):
         super().__init__(name="leave", description="Leave system")
 
-    @app_commands.command(name="channel", description="Set leave channel")
+    @app_commands.command(name="channel", description="Set leave channel (nhập Channel ID)")
     @app_commands.default_permissions(manage_guild=True)
     async def channel(self, interaction: discord.Interaction, channel_id: str):
 
@@ -204,21 +211,6 @@ class LeaveGroup(app_commands.Group):
         await interaction.response.send_message(
             "Đã set message leave.", ephemeral=True
         )
-
-    @app_commands.command(name="test", description="Test leave message")
-    async def test(self, interaction: discord.Interaction):
-
-        member = interaction.guild.get_member(interaction.user.id)
-        success = await send_config_message(interaction.guild, member, "leave")
-
-        if not success:
-            await interaction.response.send_message(
-                "Chưa cấu hình leave.", ephemeral=True
-            )
-        else:
-            await interaction.response.send_message(
-                "Đã gửi test leave.", ephemeral=True
-            )
 
 
 # ======================
