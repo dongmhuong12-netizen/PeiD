@@ -44,11 +44,12 @@ async def send_config_message(guild, member, section_name):
     if not channel or not isinstance(channel, discord.TextChannel):
         return False
 
-    # 🔥 FIX: phân biệt None và ""
+    # ===== TEXT =====
     parsed_text = None
     if message_text is not None:
         parsed_text = parse_placeholders(message_text, member, channel)
 
+    # ===== EMBED =====
     embed = None
     if embed_name:
         embed_data = load_embed(embed_name)
@@ -58,19 +59,28 @@ async def send_config_message(guild, member, section_name):
                 description=embed_data.get("description"),
                 color=embed_data.get("color") or 0x2F3136
             )
+
             if embed_data.get("image"):
                 embed.set_image(url=embed_data["image"])
 
-    # 🔥 LOGIC GỬI MỚI (cho phép text hoặc embed hoạt động độc lập)
+    # ===== SEND LOGIC (FIXED) =====
+
+    # Không có cả text lẫn embed
     if parsed_text is None and embed is None:
         return False
 
-    if parsed_text and embed:
-        await channel.send(content=parsed_text, embed=embed)
-    elif parsed_text:
-        await channel.send(content=parsed_text)
-    elif embed:
-        await channel.send(embed=embed)
+    # Nếu có embed -> luôn gửi embed (có thể kèm text)
+    if embed is not None:
+        await channel.send(
+            content=parsed_text if parsed_text else None,
+            embed=embed
+        )
+    else:
+        # Chỉ có text
+        if parsed_text:
+            await channel.send(content=parsed_text)
+        else:
+            return False
 
     return True
 
