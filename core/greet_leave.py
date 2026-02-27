@@ -32,12 +32,38 @@ async def send_config_message(guild: discord.Guild, member: discord.Member, sect
         if embed_data:
             embed_obj = discord.Embed.from_dict(embed_data)
 
+    # ======================
+    # BIẾN HỆ THỐNG
+    # ======================
+
     if message_text:
         message_text = (
             message_text
+
+            # ===== USER =====
             .replace("{user}", member.mention)
+            .replace("{user_name}", member.name)
+            .replace("{user_display}", member.display_name)
+            .replace("{user_id}", str(member.id))
+            .replace("{user_avatar}", member.display_avatar.url)
+            .replace("{account_created}", member.created_at.strftime("%d/%m/%Y"))
+            .replace(
+                "{joined_at}",
+                member.joined_at.strftime("%d/%m/%Y") if member.joined_at else "Không rõ"
+            )
+
+            # ===== SERVER =====
             .replace("{server}", guild.name)
+            .replace("{server_id}", str(guild.id))
             .replace("{member_count}", str(guild.member_count))
+            .replace("{boost_count}", str(guild.premium_subscription_count))
+            .replace("{boost_level}", str(guild.premium_tier))
+            .replace("{role_count}", str(len(guild.roles)))
+            .replace("{channel_count}", str(len(guild.channels)))
+            .replace(
+                "{online_count}",
+                str(len([m for m in guild.members if m.status != discord.Status.offline]))
+            )
         )
 
     try:
@@ -80,7 +106,7 @@ class GreetGroup(app_commands.Group):
         description="Đặt nội dung tin nhắn chào mừng"
     )
     @app_commands.describe(
-        message="Có thể dùng {user}, {server}, {member_count}"
+        message="Có thể dùng các biến như {user}, {server}, {member_count}, {joined_at}, {account_created}..."
     )
     @app_commands.default_permissions(manage_guild=True)
     async def message(self, interaction: discord.Interaction, message: str):
@@ -175,7 +201,7 @@ class LeaveGroup(app_commands.Group):
         description="Đặt nội dung tin nhắn rời đi"
     )
     @app_commands.describe(
-        message="Có thể dùng {user}, {server}"
+        message="Có thể dùng các biến như {user}, {server}, {member_count}, {joined_at}..."
     )
     @app_commands.default_permissions(manage_guild=True)
     async def message(self, interaction: discord.Interaction, message: str):
@@ -235,3 +261,20 @@ class LeaveGroup(app_commands.Group):
                 "Đã gửi tin nhắn rời đi thử.",
                 ephemeral=True
             )
+
+
+# ======================
+# LISTENER (AUTO)
+# ======================
+
+class GreetLeaveListener(commands.Cog):
+    def __init__(self, bot: commands.Bot):
+        self.bot = bot
+
+    @commands.Cog.listener()
+    async def on_member_join(self, member: discord.Member):
+        await send_config_message(member.guild, member, "greet")
+
+    @commands.Cog.listener()
+    async def on_member_remove(self, member: discord.Member):
+        await send_config_message(member.guild, member, "leave")
