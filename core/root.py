@@ -10,6 +10,7 @@ from core.embed_storage import (
 )
 
 from core.greet_leave import GreetGroup, LeaveGroup, GreetLeaveListener
+from core.booster import BoosterGroup, BoosterListener
 
 
 # =============================
@@ -200,6 +201,7 @@ class PGroup(app_commands.Group):
         self.add_command(EmbedGroup())
         self.add_command(GreetGroup())
         self.add_command(LeaveGroup())
+        self.add_command(BoosterGroup())
 
 
 # =============================
@@ -214,6 +216,7 @@ class Root(commands.Cog):
 async def setup(bot: commands.Bot):
     await bot.add_cog(Root(bot))
     await bot.add_cog(GreetLeaveListener(bot))
+    await bot.add_cog(BoosterListener(bot))
 
     # 🔒 ĐẢM BẢO KHÔNG BAO GIỜ ADD TRÙNG GROUP p
     if bot.tree.get_command("p") is None:
