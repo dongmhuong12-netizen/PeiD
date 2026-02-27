@@ -39,6 +39,7 @@ class BoosterGroup(app_commands.Group):
     @app_commands.default_permissions(manage_guild=True)
     async def message(self, interaction: discord.Interaction, text: str):
 
+        # Hỗ trợ link_label" và link_url"
         update_guild_config(interaction.guild.id, "booster", "message", text)
 
         await interaction.response.send_message(
