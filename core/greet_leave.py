@@ -27,7 +27,7 @@ def parse_placeholders(text: str, member: discord.Member, channel: discord.TextC
 
 
 # ======================
-# HELPER SEND FUNCTION (FINAL STABLE VERSION)
+# SEND FUNCTION (FINAL FIX)
 # ======================
 
 async def send_config_message(guild, member, section_name):
@@ -46,12 +46,12 @@ async def send_config_message(guild, member, section_name):
 
     # ===== TEXT =====
     parsed_text = None
-    if message_text is not None:
+    if message_text is not None and str(message_text).strip() != "":
         parsed_text = parse_placeholders(message_text, member, channel)
 
     # ===== EMBED =====
     embed = None
-    if embed_name:
+    if embed_name and str(embed_name).strip() != "":
         embed_data = load_embed(embed_name)
         if embed_data:
             embed = discord.Embed(
@@ -59,18 +59,14 @@ async def send_config_message(guild, member, section_name):
                 description=embed_data.get("description"),
                 color=embed_data.get("color") or 0x2F3136
             )
+
             if embed_data.get("image"):
                 embed.set_image(url=embed_data["image"])
 
-    # ===== SIMPLE SEND LOGIC =====
-    # Nếu không có gì để gửi
+    # Nếu không có gì hợp lệ để gửi
     if embed is None and parsed_text is None:
         return False
 
-    # Discord tự xử lý:
-    # content=None + embed -> gửi embed
-    # content="text" + embed=None -> gửi text
-    # cả hai có -> gửi cả hai
     await channel.send(
         content=parsed_text,
         embed=embed
@@ -105,6 +101,7 @@ class GreetGroup(app_commands.Group):
             return
 
         update_guild_config(interaction.guild.id, "greet", "channel", channel.id)
+
         await interaction.response.send_message(
             f"Đã set kênh greet: {channel.mention}", ephemeral=True
         )
@@ -112,6 +109,7 @@ class GreetGroup(app_commands.Group):
     @app_commands.command(name="embed", description="Set greet embed")
     @app_commands.default_permissions(manage_guild=True)
     async def embed(self, interaction: discord.Interaction, name: str):
+
         if not load_embed(name):
             await interaction.response.send_message(
                 f"Embed `{name}` không tồn tại.", ephemeral=True
@@ -119,6 +117,7 @@ class GreetGroup(app_commands.Group):
             return
 
         update_guild_config(interaction.guild.id, "greet", "embed", name)
+
         await interaction.response.send_message(
             f"Đã set embed greet: `{name}`", ephemeral=True
         )
@@ -126,15 +125,17 @@ class GreetGroup(app_commands.Group):
     @app_commands.command(name="message", description="Set greet message")
     @app_commands.default_permissions(manage_guild=True)
     async def message(self, interaction: discord.Interaction, text: str):
+
         update_guild_config(interaction.guild.id, "greet", "message", text)
+
         await interaction.response.send_message(
             "Đã set message greet.", ephemeral=True
         )
 
     @app_commands.command(name="test", description="Test greet message")
     async def test(self, interaction: discord.Interaction):
-        member = interaction.guild.get_member(interaction.user.id)
 
+        member = interaction.guild.get_member(interaction.user.id)
         success = await send_config_message(interaction.guild, member, "greet")
 
         if not success:
@@ -173,6 +174,7 @@ class LeaveGroup(app_commands.Group):
             return
 
         update_guild_config(interaction.guild.id, "leave", "channel", channel.id)
+
         await interaction.response.send_message(
             f"Đã set kênh leave: {channel.mention}", ephemeral=True
         )
@@ -180,6 +182,7 @@ class LeaveGroup(app_commands.Group):
     @app_commands.command(name="embed", description="Set leave embed")
     @app_commands.default_permissions(manage_guild=True)
     async def embed(self, interaction: discord.Interaction, name: str):
+
         if not load_embed(name):
             await interaction.response.send_message(
                 f"Embed `{name}` không tồn tại.", ephemeral=True
@@ -187,6 +190,7 @@ class LeaveGroup(app_commands.Group):
             return
 
         update_guild_config(interaction.guild.id, "leave", "embed", name)
+
         await interaction.response.send_message(
             f"Đã set embed leave: `{name}`", ephemeral=True
         )
@@ -194,15 +198,17 @@ class LeaveGroup(app_commands.Group):
     @app_commands.command(name="message", description="Set leave message")
     @app_commands.default_permissions(manage_guild=True)
     async def message(self, interaction: discord.Interaction, text: str):
+
         update_guild_config(interaction.guild.id, "leave", "message", text)
+
         await interaction.response.send_message(
             "Đã set message leave.", ephemeral=True
         )
 
     @app_commands.command(name="test", description="Test leave message")
     async def test(self, interaction: discord.Interaction):
-        member = interaction.guild.get_member(interaction.user.id)
 
+        member = interaction.guild.get_member(interaction.user.id)
         success = await send_config_message(interaction.guild, member, "leave")
 
         if not success:
