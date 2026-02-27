@@ -46,7 +46,6 @@ async def send_config_message(guild, member, section_name):
     if not channel_id:
         return False
 
-    # LẤY CHANNEL (ANTI CACHE)
     channel = guild.get_channel(channel_id)
     if not channel:
         try:
@@ -57,17 +56,13 @@ async def send_config_message(guild, member, section_name):
     if not isinstance(channel, discord.TextChannel):
         return False
 
-    # ======================
-    # TEXT
-    # ======================
+    # -------- TEXT --------
 
     parsed_text = None
     if isinstance(message_text, str) and message_text.strip():
         parsed_text = parse_placeholders(message_text, member, channel)
 
-    # ======================
-    # EMBED
-    # ======================
+    # -------- EMBED --------
 
     embed = None
     if isinstance(embed_name, str) and embed_name.strip():
@@ -93,27 +88,20 @@ async def send_config_message(guild, member, section_name):
                 color=embed_data.get("color") or 0x2F3136
             )
 
-            # Image
             if embed_data.get("image"):
                 embed.set_image(url=embed_data["image"])
 
-            # Thumbnail
             if embed_data.get("thumbnail"):
                 embed.set_thumbnail(url=embed_data["thumbnail"])
 
-    # ======================
-    # SEND
-    # ======================
+    # -------- SEND --------
 
     if parsed_text and embed:
         await channel.send(content=parsed_text, embed=embed)
-
     elif parsed_text:
         await channel.send(content=parsed_text)
-
     elif embed:
         await channel.send(embed=embed)
-
     else:
         return False
 
@@ -180,9 +168,7 @@ class GreetGroup(app_commands.Group):
     @app_commands.command(name="test", description="Test greet message")
     async def test(self, interaction: discord.Interaction):
 
-        member = interaction.user
-
-        success = await send_config_message(interaction.guild, member, "greet")
+        success = await send_config_message(interaction.guild, interaction.user, "greet")
 
         if not success:
             await interaction.response.send_message(
@@ -191,6 +177,78 @@ class GreetGroup(app_commands.Group):
         else:
             await interaction.response.send_message(
                 "Đã gửi test greet.", ephemeral=True
+            )
+
+
+# ======================
+# LEAVE GROUP
+# ======================
+
+class LeaveGroup(app_commands.Group):
+    def __init__(self):
+        super().__init__(name="leave", description="Leave system")
+
+    @app_commands.command(name="channel", description="Set leave channel (Channel ID)")
+    @app_commands.default_permissions(manage_guild=True)
+    async def channel(self, interaction: discord.Interaction, channel_id: str):
+
+        if not channel_id.isdigit():
+            await interaction.response.send_message(
+                "Channel ID không hợp lệ.", ephemeral=True
+            )
+            return
+
+        channel = interaction.guild.get_channel(int(channel_id))
+        if not channel or not isinstance(channel, discord.TextChannel):
+            await interaction.response.send_message(
+                "Không tìm thấy text channel với ID đó.", ephemeral=True
+            )
+            return
+
+        update_guild_config(interaction.guild.id, "leave", "channel", channel.id)
+
+        await interaction.response.send_message(
+            f"Đã set kênh leave: {channel.mention}", ephemeral=True
+        )
+
+    @app_commands.command(name="message", description="Set leave message")
+    @app_commands.default_permissions(manage_guild=True)
+    async def message(self, interaction: discord.Interaction, text: str):
+
+        update_guild_config(interaction.guild.id, "leave", "message", text)
+
+        await interaction.response.send_message(
+            "Đã set message leave.", ephemeral=True
+        )
+
+    @app_commands.command(name="embed", description="Set leave embed")
+    @app_commands.default_permissions(manage_guild=True)
+    async def embed(self, interaction: discord.Interaction, name: str):
+
+        if not load_embed(name):
+            await interaction.response.send_message(
+                f"Embed `{name}` không tồn tại.", ephemeral=True
+            )
+            return
+
+        update_guild_config(interaction.guild.id, "leave", "embed", name)
+
+        await interaction.response.send_message(
+            f"Đã set embed leave: `{name}`", ephemeral=True
+        )
+
+    @app_commands.command(name="test", description="Test leave message")
+    async def test(self, interaction: discord.Interaction):
+
+        success = await send_config_message(interaction.guild, interaction.user, "leave")
+
+        if not success:
+            await interaction.response.send_message(
+                "Chưa cấu hình leave.", ephemeral=True
+            )
+        else:
+            await interaction.response.send_message(
+                "Đã gửi test leave.", ephemeral=True
             )
 
 
