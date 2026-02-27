@@ -195,13 +195,11 @@ class EmbedGroup(app_commands.Group):
 # =============================
 
 class PGroup(app_commands.Group):
-    pass
-
-
-p_group = PGroup(name="p", description="Main command group")
-p_group.add_command(EmbedGroup())
-p_group.add_command(GreetGroup())
-p_group.add_command(LeaveGroup())
+    def __init__(self):
+        super().__init__(name="p", description="Main command group")
+        self.add_command(EmbedGroup())
+        self.add_command(GreetGroup())
+        self.add_command(LeaveGroup())
 
 
 # =============================
@@ -214,7 +212,13 @@ class Root(commands.Cog):
 
 
 async def setup(bot: commands.Bot):
-    await bot.add_cog(Root(bot))
+    root = Root(bot)
+    await bot.add_cog(root)
 
-    bot.tree.add_command(p_group)
-    # await bot.add_cog(GreetLeaveListener(bot))  # vẫn tắt nếu bạn muốn
+    # tránh add trùng command khi reload
+    try:
+        bot.tree.remove_command("p", type=app_commands.AppCommandType.chat_input)
+    except:
+        pass
+
+    bot.tree.add_command(PGroup())
