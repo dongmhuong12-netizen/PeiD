@@ -58,10 +58,17 @@ async def send_config_message(guild, member, section_name):
             if embed_data.get("image"):
                 embed.set_image(url=embed_data["image"])
 
+    # ✅ SỬA PHẦN LOGIC GỬI TIN NHẮN Ở ĐÂY
     if not parsed_text and not embed:
         return False
 
-    await channel.send(content=parsed_text, embed=embed)
+    if parsed_text and embed:
+        await channel.send(content=parsed_text, embed=embed)
+    elif parsed_text:
+        await channel.send(content=parsed_text)
+    elif embed:
+        await channel.send(embed=embed)
+
     return True
 
 
@@ -73,26 +80,24 @@ class GreetGroup(app_commands.Group):
     def __init__(self):
         super().__init__(name="greet", description="Greet system")
 
-    @app_commands.command(name="channel", description="Set greet channel (nhập channel ID)")
+    @app_commands.command(name="channel", description="Set greet channel")
     @app_commands.default_permissions(manage_guild=True)
     async def channel(self, interaction: discord.Interaction, channel_id: str):
 
-        try:
-            channel = interaction.guild.get_channel(int(channel_id))
-        except ValueError:
+        if not channel_id.isdigit():
             await interaction.response.send_message(
                 "Channel ID không hợp lệ.", ephemeral=True
             )
             return
 
+        channel = interaction.guild.get_channel(int(channel_id))
         if not channel or not isinstance(channel, discord.TextChannel):
             await interaction.response.send_message(
-                "Không tìm thấy text channel với ID này.", ephemeral=True
+                "Không tìm thấy text channel với ID đó.", ephemeral=True
             )
             return
 
         update_guild_config(interaction.guild.id, "greet", "channel", channel.id)
-
         await interaction.response.send_message(
             f"Đã set kênh greet: {channel.mention}", ephemeral=True
         )
@@ -143,26 +148,24 @@ class LeaveGroup(app_commands.Group):
     def __init__(self):
         super().__init__(name="leave", description="Leave system")
 
-    @app_commands.command(name="channel", description="Set leave channel (nhập channel ID)")
+    @app_commands.command(name="channel", description="Set leave channel")
     @app_commands.default_permissions(manage_guild=True)
     async def channel(self, interaction: discord.Interaction, channel_id: str):
 
-        try:
-            channel = interaction.guild.get_channel(int(channel_id))
-        except ValueError:
+        if not channel_id.isdigit():
             await interaction.response.send_message(
                 "Channel ID không hợp lệ.", ephemeral=True
             )
             return
 
+        channel = interaction.guild.get_channel(int(channel_id))
         if not channel or not isinstance(channel, discord.TextChannel):
             await interaction.response.send_message(
-                "Không tìm thấy text channel với ID này.", ephemeral=True
+                "Không tìm thấy text channel với ID đó.", ephemeral=True
             )
             return
 
         update_guild_config(interaction.guild.id, "leave", "channel", channel.id)
-
         await interaction.response.send_message(
             f"Đã set kênh leave: {channel.mention}", ephemeral=True
         )
