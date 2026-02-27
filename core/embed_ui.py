@@ -2,6 +2,7 @@ import discord
 from discord.ui import View, Modal, TextInput
 import re
 from .embed_storage import save_embed, delete_embed
+from .variable_engine import apply_variables   # ✅ THÊM
 
 
 # =============================
@@ -55,39 +56,23 @@ class EmbedUIView(View):
         if color_value is None:
             color_value = 0x2F3136
 
-        title = self.embed_data.get("title")
-        description = self.embed_data.get("description")
+        embed_data = self.embed_data.copy()
+
+        # =============================
+        # ✅ APPLY VARIABLE ENGINE (PREVIEW)
+        # =============================
+        if interaction:
+            embed_data = apply_variables(
+                embed_data,
+                interaction.guild,
+                interaction.user
+            )
+
+        title = embed_data.get("title")
+        description = embed_data.get("description")
 
         link_label = None
         link_url = None
-
-        # ===== Placeholder Parse (preview only) =====
-        if interaction:
-            member = interaction.user
-            channel = interaction.channel
-            guild = interaction.guild
-
-            def parse(text):
-                if not isinstance(text, str):
-                    return ""
-
-                replacements = {
-                    "{user}": member.mention,
-                    "{username}": member.name,
-                    "{server}": guild.name if guild else "",
-                    "{membercount}": str(guild.member_count) if guild else "0",
-                    "{channel}": channel.mention if channel else "",
-                    "{top_role}": member.top_role.mention if member.top_role else "",
-                    "{server_icon}": guild.icon.url if guild and guild.icon else ""
-                }
-
-                for k, v in replacements.items():
-                    text = text.replace(k, v)
-
-                return text
-
-            title = parse(title)
-            description = parse(description)
 
         # ===== EXTRACT LINK TOKEN =====
         if isinstance(description, str):
@@ -111,11 +96,11 @@ class EmbedUIView(View):
             color=color_value
         )
 
-        if self.embed_data.get("image"):
-            embed.set_image(url=self.embed_data["image"])
+        if embed_data.get("image"):
+            embed.set_image(url=embed_data["image"])
 
-        if self.embed_data.get("thumbnail"):
-            embed.set_thumbnail(url=self.embed_data["thumbnail"])
+        if embed_data.get("thumbnail"):
+            embed.set_thumbnail(url=embed_data["thumbnail"])
 
         # ===== BUILD VIEW =====
         self.clear_items()
