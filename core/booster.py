@@ -66,9 +66,33 @@ class BoosterGroup(app_commands.Group):
 
     @app_commands.command(name="role", description="Set booster role")
     @app_commands.default_permissions(manage_guild=True)
-    async def role(self, interaction: discord.Interaction, role: discord.Role):
+    async def role(self, interaction: discord.Interaction, role_input: str):
 
-        update_guild_config(interaction.guild.id, "booster", "role", role.id)
+        guild = interaction.guild
+
+        # Nếu là mention <@&123>
+        if role_input.startswith("<@&") and role_input.endswith(">"):
+            role_id = role_input.replace("<@&", "").replace(">", "")
+        else:
+            role_id = role_input
+
+        if not role_id.isdigit():
+            await interaction.response.send_message(
+                "Role ID không hợp lệ.",
+                ephemeral=True
+            )
+            return
+
+        role = guild.get_role(int(role_id))
+
+        if not role:
+            await interaction.response.send_message(
+                "Không tìm thấy role.",
+                ephemeral=True
+            )
+            return
+
+        update_guild_config(guild.id, "booster", "role", role.id)
 
         await interaction.response.send_message(
             f"Đã set booster role: {role.mention}",
