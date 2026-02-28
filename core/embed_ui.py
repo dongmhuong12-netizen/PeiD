@@ -6,7 +6,6 @@ from core.embed_storage import save_embed, delete_embed
 from core.variable_engine import apply_variables
 
 DATA_FILE = "data/reaction_roles.json"
-
 ACTIVE_EMBED_VIEWS = {}
 
 
@@ -169,6 +168,13 @@ class EmbedUIView(discord.ui.View):
         if data.get("image"):
             embed.set_image(url=data["image"])
 
+        # ✅ Thêm chú thích reaction
+        embed.add_field(
+            name="",
+            value="_React vào emoji bên dưới để nhận role._",
+            inline=False
+        )
+
         return embed
 
     async def update_message(self, interaction: discord.Interaction):
@@ -202,20 +208,18 @@ class EmbedUIView(discord.ui.View):
 
     # ===== REACTION =====
 
-    @discord.ui.button(label="Reaction Roles", style=discord.ButtonStyle.success)
+    @discord.ui.button(label="Reaction Roles", style=discord.ButtonStyle.secondary)
     async def reaction_roles(self, interaction: discord.Interaction, button):
         await interaction.response.send_modal(ReactionRoleModal(self))
 
     # ===== SAVE / DELETE =====
 
-    @discord.ui.button(label="Save Embed", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="Save Embed", style=discord.ButtonStyle.secondary)
     async def save_btn(self, interaction: discord.Interaction, button):
-        # ✅ FIX: lưu theo guild
         save_embed(interaction.guild.id, self.name, self.data)
         await interaction.response.send_message("Embed đã lưu.", ephemeral=True)
 
-    @discord.ui.button(label="Delete Embed", style=discord.ButtonStyle.danger)
+    @discord.ui.button(label="Delete Embed", style=discord.ButtonStyle.secondary)
     async def delete_btn(self, interaction: discord.Interaction, button):
-        # ✅ FIX: xoá theo guild
         delete_embed(interaction.guild.id, self.name)
         await interaction.response.send_message("Embed đã xoá.", ephemeral=True)
