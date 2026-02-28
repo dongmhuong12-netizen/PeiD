@@ -64,8 +64,8 @@ class EmbedGroup(app_commands.Group):
             ACTIVE_EMBED_VIEWS[name] = []
 
         embed_data = {
-            "title": "New Embed",
-            "description": "Edit using buttons below.",
+            "title": "Embed Mới",
+            "description": "Dùng các nút bên dưới để chỉnh sửa.",
             "color": 0x5865F2
         }
 
