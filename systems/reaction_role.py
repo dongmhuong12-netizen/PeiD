@@ -25,6 +25,12 @@ class ReactionRole(commands.Cog):
         self.data = load_data()
 
     # =========================
+    # RELOAD DATA (đảm bảo luôn mới)
+    # =========================
+    def refresh(self):
+        self.data = load_data()
+
+    # =========================
     # REACTION ADD
     # =========================
     @commands.Cog.listener()
@@ -32,6 +38,8 @@ class ReactionRole(commands.Cog):
 
         if payload.user_id == self.bot.user.id:
             return
+
+        self.refresh()
 
         message_id = str(payload.message_id)
 
@@ -49,23 +57,38 @@ class ReactionRole(commands.Cog):
 
         emoji_str = str(payload.emoji)
 
-        # 🔥 DUYỆT TỪNG GROUP
+        # DUYỆT TỪNG GROUP
         for group in config.get("groups", []):
 
             if emoji_str not in group["emojis"]:
                 continue
 
             index = group["emojis"].index(emoji_str)
-            role_id = group["roles"][index]
-            role = guild.get_role(role_id)
+            role_data = group["roles"][index]
 
-            if not role:
+            # hỗ trợ 1 hoặc nhiều role
+            if not isinstance(role_data, list):
+                role_ids = [role_data]
+            else:
+                role_ids = role_data
+
+            roles_to_add = []
+
+            for r_id in role_ids:
+                try:
+                    role = guild.get_role(int(r_id))
+                    if role:
+                        roles_to_add.append(role)
+                except:
+                    continue
+
+            if not roles_to_add:
                 return
 
             # ===== MULTI MODE =====
             if group["mode"] == "multi":
                 try:
-                    await member.add_roles(role)
+                    await member.add_roles(*roles_to_add)
                 except:
                     pass
 
@@ -73,17 +96,27 @@ class ReactionRole(commands.Cog):
             elif group["mode"] == "single":
 
                 # remove tất cả role trong group trước
-                for r_id in group["roles"]:
-                    r = guild.get_role(r_id)
-                    if r and r in member.roles:
+                for r_data in group["roles"]:
+
+                    if isinstance(r_data, list):
+                        for sub_id in r_data:
+                            try:
+                                r = guild.get_role(int(sub_id))
+                                if r and r in member.roles:
+                                    await member.remove_roles(r)
+                            except:
+                                pass
+                    else:
                         try:
-                            await member.remove_roles(r)
+                            r = guild.get_role(int(r_data))
+                            if r and r in member.roles:
+                                await member.remove_roles(r)
                         except:
                             pass
 
                 # add role mới
                 try:
-                    await member.add_roles(role)
+                    await member.add_roles(*roles_to_add)
                 except:
                     pass
 
@@ -95,6 +128,8 @@ class ReactionRole(commands.Cog):
     @commands.Cog.listener()
     async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent):
 
+        self.refresh()
+
         message_id = str(payload.message_id)
 
         if message_id not in self.data:
@@ -117,21 +152,31 @@ class ReactionRole(commands.Cog):
                 continue
 
             index = group["emojis"].index(emoji_str)
-            role_id = group["roles"][index]
-            role = guild.get_role(role_id)
+            role_data = group["roles"][index]
 
-            if not role:
+            if not isinstance(role_data, list):
+                role_ids = [role_data]
+            else:
+                role_ids = role_data
+
+            roles_to_remove = []
+
+            for r_id in role_ids:
+                try:
+                    role = guild.get_role(int(r_id))
+                    if role:
+                        roles_to_remove.append(role)
+                except:
+                    continue
+
+            if not roles_to_remove:
                 return
 
-            # chỉ remove nếu là multi
-            if group["mode"] == "multi":
-                try:
-                    await member.remove_roles(role)
-                except:
-                    pass
-
-            # nếu single thì không làm gì khi remove reaction
-            # vì role đã được xử lý ở add
+            # remove role ở cả single và multi
+            try:
+                await member.remove_roles(*roles_to_remove)
+            except:
+                pass
 
             return
 
