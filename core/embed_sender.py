@@ -37,16 +37,16 @@ async def send_embed(
     embed_name: str | None = None
 ):
     try:
-        # 🔥 FIX: Nếu là interaction mà không truyền member → dùng interaction.user
+        # Nếu là interaction mà không truyền member
         if member is None and isinstance(destination, discord.Interaction):
             member = destination.user
 
         embed_copy = copy.deepcopy(embed_data)
 
-        # 🔥 APPLY VARIABLES
+        # APPLY VARIABLES
         embed_copy = apply_variables(embed_copy, guild, member)
 
-        # 🔥 FIX COLOR STRING
+        # FIX COLOR STRING
         if "color" in embed_copy:
             color = embed_copy["color"]
             if isinstance(color, str):
@@ -54,7 +54,7 @@ async def send_embed(
                 embed_copy["color"] = int(color, 16)
 
         # =========================
-        # BUILD EMBED THỦ CÔNG (KHÔNG DÙNG from_dict)
+        # BUILD EMBED
         # =========================
 
         embed = discord.Embed(
@@ -118,39 +118,34 @@ async def send_embed(
             message = await destination.send(embed=embed)
 
         # =========================
-        # REACTION ROLE RESTORE
+        # REACTION ROLE RESTORE (FIXED)
         # =========================
 
         if embed_name:
             data = load_reaction_data()
 
-            old_message_id = None
-            old_config = None
-
-            for msg_id, config in data.items():
-                if (
-                    config.get("embed_name") == embed_name
-                    and config.get("guild_id") == guild.id
-                ):
-                    old_message_id = msg_id
-                    old_config = config
-                    break
+            # 🔥 LẤY ĐÚNG KEY GỐC
+            key = f"{guild.id}::embed::{embed_name}"
+            old_config = data.get(key)
 
             if old_config and "groups" in old_config:
 
+                # 🔥 ADD FULL EMOJI
                 for group in old_config.get("groups", []):
                     for emoji in group.get("emojis", []):
                         try:
                             await message.add_reaction(emoji)
-                        except:
-                            pass
+                        except Exception as e:
+                            print("Reaction add error:", e)
 
+                # 🔥 CHUYỂN CONFIG SANG MESSAGE.ID
                 data[str(message.id)] = old_config
                 data[str(message.id)]["guild_id"] = guild.id
                 data[str(message.id)]["embed_name"] = embed_name
 
-                if old_message_id and old_message_id in data:
-                    del data[old_message_id]
+                # 🔥 XOÁ KEY CŨ
+                if key in data:
+                    del data[key]
 
                 save_reaction_data(data)
 
