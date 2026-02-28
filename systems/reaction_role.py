@@ -45,7 +45,6 @@ class ReactionRole(commands.Cog):
 
         emoji_str = str(payload.emoji)
 
-        # 🔥 LỌC CONFIG THEO GUILD
         guild_configs = [
             v for v in data.values()
             if v.get("guild_id") == guild_id
@@ -55,7 +54,6 @@ class ReactionRole(commands.Cog):
             return
 
         for config in guild_configs:
-
             for group in config.get("groups", []):
 
                 if emoji_str not in group["emojis"]:
@@ -64,13 +62,9 @@ class ReactionRole(commands.Cog):
                 index = group["emojis"].index(emoji_str)
                 role_data = group["roles"][index]
 
-                if not isinstance(role_data, list):
-                    role_ids = [role_data]
-                else:
-                    role_ids = role_data
+                role_ids = role_data if isinstance(role_data, list) else [role_data]
 
                 roles_to_add = []
-
                 for r_id in role_ids:
                     try:
                         role = guild.get_role(int(r_id))
@@ -82,41 +76,53 @@ class ReactionRole(commands.Cog):
                 if not roles_to_add:
                     continue
 
-                # ===== MULTI MODE =====
+                # =========================
+                # MULTI MODE
+                # =========================
                 if group["mode"] == "multi":
                     try:
                         await member.add_roles(*roles_to_add)
                     except:
                         pass
 
-                # ===== SINGLE MODE =====
+                # =========================
+                # SINGLE MODE (FIXED)
+                # =========================
                 elif group["mode"] == "single":
 
-                    # remove toàn bộ role trong group trước
+                    # 🔥 Remove toàn bộ role trong group trước
                     for r_data in group["roles"]:
 
-                        if isinstance(r_data, list):
-                            for sub_id in r_data:
-                                try:
-                                    r = guild.get_role(int(sub_id))
-                                    if r and r in member.roles:
-                                        await member.remove_roles(r)
-                                except:
-                                    pass
-                        else:
+                        ids = r_data if isinstance(r_data, list) else [r_data]
+
+                        for rid in ids:
                             try:
-                                r = guild.get_role(int(r_data))
+                                r = guild.get_role(int(rid))
                                 if r and r in member.roles:
                                     await member.remove_roles(r)
                             except:
                                 pass
 
+                    # 🔥 Remove các reaction khác của user trong cùng message
+                    try:
+                        channel = guild.get_channel(payload.channel_id)
+                        message = await channel.fetch_message(payload.message_id)
+
+                        for reaction in message.reactions:
+                            if str(reaction.emoji) != emoji_str:
+                                async for user in reaction.users():
+                                    if user.id == member.id:
+                                        await reaction.remove(member)
+                    except:
+                        pass
+
+                    # 🔥 Add role mới
                     try:
                         await member.add_roles(*roles_to_add)
                     except:
                         pass
 
-                return  # 🔥 dừng sau khi xử lý xong
+                return  # dừng sau khi xử lý
 
 
     # =========================
@@ -150,7 +156,6 @@ class ReactionRole(commands.Cog):
             return
 
         for config in guild_configs:
-
             for group in config.get("groups", []):
 
                 if emoji_str not in group["emojis"]:
@@ -159,10 +164,7 @@ class ReactionRole(commands.Cog):
                 index = group["emojis"].index(emoji_str)
                 role_data = group["roles"][index]
 
-                if not isinstance(role_data, list):
-                    role_ids = [role_data]
-                else:
-                    role_ids = role_data
+                role_ids = role_data if isinstance(role_data, list) else [role_data]
 
                 roles_to_remove = []
 
