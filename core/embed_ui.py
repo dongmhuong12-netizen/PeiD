@@ -168,13 +168,6 @@ class EmbedUIView(discord.ui.View):
         if data.get("image"):
             embed.set_image(url=data["image"])
 
-        # ✅ Thêm chú thích reaction
-        embed.add_field(
-            name="",
-            value="_React vào emoji bên dưới để nhận role._",
-            inline=False
-        )
-
         return embed
 
     async def update_message(self, interaction: discord.Interaction):
