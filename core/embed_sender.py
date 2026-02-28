@@ -26,7 +26,7 @@ async def send_embed(
     embed_data: dict,
     guild: discord.Guild,
     member: discord.Member | None = None,
-    embed_name: str | None = None   # 🔥 THÊM PARAM
+    embed_name: str | None = None
 ):
     try:
         embed_copy = copy.deepcopy(embed_data)
@@ -35,7 +35,6 @@ async def send_embed(
         # ===== FIX IMAGE FORMAT =====
         if "image" in embed_copy:
             img = embed_copy["image"]
-
             if isinstance(img, str):
                 embed_copy["image"] = {"url": img}
             elif isinstance(img, dict):
@@ -44,7 +43,6 @@ async def send_embed(
 
         if "thumbnail" in embed_copy:
             thumb = embed_copy["thumbnail"]
-
             if isinstance(thumb, str):
                 embed_copy["thumbnail"] = {"url": thumb}
             elif isinstance(thumb, dict):
@@ -89,33 +87,35 @@ async def send_embed(
         else:
             message = await destination.send(embed=embed)
 
-        # ===== REACTION ROLE PATCH =====
+        # ===== REACTION ROLE RESTORE =====
         if embed_name:
             data = load_reaction_data()
 
             old_message_id = None
             old_config = None
 
-            # tìm config cũ của embed này
+            # tìm config theo embed_name
             for msg_id, config in data.items():
                 if config.get("embed_name") == embed_name:
                     old_message_id = msg_id
                     old_config = config
                     break
 
-            if old_config:
-                # add lại emoji
-                for emoji in old_config["emojis"]:
-                    try:
-                        await message.add_reaction(emoji)
-                    except:
-                        pass
+            if old_config and "groups" in old_config:
 
-                # ghi đè message_id mới
+                # 🔥 add emoji của tất cả group
+                for group in old_config.get("groups", []):
+                    for emoji in group.get("emojis", []):
+                        try:
+                            await message.add_reaction(emoji)
+                        except:
+                            pass
+
+                # ghi message_id mới
                 data[str(message.id)] = old_config
                 data[str(message.id)]["embed_name"] = embed_name
 
-                # xoá message_id cũ
+                # xoá message cũ
                 if old_message_id and old_message_id in data:
                     del data[old_message_id]
 
