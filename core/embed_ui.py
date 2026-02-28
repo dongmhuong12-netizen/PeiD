@@ -170,7 +170,7 @@ class EmbedUIView(View):
             ephemeral=True
         )
 
-    @discord.ui.button(label="Reaction Roles", style=discord.ButtonStyle.green)
+    @discord.ui.button(label="Reaction Roles", style=discord.ButtonStyle.green, row=1)
     async def reaction_roles_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(ReactionRoleModal(self))
 
