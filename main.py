@@ -14,13 +14,13 @@ bot = commands.Bot(
     intents=intents
 )
 
-
 # =========================
 # LOAD EXTENSIONS
 # =========================
 
 async def load_extensions():
     await bot.load_extension("core.root")
+    await bot.load_extension("systems.reaction_role")  # 👈 thêm dòng này
 
 
 # =========================
@@ -33,13 +33,8 @@ async def on_ready():
     print("------")
 
     try:
-        # ❌ KHÔNG clear
-        # ❌ KHÔNG guild sync
-        # ✅ Global sync chuẩn
-
         synced = await bot.tree.sync()
         print(f"Synced {len(synced)} global commands.")
-
     except Exception as e:
         print(f"Sync error: {e}")
 
