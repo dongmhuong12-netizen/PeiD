@@ -3,6 +3,7 @@ import json
 import os
 
 from core.embed_storage import save_embed, delete_embed
+from core.variable_engine import apply_variables  # ✅ thêm dòng này
 
 DATA_FILE = "data/reaction_roles.json"
 
@@ -149,24 +150,34 @@ class EmbedUIView(discord.ui.View):
         self.data = data
         self.message = None
 
-        # tránh lưu trùng view
         if name not in ACTIVE_EMBED_VIEWS:
             ACTIVE_EMBED_VIEWS[name] = []
         ACTIVE_EMBED_VIEWS[name].append(self)
 
+    # ✅ FIX DUY NHẤT: Apply variables khi preview
     def build_embed(self):
+        data = self.data
+
+        if hasattr(self, "guild") and hasattr(self, "member"):
+            data = apply_variables(data, self.guild, self.member)
+
         embed = discord.Embed(
-            title=self.data.get("title"),
-            description=self.data.get("description"),
-            color=self.data.get("color", 0x5865F2)
+            title=data.get("title"),
+            description=data.get("description"),
+            color=data.get("color", 0x5865F2)
         )
 
-        if self.data.get("image"):
-            embed.set_image(url=self.data["image"])
+        if data.get("image"):
+            embed.set_image(url=data["image"])
 
         return embed
 
     async def update_message(self, interaction: discord.Interaction):
+
+        # ✅ Lưu context để biến hoạt động trong UI
+        self.guild = interaction.guild
+        self.member = interaction.user
+
         embed = self.build_embed()
 
         if interaction.response.is_done():
