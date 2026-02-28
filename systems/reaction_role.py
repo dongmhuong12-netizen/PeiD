@@ -25,7 +25,7 @@ class ReactionRole(commands.Cog):
         self.data = load_data()
 
     # =========================
-    # RELOAD DATA (đảm bảo luôn mới)
+    # RELOAD DATA
     # =========================
     def refresh(self):
         self.data = load_data()
@@ -57,7 +57,6 @@ class ReactionRole(commands.Cog):
 
         emoji_str = str(payload.emoji)
 
-        # DUYỆT TỪNG GROUP
         for group in config.get("groups", []):
 
             if emoji_str not in group["emojis"]:
@@ -66,7 +65,6 @@ class ReactionRole(commands.Cog):
             index = group["emojis"].index(emoji_str)
             role_data = group["roles"][index]
 
-            # hỗ trợ 1 hoặc nhiều role
             if not isinstance(role_data, list):
                 role_ids = [role_data]
             else:
@@ -83,7 +81,7 @@ class ReactionRole(commands.Cog):
                     continue
 
             if not roles_to_add:
-                return
+                break
 
             # ===== MULTI MODE =====
             if group["mode"] == "multi":
@@ -114,13 +112,12 @@ class ReactionRole(commands.Cog):
                         except:
                             pass
 
-                # add role mới
                 try:
                     await member.add_roles(*roles_to_add)
                 except:
                     pass
 
-            return  # xử lý xong thì thoát
+            break  # 🔥 chỉ break loop, không return
 
     # =========================
     # REACTION REMOVE
@@ -170,15 +167,14 @@ class ReactionRole(commands.Cog):
                     continue
 
             if not roles_to_remove:
-                return
+                break
 
-            # remove role ở cả single và multi
             try:
                 await member.remove_roles(*roles_to_remove)
             except:
                 pass
 
-            return
+            break  # 🔥 break thay vì return
 
 
 async def setup(bot: commands.Bot):
