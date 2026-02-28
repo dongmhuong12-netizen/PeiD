@@ -4,15 +4,25 @@ import os
 DATA_FILE = "data/embeds.json"
 
 
+# =========================
+# INTERNAL
+# =========================
+
 def load_all():
     if not os.path.exists(DATA_FILE):
         return {}
-    with open(DATA_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+
+    try:
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, ValueError):
+        # Nếu file bị hỏng → reset an toàn
+        return {}
 
 
 def save_all(data):
     os.makedirs("data", exist_ok=True)
+
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4)
 
@@ -23,7 +33,6 @@ def save_all(data):
 
 def save_embed(guild_id: int, name: str, data: dict):
     all_data = load_all()
-
     guild_id = str(guild_id)
 
     if guild_id not in all_data:
@@ -44,6 +53,11 @@ def delete_embed(guild_id: int, name: str):
 
     if guild_id in all_data and name in all_data[guild_id]:
         del all_data[guild_id][name]
+
+        # Nếu guild không còn embed nào → xoá luôn guild key
+        if not all_data[guild_id]:
+            del all_data[guild_id]
+
         save_all(all_data)
         return True
 
