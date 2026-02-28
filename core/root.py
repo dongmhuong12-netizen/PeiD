@@ -8,11 +8,11 @@ from core.embed_storage import (
     delete_embed,
     get_all_embed_names
 )
-from core.embed_sender import send_embed  # 🔥 THÊM DÒNG NÀY
+from core.embed_sender import send_embed
 
 from core.greet_leave import GreetGroup, LeaveGroup, GreetLeaveListener
 from core.booster import BoosterGroup, BoosterListener
-from core.wellcome import WellcomeGroup, WellcomeListener  # 🔥 THÊM DÒNG NÀY
+from core.wellcome import WellcomeGroup, WellcomeListener
 
 
 # =============================
@@ -23,7 +23,7 @@ async def embed_name_autocomplete(
     interaction: discord.Interaction,
     current: str
 ):
-    names = get_all_embed_names()
+    names = get_all_embed_names(interaction.guild.id)
 
     return [
         app_commands.Choice(name=name, value=name)
@@ -43,7 +43,7 @@ class EmbedGroup(app_commands.Group):
     @app_commands.command(name="create", description="Create a new embed UI")
     async def create(self, interaction: discord.Interaction, name: str):
 
-        existing = load_embed(name)
+        existing = load_embed(interaction.guild.id, name)
         if existing:
             await interaction.response.send_message(
                 f"Đã có embed tồn tại với tên `{name}`. "
@@ -97,7 +97,7 @@ class EmbedGroup(app_commands.Group):
     @app_commands.autocomplete(name=embed_name_autocomplete)
     async def edit(self, interaction: discord.Interaction, name: str):
 
-        data = load_embed(name)
+        data = load_embed(interaction.guild.id, name)
 
         if not data:
             await interaction.response.send_message(
@@ -133,7 +133,7 @@ class EmbedGroup(app_commands.Group):
     @app_commands.autocomplete(name=embed_name_autocomplete)
     async def delete(self, interaction: discord.Interaction, name: str):
 
-        data = load_embed(name)
+        data = load_embed(interaction.guild.id, name)
 
         if not data:
             await interaction.response.send_message(
@@ -153,7 +153,7 @@ class EmbedGroup(app_commands.Group):
 
             ACTIVE_EMBED_VIEWS[name] = []
 
-        delete_embed(name)
+        delete_embed(interaction.guild.id, name)
 
         await interaction.response.send_message(
             f"Embed `{name}` đã được xoá vĩnh viễn, có thể tạo embed mới bằng tên của embed này.",
@@ -164,7 +164,7 @@ class EmbedGroup(app_commands.Group):
     @app_commands.autocomplete(name=embed_name_autocomplete)
     async def show(self, interaction: discord.Interaction, name: str):
 
-        data = load_embed(name)
+        data = load_embed(interaction.guild.id, name)
 
         if not data:
             await interaction.response.send_message(
@@ -177,7 +177,7 @@ class EmbedGroup(app_commands.Group):
             interaction.channel,
             data,
             interaction.guild,
-            interaction.user,  # ✅ FIX: thêm dấu phẩy
+            interaction.user,
             embed_name=name
         )
 
@@ -198,7 +198,7 @@ class PGroup(app_commands.Group):
         self.add_command(GreetGroup())
         self.add_command(LeaveGroup())
         self.add_command(BoosterGroup())
-        self.add_command(WellcomeGroup())  # 🔥 THÊM DÒNG NÀY
+        self.add_command(WellcomeGroup())
 
 
 # =============================
@@ -214,7 +214,7 @@ async def setup(bot: commands.Bot):
     await bot.add_cog(Root(bot))
     await bot.add_cog(GreetLeaveListener(bot))
     await bot.add_cog(BoosterListener(bot))
-    await bot.add_cog(WellcomeListener(bot))  # 🔥 THÊM DÒNG NÀY
+    await bot.add_cog(WellcomeListener(bot))
 
     if bot.tree.get_command("p") is None:
         bot.tree.add_command(PGroup())
