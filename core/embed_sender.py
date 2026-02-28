@@ -1,14 +1,32 @@
 import discord
 import copy
+import os
+import json
 from typing import Union
 from core.variable_engine import apply_variables
+
+DATA_FILE = "data/reaction_roles.json"
+
+
+def load_reaction_data():
+    if not os.path.exists(DATA_FILE):
+        return {}
+    with open(DATA_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def save_reaction_data(data):
+    os.makedirs("data", exist_ok=True)
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4)
 
 
 async def send_embed(
     destination: Union[discord.TextChannel, discord.Interaction],
     embed_data: dict,
     guild: discord.Guild,
-    member: discord.Member | None = None
+    member: discord.Member | None = None,
+    embed_name: str | None = None   # 🔥 THÊM PARAM
 ):
     try:
         embed_copy = copy.deepcopy(embed_data)
@@ -20,7 +38,6 @@ async def send_embed(
 
             if isinstance(img, str):
                 embed_copy["image"] = {"url": img}
-
             elif isinstance(img, dict):
                 if not img.get("url"):
                     embed_copy.pop("image")
@@ -30,7 +47,6 @@ async def send_embed(
 
             if isinstance(thumb, str):
                 embed_copy["thumbnail"] = {"url": thumb}
-
             elif isinstance(thumb, dict):
                 if not thumb.get("url"):
                     embed_copy.pop("thumbnail")
@@ -63,13 +79,47 @@ async def send_embed(
         return False
 
     try:
+        # ===== SEND MESSAGE =====
         if isinstance(destination, discord.Interaction):
             if destination.response.is_done():
-                await destination.followup.send(embed=embed)
+                message = await destination.followup.send(embed=embed)
             else:
                 await destination.response.send_message(embed=embed)
+                message = await destination.original_response()
         else:
-            await destination.send(embed=embed)
+            message = await destination.send(embed=embed)
+
+        # ===== REACTION ROLE PATCH =====
+        if embed_name:
+            data = load_reaction_data()
+
+            old_message_id = None
+            old_config = None
+
+            # tìm config cũ của embed này
+            for msg_id, config in data.items():
+                if config.get("embed_name") == embed_name:
+                    old_message_id = msg_id
+                    old_config = config
+                    break
+
+            if old_config:
+                # add lại emoji
+                for emoji in old_config["emojis"]:
+                    try:
+                        await message.add_reaction(emoji)
+                    except:
+                        pass
+
+                # ghi đè message_id mới
+                data[str(message.id)] = old_config
+                data[str(message.id)]["embed_name"] = embed_name
+
+                # xoá message_id cũ
+                if old_message_id and old_message_id in data:
+                    del data[old_message_id]
+
+                save_reaction_data(data)
 
         return True
 
