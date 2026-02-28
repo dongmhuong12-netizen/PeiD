@@ -1,55 +1,55 @@
 import json
 import os
 
-FILE_PATH = "data/embeds.json"
+DATA_FILE = "data/embeds.json"
 
 
-def _load_all():
-    if not os.path.exists(FILE_PATH):
+def load_all():
+    if not os.path.exists(DATA_FILE):
         return {}
-
-    with open(FILE_PATH, "r", encoding="utf-8") as f:
-        try:
-            return json.load(f)
-        except json.JSONDecodeError:
-            return {}
+    with open(DATA_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
 
 
-def _save_all(data: dict):
+def save_all(data):
     os.makedirs("data", exist_ok=True)
-
-    with open(FILE_PATH, "w", encoding="utf-8") as f:
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4)
 
 
-def save_embed(name: str, embed_data: dict):
-    data = _load_all()
-    data[name] = embed_data
-    _save_all(data)
+# =========================
+# PUBLIC API
+# =========================
+
+def save_embed(guild_id: int, name: str, data: dict):
+    all_data = load_all()
+
+    guild_id = str(guild_id)
+
+    if guild_id not in all_data:
+        all_data[guild_id] = {}
+
+    all_data[guild_id][name] = data
+    save_all(all_data)
 
 
-def load_embed(name: str):
-    data = _load_all()
-    return data.get(name)
+def load_embed(guild_id: int, name: str):
+    all_data = load_all()
+    return all_data.get(str(guild_id), {}).get(name)
 
 
-def delete_embed(name: str):
-    data = _load_all()
+def delete_embed(guild_id: int, name: str):
+    all_data = load_all()
+    guild_id = str(guild_id)
 
-    if name not in data:
-        return False
+    if guild_id in all_data and name in all_data[guild_id]:
+        del all_data[guild_id][name]
+        save_all(all_data)
+        return True
 
-    del data[name]
-    _save_all(data)
-    return True
-
-
-def embed_exists(name: str):
-    data = _load_all()
-    return name in data
+    return False
 
 
-# 🔥 HÀM MỚI — LẤY DANH SÁCH TÊN EMBED
-def get_all_embed_names():
-    data = _load_all()
-    return list(data.keys())
+def get_all_embeds(guild_id: int):
+    all_data = load_all()
+    return all_data.get(str(guild_id), {})
