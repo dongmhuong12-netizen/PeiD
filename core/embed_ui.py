@@ -89,7 +89,7 @@ class EditImageModal(discord.ui.Modal, title="Set Image URL"):
 
 
 # =========================
-# REACTION ROLE MODAL (FIXED)
+# REACTION ROLE MODAL (FIXED PROPERLY)
 # =========================
 
 class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
@@ -114,21 +114,30 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
             await interaction.response.send_message("Emoji và role không khớp.", ephemeral=True)
             return
 
+        if mode not in ["single", "multi"]:
+            await interaction.response.send_message("Mode phải là single hoặc multi.", ephemeral=True)
+            return
+
         guild_id = interaction.guild.id
         data = load_reaction_data()
 
         key = f"{guild_id}::embed::{self.view.name}"
 
-        # 🔥 FIX: ghi đè toàn bộ groups thay vì append
-        data[key] = {
-            "guild_id": guild_id,
-            "embed_name": self.view.name,
-            "groups": [{
-                "mode": mode,
-                "emojis": emojis,
-                "roles": roles
-            }]
+        new_group = {
+            "mode": mode,
+            "emojis": emojis,
+            "roles": roles
         }
+
+        # 🔥 FIX THẬT SỰ: append group thay vì overwrite
+        if key not in data:
+            data[key] = {
+                "guild_id": guild_id,
+                "embed_name": self.view.name,
+                "groups": []
+            }
+
+        data[key]["groups"].append(new_group)
 
         save_reaction_data(data)
 
@@ -202,7 +211,7 @@ class EmbedUIView(discord.ui.View):
     async def reaction_roles(self, interaction: discord.Interaction, button):
         await interaction.response.send_modal(ReactionRoleModal(self))
 
-    # ===== SAVE / DELETE (FIXED) =====
+    # ===== SAVE / DELETE =====
 
     @discord.ui.button(label="Save Embed", style=discord.ButtonStyle.secondary)
     async def save_btn(self, interaction: discord.Interaction, button):
@@ -213,11 +222,9 @@ class EmbedUIView(discord.ui.View):
     async def delete_btn(self, interaction: discord.Interaction, button):
         delete_embed(interaction.guild.id, self.name)
 
-        # 🔥 clear registry
         if self.name in ACTIVE_EMBED_VIEWS:
             ACTIVE_EMBED_VIEWS[self.name].remove(self)
 
-        # disable buttons
         for item in self.children:
             item.disabled = True
 
