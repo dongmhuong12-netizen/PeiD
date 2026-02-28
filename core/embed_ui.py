@@ -5,6 +5,9 @@ import os
 DATA_FILE = "data/reaction_roles.json"
 
 
+# =========================
+# LOAD / SAVE DATA
+# =========================
 def load_data():
     if not os.path.exists(DATA_FILE):
         return {}
@@ -18,6 +21,9 @@ def save_data(data):
         json.dump(data, f, indent=4)
 
 
+# =========================
+# REACTION ROLE MODAL
+# =========================
 class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
 
     def __init__(self, view):
@@ -65,10 +71,9 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
             return
 
         guild_id = interaction.guild.id
-
         data = load_data()
 
-        # 🔥 KEY MỚI CÓ guild_id
+        # KEY gồm guild_id + embed_name
         temp_key = f"{guild_id}::embed::{self.view.name}"
 
         config = data.get(temp_key)
@@ -94,4 +99,27 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
         await interaction.response.send_message(
             "✅ Reaction role đã được lưu.",
             ephemeral=True
+        )
+
+
+# =========================
+# EMBED UI VIEW
+# =========================
+class EmbedUIView(discord.ui.View):
+
+    def __init__(self, name: str):
+        super().__init__(timeout=None)
+        self.name = name
+
+    @discord.ui.button(
+        label="Reaction Roles",
+        style=discord.ButtonStyle.success
+    )
+    async def reaction_roles(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+        await interaction.response.send_modal(
+            ReactionRoleModal(self)
         )
