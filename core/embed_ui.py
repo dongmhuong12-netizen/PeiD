@@ -1,8 +1,10 @@
 import discord
 from discord.ui import View, Modal, TextInput
 import re
+import json
+import os
 from .embed_storage import save_embed, delete_embed
-from .variable_engine import apply_variables   # ✅ THÊM
+from .variable_engine import apply_variables
 
 
 # =============================
@@ -10,6 +12,21 @@ from .variable_engine import apply_variables   # ✅ THÊM
 # =============================
 
 ACTIVE_EMBED_VIEWS = {}
+
+REACTION_FILE = "data/reaction_roles.json"
+
+
+def load_reaction_data():
+    if not os.path.exists(REACTION_FILE):
+        return {}
+    with open(REACTION_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def save_reaction_data(data):
+    os.makedirs("data", exist_ok=True)
+    with open(REACTION_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4)
 
 
 # =============================
@@ -28,10 +45,6 @@ class EmbedUIView(View):
             ACTIVE_EMBED_VIEWS[name] = []
         ACTIVE_EMBED_VIEWS[name].append(self)
 
-    # =============================
-    # FIXED LINK TOKEN PARSER
-    # =============================
-
     def extract_link_tokens(self, text: str):
         if not text:
             return text, None, None
@@ -47,10 +60,6 @@ class EmbedUIView(View):
 
         return text.strip(), label, url
 
-    # =============================
-    # BUILD EMBED
-    # =============================
-
     def build_embed(self, interaction: discord.Interaction = None):
         color_value = self.embed_data.get("color")
         if color_value is None:
@@ -58,9 +67,6 @@ class EmbedUIView(View):
 
         embed_data = self.embed_data.copy()
 
-        # =============================
-        # ✅ APPLY VARIABLE ENGINE (PREVIEW)
-        # =============================
         if interaction:
             embed_data = apply_variables(
                 embed_data,
@@ -74,11 +80,9 @@ class EmbedUIView(View):
         link_label = None
         link_url = None
 
-        # ===== EXTRACT LINK TOKEN =====
         if isinstance(description, str):
             description, link_label, link_url = self.extract_link_tokens(description)
 
-        # ===== CLEAN TEXT =====
         def clean_text(text):
             if not isinstance(text, str):
                 return text
@@ -102,7 +106,6 @@ class EmbedUIView(View):
         if embed_data.get("thumbnail"):
             embed.set_thumbnail(url=embed_data["thumbnail"])
 
-        # ===== BUILD VIEW =====
         self.clear_items()
         self._add_default_buttons()
 
@@ -111,10 +114,6 @@ class EmbedUIView(View):
 
         return embed
 
-    # =============================
-    # DEFAULT BUTTONS
-    # =============================
-
     def _add_default_buttons(self):
         self.add_item(self.edit_title)
         self.add_item(self.edit_description)
@@ -122,10 +121,7 @@ class EmbedUIView(View):
         self.add_item(self.edit_color)
         self.add_item(self.save_button)
         self.add_item(self.delete_button)
-
-    # =============================
-    # BUTTONS
-    # =============================
+        self.add_item(self.reaction_roles_button)
 
     @discord.ui.button(label="Edit Title", style=discord.ButtonStyle.gray)
     async def edit_title(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -173,6 +169,10 @@ class EmbedUIView(View):
             f"Embed `{self.name}` đã được xoá vĩnh viễn.",
             ephemeral=True
         )
+
+    @discord.ui.button(label="Reaction Roles", style=discord.ButtonStyle.green)
+    async def reaction_roles_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(ReactionRoleModal(self))
 
 
 # =============================
@@ -261,4 +261,88 @@ class ColorModal(Modal, title="Chỉnh sửa màu (Hex)"):
         await interaction.response.edit_message(
             embed=self.view.build_embed(interaction),
             view=self.view
+        )
+
+
+class ReactionRoleModal(Modal, title="Thêm Reaction Role"):
+
+    def __init__(self, view: EmbedUIView):
+        super().__init__()
+        self.view = view
+
+        self.mode_input = TextInput(
+            label="Mode (single / multi)",
+            required=True
+        )
+
+        self.emoji_input = TextInput(
+            label="Emoji",
+            required=True
+        )
+
+        self.role_input = TextInput(
+            label="Role ID",
+            required=True
+        )
+
+        self.add_item(self.mode_input)
+        self.add_item(self.emoji_input)
+        self.add_item(self.role_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+
+        mode = self.mode_input.value.lower().strip()
+        emoji = self.emoji_input.value.strip()
+
+        try:
+            role_id = int(self.role_input.value.strip())
+        except:
+            await interaction.response.send_message(
+                "Role ID không hợp lệ.",
+                ephemeral=True
+            )
+            return
+
+        if mode not in ["single", "multi"]:
+            await interaction.response.send_message(
+                "Mode phải là 'single' hoặc 'multi'.",
+                ephemeral=True
+            )
+            return
+
+        data = load_reaction_data()
+
+        temp_key = f"embed::{self.view.name}"
+        config = data.get(temp_key)
+
+        if not config:
+            config = {
+                "guild_id": interaction.guild.id,
+                "embed_name": self.view.name,
+                "groups": []
+            }
+
+        target_group = None
+        for group in config["groups"]:
+            if group["mode"] == mode:
+                target_group = group
+                break
+
+        if not target_group:
+            target_group = {
+                "mode": mode,
+                "emojis": [],
+                "roles": []
+            }
+            config["groups"].append(target_group)
+
+        target_group["emojis"].append(emoji)
+        target_group["roles"].append(role_id)
+
+        data[temp_key] = config
+        save_reaction_data(data)
+
+        await interaction.response.send_message(
+            f"Đã thêm reaction role ({mode}) vào embed `{self.view.name}`.",
+            ephemeral=True
         )
