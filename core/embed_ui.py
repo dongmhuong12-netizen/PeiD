@@ -89,7 +89,7 @@ class EditImageModal(discord.ui.Modal, title="Set Image URL"):
 
 
 # =========================
-# REACTION ROLE MODAL
+# REACTION ROLE MODAL (FIXED)
 # =========================
 
 class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
@@ -111,7 +111,10 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
         mode = self.mode.value.lower().strip()
 
         if len(emojis) != len(roles):
-            await interaction.response.send_message("Emoji và role không khớp.", ephemeral=True)
+            await interaction.response.send_message(
+                "Emoji và role không khớp.",
+                ephemeral=True
+            )
             return
 
         guild_id = interaction.guild.id
@@ -119,22 +122,26 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
 
         key = f"{guild_id}::embed::{self.view.name}"
 
-        config = data.get(key, {
+        # 🔥 FIX: Replace hoàn toàn group cũ thay vì append
+        config = {
             "guild_id": guild_id,
             "embed_name": self.view.name,
-            "groups": []
-        })
-
-        config["groups"].append({
-            "mode": mode,
-            "emojis": emojis,
-            "roles": roles
-        })
+            "groups": [
+                {
+                    "mode": mode,
+                    "emojis": emojis,
+                    "roles": roles
+                }
+            ]
+        }
 
         data[key] = config
         save_reaction_data(data)
 
-        await interaction.response.send_message("Reaction role đã lưu.", ephemeral=True)
+        await interaction.response.send_message(
+            "Reaction role đã lưu.",
+            ephemeral=True
+        )
 
 
 # =========================
@@ -188,7 +195,7 @@ class EmbedUIView(discord.ui.View):
         await interaction.response.send_modal(EditTitleModal(self))
 
     @discord.ui.button(label="Edit Description", style=discord.ButtonStyle.secondary)
-    async def edit_description(self, interaction: discord.Interaction, button):
+    async def edit_description(self, interaction: discord.Interation, button):
         await interaction.response.send_modal(EditDescriptionModal(self))
 
     @discord.ui.button(label="Set Image", style=discord.ButtonStyle.secondary)
