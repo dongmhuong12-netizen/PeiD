@@ -3,7 +3,7 @@ import json
 import os
 
 from core.embed_storage import save_embed, delete_embed
-from core.variable_engine import apply_variables  # ✅ thêm dòng này
+from core.variable_engine import apply_variables
 
 DATA_FILE = "data/reaction_roles.json"
 
@@ -154,7 +154,6 @@ class EmbedUIView(discord.ui.View):
             ACTIVE_EMBED_VIEWS[name] = []
         ACTIVE_EMBED_VIEWS[name].append(self)
 
-    # ✅ FIX DUY NHẤT: Apply variables khi preview
     def build_embed(self):
         data = self.data
 
@@ -173,8 +172,6 @@ class EmbedUIView(discord.ui.View):
         return embed
 
     async def update_message(self, interaction: discord.Interaction):
-
-        # ✅ Lưu context để biến hoạt động trong UI
         self.guild = interaction.guild
         self.member = interaction.user
 
@@ -213,10 +210,12 @@ class EmbedUIView(discord.ui.View):
 
     @discord.ui.button(label="Save Embed", style=discord.ButtonStyle.primary)
     async def save_btn(self, interaction: discord.Interaction, button):
-        save_embed(self.name, self.data)
+        # ✅ FIX: lưu theo guild
+        save_embed(interaction.guild.id, self.name, self.data)
         await interaction.response.send_message("Embed đã lưu.", ephemeral=True)
 
     @discord.ui.button(label="Delete Embed", style=discord.ButtonStyle.danger)
     async def delete_btn(self, interaction: discord.Interaction, button):
-        delete_embed(self.name)
+        # ✅ FIX: xoá theo guild
+        delete_embed(interaction.guild.id, self.name)
         await interaction.response.send_message("Embed đã xoá.", ephemeral=True)
