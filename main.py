@@ -5,8 +5,13 @@ import os
 
 TOKEN = os.getenv("TOKEN")
 
+# =========================
+# INTENTS (QUAN TRỌNG)
+# =========================
 intents = discord.Intents.default()
-intents.members = True
+intents.members = True          # cần cho add/remove role
+intents.reactions = True        # cần cho reaction events
+intents.guilds = True
 intents.message_content = True
 
 bot = commands.Bot(
@@ -17,16 +22,14 @@ bot = commands.Bot(
 # =========================
 # LOAD EXTENSIONS
 # =========================
-
 async def load_extensions():
     await bot.load_extension("core.root")
-    await bot.load_extension("systems.reaction_role")  # 👈 thêm dòng này
+    await bot.load_extension("systems.reaction_role")
 
 
 # =========================
 # READY EVENT
 # =========================
-
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user} (ID: {bot.user.id})")
@@ -42,11 +45,11 @@ async def on_ready():
 # =========================
 # START BOT
 # =========================
-
 async def main():
     async with bot:
         await load_extensions()
         await bot.start(TOKEN)
 
 
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())
