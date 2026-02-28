@@ -34,7 +34,6 @@ class EditTitleModal(discord.ui.Modal, title="Edit Title"):
     def __init__(self, view):
         super().__init__()
         self.view = view
-
         self.input = discord.ui.TextInput(label="New Title", required=False)
         self.add_item(self.input)
 
@@ -47,7 +46,6 @@ class EditDescriptionModal(discord.ui.Modal, title="Edit Description"):
     def __init__(self, view):
         super().__init__()
         self.view = view
-
         self.input = discord.ui.TextInput(
             label="New Description",
             style=discord.TextStyle.paragraph,
@@ -64,7 +62,6 @@ class EditColorModal(discord.ui.Modal, title="Edit Color (HEX)"):
     def __init__(self, view):
         super().__init__()
         self.view = view
-
         self.input = discord.ui.TextInput(
             label="Hex Color (vd: FF0000)",
             required=True
@@ -75,7 +72,7 @@ class EditColorModal(discord.ui.Modal, title="Edit Color (HEX)"):
         try:
             self.view.data["color"] = int(self.input.value.replace("#", ""), 16)
             await self.view.update_message(interaction)
-        except:
+        except ValueError:
             await interaction.response.send_message("Hex không hợp lệ.", ephemeral=True)
 
 
@@ -83,7 +80,6 @@ class EditImageModal(discord.ui.Modal, title="Set Image URL"):
     def __init__(self, view):
         super().__init__()
         self.view = view
-
         self.input = discord.ui.TextInput(label="Image URL", required=False)
         self.add_item(self.input)
 
@@ -153,7 +149,10 @@ class EmbedUIView(discord.ui.View):
         self.data = data
         self.message = None
 
-        ACTIVE_EMBED_VIEWS.setdefault(name, []).append(self)
+        # tránh lưu trùng view
+        if name not in ACTIVE_EMBED_VIEWS:
+            ACTIVE_EMBED_VIEWS[name] = []
+        ACTIVE_EMBED_VIEWS[name].append(self)
 
     def build_embed(self):
         embed = discord.Embed(
@@ -167,42 +166,46 @@ class EmbedUIView(discord.ui.View):
 
         return embed
 
-    async def update_message(self, interaction):
+    async def update_message(self, interaction: discord.Interaction):
         embed = self.build_embed()
-        await interaction.response.edit_message(embed=embed, view=self)
+
+        if interaction.response.is_done():
+            await interaction.message.edit(embed=embed, view=self)
+        else:
+            await interaction.response.edit_message(embed=embed, view=self)
 
     # ===== EDIT BUTTONS =====
 
     @discord.ui.button(label="Edit Title", style=discord.ButtonStyle.secondary)
-    async def edit_title(self, interaction, button):
+    async def edit_title(self, interaction: discord.Interaction, button):
         await interaction.response.send_modal(EditTitleModal(self))
 
     @discord.ui.button(label="Edit Description", style=discord.ButtonStyle.secondary)
-    async def edit_description(self, interaction, button):
+    async def edit_description(self, interaction: discord.Interaction, button):
         await interaction.response.send_modal(EditDescriptionModal(self))
 
     @discord.ui.button(label="Set Image", style=discord.ButtonStyle.secondary)
-    async def set_image(self, interaction, button):
+    async def set_image(self, interaction: discord.Interaction, button):
         await interaction.response.send_modal(EditImageModal(self))
 
     @discord.ui.button(label="Edit Color", style=discord.ButtonStyle.secondary)
-    async def edit_color(self, interaction, button):
+    async def edit_color(self, interaction: discord.Interaction, button):
         await interaction.response.send_modal(EditColorModal(self))
 
     # ===== REACTION =====
 
     @discord.ui.button(label="Reaction Roles", style=discord.ButtonStyle.success)
-    async def reaction_roles(self, interaction, button):
+    async def reaction_roles(self, interaction: discord.Interaction, button):
         await interaction.response.send_modal(ReactionRoleModal(self))
 
     # ===== SAVE / DELETE =====
 
     @discord.ui.button(label="Save Embed", style=discord.ButtonStyle.primary)
-    async def save_btn(self, interaction, button):
+    async def save_btn(self, interaction: discord.Interaction, button):
         save_embed(self.name, self.data)
         await interaction.response.send_message("Embed đã lưu.", ephemeral=True)
 
     @discord.ui.button(label="Delete Embed", style=discord.ButtonStyle.danger)
-    async def delete_btn(self, interaction, button):
+    async def delete_btn(self, interaction: discord.Interaction, button):
         delete_embed(self.name)
         await interaction.response.send_message("Embed đã xoá.", ephemeral=True)
