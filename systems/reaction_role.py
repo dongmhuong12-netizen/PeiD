@@ -34,7 +34,6 @@ class ReactionRole(commands.Cog):
         if not interaction.guild:
             return
 
-        # ⚠ đổi 3 role này thành role ID thật trong server của cậu
         role_ids = [
             1475556354096894052,
             1475556479980273664,
@@ -42,6 +41,8 @@ class ReactionRole(commands.Cog):
         ]
 
         emojis = ["🐋", "🐬", "🐳"]
+
+        embed_name = "rr_test"  # 🔥 tên cố định cho test
 
         embed = discord.Embed(
             title="Reaction Role Test",
@@ -52,15 +53,15 @@ class ReactionRole(commands.Cog):
         await interaction.response.send_message(embed=embed)
         message = await interaction.original_response()
 
-        # add reaction theo thứ tự
         for emoji in emojis:
             await message.add_reaction(emoji)
 
-        # lưu config theo message_id
+        # 🔥 lưu kèm embed_name
         self.data[str(message.id)] = {
             "guild_id": interaction.guild.id,
             "roles": role_ids,
-            "emojis": emojis
+            "emojis": emojis,
+            "embed_name": embed_name
         }
 
         save_data(self.data)
