@@ -1,5 +1,4 @@
 import discord
-from discord import app_commands
 from discord.ext import commands
 import json
 import os
@@ -26,47 +25,6 @@ class ReactionRole(commands.Cog):
         self.data = load_data()
 
     # =========================
-    # TEST COMMAND
-    # =========================
-    @app_commands.command(name="rr_test", description="Test reaction role system")
-    async def rr_test(self, interaction: discord.Interaction):
-
-        if not interaction.guild:
-            return
-
-        role_ids = [
-            1475556354096894052,
-            1475556479980273664,
-            1475556621081116695
-        ]
-
-        emojis = ["🐋", "🐬", "🐳"]
-
-        embed_name = "rr_test"  # 🔥 tên cố định cho test
-
-        embed = discord.Embed(
-            title="Reaction Role Test",
-            description="Bấm emoji để nhận role.\nGỡ emoji để bỏ role.",
-            color=discord.Color.blue()
-        )
-
-        await interaction.response.send_message(embed=embed)
-        message = await interaction.original_response()
-
-        for emoji in emojis:
-            await message.add_reaction(emoji)
-
-        # 🔥 lưu kèm embed_name
-        self.data[str(message.id)] = {
-            "guild_id": interaction.guild.id,
-            "roles": role_ids,
-            "emojis": emojis,
-            "embed_name": embed_name
-        }
-
-        save_data(self.data)
-
-    # =========================
     # REACTION ADD
     # =========================
     @commands.Cog.listener()
@@ -81,10 +39,6 @@ class ReactionRole(commands.Cog):
             return
 
         config = self.data[message_id]
-
-        if str(payload.emoji) not in config["emojis"]:
-            return
-
         guild = self.bot.get_guild(config["guild_id"])
         if not guild:
             return
@@ -93,17 +47,47 @@ class ReactionRole(commands.Cog):
         if not member:
             return
 
-        index = config["emojis"].index(str(payload.emoji))
-        role_id = config["roles"][index]
+        emoji_str = str(payload.emoji)
 
-        role = guild.get_role(role_id)
-        if not role:
-            return
+        # 🔥 DUYỆT TỪNG GROUP
+        for group in config.get("groups", []):
 
-        try:
-            await member.add_roles(role)
-        except:
-            pass
+            if emoji_str not in group["emojis"]:
+                continue
+
+            index = group["emojis"].index(emoji_str)
+            role_id = group["roles"][index]
+            role = guild.get_role(role_id)
+
+            if not role:
+                return
+
+            # ===== MULTI MODE =====
+            if group["mode"] == "multi":
+                try:
+                    await member.add_roles(role)
+                except:
+                    pass
+
+            # ===== SINGLE MODE =====
+            elif group["mode"] == "single":
+
+                # remove tất cả role trong group trước
+                for r_id in group["roles"]:
+                    r = guild.get_role(r_id)
+                    if r and r in member.roles:
+                        try:
+                            await member.remove_roles(r)
+                        except:
+                            pass
+
+                # add role mới
+                try:
+                    await member.add_roles(role)
+                except:
+                    pass
+
+            return  # xử lý xong thì thoát
 
     # =========================
     # REACTION REMOVE
@@ -117,10 +101,6 @@ class ReactionRole(commands.Cog):
             return
 
         config = self.data[message_id]
-
-        if str(payload.emoji) not in config["emojis"]:
-            return
-
         guild = self.bot.get_guild(config["guild_id"])
         if not guild:
             return
@@ -129,17 +109,31 @@ class ReactionRole(commands.Cog):
         if not member:
             return
 
-        index = config["emojis"].index(str(payload.emoji))
-        role_id = config["roles"][index]
+        emoji_str = str(payload.emoji)
 
-        role = guild.get_role(role_id)
-        if not role:
+        for group in config.get("groups", []):
+
+            if emoji_str not in group["emojis"]:
+                continue
+
+            index = group["emojis"].index(emoji_str)
+            role_id = group["roles"][index]
+            role = guild.get_role(role_id)
+
+            if not role:
+                return
+
+            # chỉ remove nếu là multi
+            if group["mode"] == "multi":
+                try:
+                    await member.remove_roles(role)
+                except:
+                    pass
+
+            # nếu single thì không làm gì khi remove reaction
+            # vì role đã được xử lý ở add
+
             return
-
-        try:
-            await member.remove_roles(role)
-        except:
-            pass
 
 
 async def setup(bot: commands.Bot):
