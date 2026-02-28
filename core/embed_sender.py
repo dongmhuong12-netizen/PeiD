@@ -8,6 +8,10 @@ from core.variable_engine import apply_variables
 DATA_FILE = "data/reaction_roles.json"
 
 
+# =========================
+# REACTION STORAGE
+# =========================
+
 def load_reaction_data():
     if not os.path.exists(DATA_FILE):
         return {}
@@ -21,6 +25,10 @@ def save_reaction_data(data):
         json.dump(data, f, indent=4)
 
 
+# =========================
+# SEND EMBED
+# =========================
+
 async def send_embed(
     destination: Union[discord.TextChannel, discord.Interaction],
     embed_data: dict,
@@ -29,49 +37,77 @@ async def send_embed(
     embed_name: str | None = None
 ):
     try:
+        # 🔥 FIX: Nếu là interaction mà không truyền member → dùng interaction.user
+        if member is None and isinstance(destination, discord.Interaction):
+            member = destination.user
+
         embed_copy = copy.deepcopy(embed_data)
+
+        # 🔥 APPLY VARIABLES
         embed_copy = apply_variables(embed_copy, guild, member)
 
-        # FIX IMAGE FORMAT
-        if "image" in embed_copy:
-            img = embed_copy["image"]
-            if isinstance(img, str):
-                embed_copy["image"] = {"url": img}
-            elif isinstance(img, dict) and not img.get("url"):
-                embed_copy.pop("image")
-
-        if "thumbnail" in embed_copy:
-            thumb = embed_copy["thumbnail"]
-            if isinstance(thumb, str):
-                embed_copy["thumbnail"] = {"url": thumb}
-            elif isinstance(thumb, dict) and not thumb.get("url"):
-                embed_copy.pop("thumbnail")
-
-        for key in ["author", "footer"]:
-            if key in embed_copy and not embed_copy[key]:
-                embed_copy.pop(key)
-
-        if "fields" in embed_copy:
-            embed_copy["fields"] = [
-                f for f in embed_copy["fields"]
-                if f.get("name") and f.get("value")
-            ]
-            if not embed_copy["fields"]:
-                embed_copy.pop("fields")
-
+        # 🔥 FIX COLOR STRING
         if "color" in embed_copy:
             color = embed_copy["color"]
             if isinstance(color, str):
                 color = color.replace("#", "").replace("0x", "")
                 embed_copy["color"] = int(color, 16)
 
-        embed = discord.Embed.from_dict(embed_copy)
+        # =========================
+        # BUILD EMBED THỦ CÔNG (KHÔNG DÙNG from_dict)
+        # =========================
+
+        embed = discord.Embed(
+            title=embed_copy.get("title"),
+            description=embed_copy.get("description"),
+            color=embed_copy.get("color", 0x2F3136)
+        )
+
+        # IMAGE
+        if embed_copy.get("image"):
+            if isinstance(embed_copy["image"], dict):
+                embed.set_image(url=embed_copy["image"].get("url"))
+            else:
+                embed.set_image(url=embed_copy["image"])
+
+        # THUMBNAIL
+        if embed_copy.get("thumbnail"):
+            if isinstance(embed_copy["thumbnail"], dict):
+                embed.set_thumbnail(url=embed_copy["thumbnail"].get("url"))
+            else:
+                embed.set_thumbnail(url=embed_copy["thumbnail"])
+
+        # FOOTER
+        if embed_copy.get("footer"):
+            footer = embed_copy["footer"]
+            if isinstance(footer, dict):
+                embed.set_footer(text=footer.get("text"))
+
+        # AUTHOR
+        if embed_copy.get("author"):
+            author = embed_copy["author"]
+            if isinstance(author, dict):
+                embed.set_author(name=author.get("name"))
+
+        # FIELDS
+        if embed_copy.get("fields"):
+            for field in embed_copy["fields"]:
+                if field.get("name") and field.get("value"):
+                    embed.add_field(
+                        name=field.get("name"),
+                        value=field.get("value"),
+                        inline=field.get("inline", False)
+                    )
 
     except Exception as e:
         print("Embed build error:", e)
         return False
 
     try:
+        # =========================
+        # SEND MESSAGE
+        # =========================
+
         if isinstance(destination, discord.Interaction):
             if destination.response.is_done():
                 message = await destination.followup.send(embed=embed)
@@ -81,7 +117,10 @@ async def send_embed(
         else:
             message = await destination.send(embed=embed)
 
-        # ===== REACTION ROLE RESTORE (SAFE MULTI GUILD) =====
+        # =========================
+        # REACTION ROLE RESTORE
+        # =========================
+
         if embed_name:
             data = load_reaction_data()
 
