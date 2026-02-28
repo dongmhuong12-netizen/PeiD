@@ -2,146 +2,223 @@ import discord
 import json
 import os
 
+from core.embed_storage import save_embed, delete_embed
+from core.variable_engine import apply_variables
+
 DATA_FILE = "data/reaction_roles.json"
+ACTIVE_EMBED_VIEWS = {}
 
 
 # =========================
-# JSON STORAGE
+# REACTION STORAGE
 # =========================
 
-def load_data():
+def load_reaction_data():
     if not os.path.exists(DATA_FILE):
         return {}
     with open(DATA_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
-def save_data(data):
+def save_reaction_data(data):
     os.makedirs("data", exist_ok=True)
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4)
 
 
 # =========================
-# EMBED UI
+# EDIT MODALS
+# =========================
+
+class EditTitleModal(discord.ui.Modal, title="Edit Title"):
+    def __init__(self, view):
+        super().__init__()
+        self.view = view
+        self.input = discord.ui.TextInput(label="New Title", required=False)
+        self.add_item(self.input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        self.view.data["title"] = self.input.value
+        await self.view.update_message(interaction)
+
+
+class EditDescriptionModal(discord.ui.Modal, title="Edit Description"):
+    def __init__(self, view):
+        super().__init__()
+        self.view = view
+        self.input = discord.ui.TextInput(
+            label="New Description",
+            style=discord.TextStyle.paragraph,
+            required=False
+        )
+        self.add_item(self.input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        self.view.data["description"] = self.input.value
+        await self.view.update_message(interaction)
+
+
+class EditColorModal(discord.ui.Modal, title="Edit Color (HEX)"):
+    def __init__(self, view):
+        super().__init__()
+        self.view = view
+        self.input = discord.ui.TextInput(
+            label="Hex Color (vd: FF0000)",
+            required=True
+        )
+        self.add_item(self.input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            self.view.data["color"] = int(self.input.value.replace("#", ""), 16)
+            await self.view.update_message(interaction)
+        except ValueError:
+            await interaction.response.send_message("Hex không hợp lệ.", ephemeral=True)
+
+
+class EditImageModal(discord.ui.Modal, title="Set Image URL"):
+    def __init__(self, view):
+        super().__init__()
+        self.view = view
+        self.input = discord.ui.TextInput(label="Image URL", required=False)
+        self.add_item(self.input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        self.view.data["image"] = self.input.value
+        await self.view.update_message(interaction)
+
+
+# =========================
+# REACTION ROLE MODAL (FIXED)
+# =========================
+
+class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
+    def __init__(self, view):
+        super().__init__()
+        self.view = view
+
+        self.emojis = discord.ui.TextInput(label="Emojis (😀, 😎)", required=True)
+        self.roles = discord.ui.TextInput(label="Role IDs (123,456)", required=True)
+        self.mode = discord.ui.TextInput(label="Mode (single/multi)", default="single")
+
+        self.add_item(self.emojis)
+        self.add_item(self.roles)
+        self.add_item(self.mode)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        emojis = [e.strip() for e in self.emojis.value.split(",") if e.strip()]
+        roles = [r.strip() for r in self.roles.value.split(",") if r.strip()]
+        mode = self.mode.value.lower().strip()
+
+        if len(emojis) != len(roles):
+            await interaction.response.send_message("Emoji và role không khớp.", ephemeral=True)
+            return
+
+        guild_id = interaction.guild.id
+        data = load_reaction_data()
+
+        key = f"{guild_id}::embed::{self.view.name}"
+
+        # 🔥 FIX: ghi đè toàn bộ groups thay vì append
+        data[key] = {
+            "guild_id": guild_id,
+            "embed_name": self.view.name,
+            "groups": [{
+                "mode": mode,
+                "emojis": emojis,
+                "roles": roles
+            }]
+        }
+
+        save_reaction_data(data)
+
+        await interaction.response.send_message("Reaction role đã lưu.", ephemeral=True)
+
+
+# =========================
+# EMBED VIEW
 # =========================
 
 class EmbedUIView(discord.ui.View):
-    def __init__(self, embed_message: discord.Message):
-        super().__init__(timeout=None)
-        self.embed_message = embed_message
 
-    @discord.ui.button(label="Chỉnh sửa tiêu đề", style=discord.ButtonStyle.primary)
+    def __init__(self, name: str, data: dict):
+        super().__init__(timeout=None)
+        self.name = name
+        self.data = data
+        self.message = None
+
+        if name not in ACTIVE_EMBED_VIEWS:
+            ACTIVE_EMBED_VIEWS[name] = []
+
+        ACTIVE_EMBED_VIEWS[name].append(self)
+
+    def build_embed(self):
+        data = self.data
+
+        if hasattr(self, "guild") and hasattr(self, "member"):
+            data = apply_variables(data, self.guild, self.member)
+
+        embed = discord.Embed(
+            title=data.get("title"),
+            description=data.get("description"),
+            color=data.get("color", 0x5865F2)
+        )
+
+        if data.get("image"):
+            embed.set_image(url=data["image"])
+
+        return embed
+
+    async def update_message(self, interaction: discord.Interaction):
+        self.guild = interaction.guild
+        self.member = interaction.user
+
+        embed = self.build_embed()
+
+        if interaction.response.is_done():
+            await interaction.message.edit(embed=embed, view=self)
+        else:
+            await interaction.response.edit_message(embed=embed, view=self)
+
+    # ===== EDIT BUTTONS =====
+
+    @discord.ui.button(label="Edit Title", style=discord.ButtonStyle.secondary)
     async def edit_title(self, interaction: discord.Interaction, button):
         await interaction.response.send_modal(EditTitleModal(self))
 
-    @discord.ui.button(label="Chỉnh sửa nội dung", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="Edit Description", style=discord.ButtonStyle.secondary)
     async def edit_description(self, interaction: discord.Interaction, button):
         await interaction.response.send_modal(EditDescriptionModal(self))
 
-    @discord.ui.button(label="Xoá Embed", style=discord.ButtonStyle.danger)
-    async def delete_embed(self, interaction: discord.Interaction, button):
-        await self.embed_message.delete()
-        self.stop()
-        await interaction.response.send_message("Đã xoá embed.", ephemeral=True)
+    @discord.ui.button(label="Set Image", style=discord.ButtonStyle.secondary)
+    async def set_image(self, interaction: discord.Interaction, button):
+        await interaction.response.send_modal(EditImageModal(self))
 
+    @discord.ui.button(label="Edit Color", style=discord.ButtonStyle.secondary)
+    async def edit_color(self, interaction: discord.Interaction, button):
+        await interaction.response.send_modal(EditColorModal(self))
 
-class EditTitleModal(discord.ui.Modal, title="Chỉnh sửa tiêu đề"):
-    new_title = discord.ui.TextInput(label="Tiêu đề mới", required=True)
+    @discord.ui.button(label="Reaction Roles", style=discord.ButtonStyle.secondary)
+    async def reaction_roles(self, interaction: discord.Interaction, button):
+        await interaction.response.send_modal(ReactionRoleModal(self))
 
-    def __init__(self, view: EmbedUIView):
-        super().__init__()
-        self.view = view
+    # ===== SAVE / DELETE (FIXED) =====
 
-    async def on_submit(self, interaction: discord.Interaction):
-        embed = self.view.embed_message.embeds[0]
-        embed.title = self.new_title.value
-        await self.view.embed_message.edit(embed=embed)
-        await interaction.response.send_message("Đã cập nhật tiêu đề.", ephemeral=True)
+    @discord.ui.button(label="Save Embed", style=discord.ButtonStyle.secondary)
+    async def save_btn(self, interaction: discord.Interaction, button):
+        save_embed(interaction.guild.id, self.name, self.data)
+        await interaction.response.send_message("Embed đã lưu.", ephemeral=True)
 
+    @discord.ui.button(label="Delete Embed", style=discord.ButtonStyle.secondary)
+    async def delete_btn(self, interaction: discord.Interaction, button):
+        delete_embed(interaction.guild.id, self.name)
 
-class EditDescriptionModal(discord.ui.Modal, title="Chỉnh sửa nội dung"):
-    new_description = discord.ui.TextInput(
-        label="Nội dung mới",
-        style=discord.TextStyle.paragraph,
-        required=True
-    )
+        # 🔥 clear registry
+        if self.name in ACTIVE_EMBED_VIEWS:
+            ACTIVE_EMBED_VIEWS[self.name].remove(self)
 
-    def __init__(self, view: EmbedUIView):
-        super().__init__()
-        self.view = view
+        # disable buttons
+        for item in self.children:
+            item.disabled = True
 
-    async def on_submit(self, interaction: discord.Interaction):
-        embed = self.view.embed_message.embeds[0]
-        embed.description = self.new_description.value
-        await self.view.embed_message.edit(embed=embed)
-        await interaction.response.send_message("Đã cập nhật nội dung.", ephemeral=True)
-
-
-# =========================
-# REACTION ROLE LISTENER
-# =========================
-
-async def handle_reaction_add(payload: discord.RawReactionActionEvent, bot: discord.Client):
-    if payload.guild_id is None:
-        return
-
-    data = load_data()
-    message_id = str(payload.message_id)
-
-    if message_id not in data:
-        return
-
-    config = data[message_id]
-
-    guild = bot.get_guild(payload.guild_id)
-    member = guild.get_member(payload.user_id)
-    if member.bot:
-        return
-
-    emoji = str(payload.emoji)
-
-    if emoji not in config["roles"]:
-        return
-
-    role_id = config["roles"][emoji]
-    role = guild.get_role(role_id)
-
-    if config["mode"] == "single":
-        # remove other roles first
-        for e, r_id in config["roles"].items():
-            if e != emoji:
-                r = guild.get_role(r_id)
-                if r in member.roles:
-                    await member.remove_roles(r)
-
-    await member.add_roles(role)
-
-
-async def handle_reaction_remove(payload: discord.RawReactionActionEvent, bot: discord.Client):
-    if payload.guild_id is None:
-        return
-
-    data = load_data()
-    message_id = str(payload.message_id)
-
-    if message_id not in data:
-        return
-
-    config = data[message_id]
-
-    guild = bot.get_guild(payload.guild_id)
-    member = guild.get_member(payload.user_id)
-    if member.bot:
-        return
-
-    emoji = str(payload.emoji)
-
-    if emoji not in config["roles"]:
-        return
-
-    role_id = config["roles"][emoji]
-    role = guild.get_role(role_id)
-
-    if role in member.roles:
-        await member.remove_roles(role)
+        await interaction.response.edit_message(view=self)
