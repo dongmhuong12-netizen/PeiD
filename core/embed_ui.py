@@ -10,7 +10,7 @@ ACTIVE_EMBED_VIEWS = {}
 
 
 # =========================
-# REACTION ROLE STORAGE
+# REACTION STORAGE
 # =========================
 
 def load_reaction_data():
@@ -27,46 +27,95 @@ def save_reaction_data(data):
 
 
 # =========================
-# REACTION ROLE MODAL
+# EDIT MODALS
 # =========================
 
-class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
-
+class EditTitleModal(discord.ui.Modal, title="Edit Title"):
     def __init__(self, view):
         super().__init__()
         self.view = view
 
-        self.emojis_input = discord.ui.TextInput(
-            label="Emojis (😀, 😎, 🔥)",
-            required=True
-        )
-
-        self.roles_input = discord.ui.TextInput(
-            label="Role IDs (123, 456, 789)",
-            required=True
-        )
-
-        self.mode_input = discord.ui.TextInput(
-            label="Mode (single / multi)",
-            default="single",
-            required=True
-        )
-
-        self.add_item(self.emojis_input)
-        self.add_item(self.roles_input)
-        self.add_item(self.mode_input)
+        self.input = discord.ui.TextInput(label="New Title", required=False)
+        self.add_item(self.input)
 
     async def on_submit(self, interaction: discord.Interaction):
+        self.view.data["title"] = self.input.value
+        await self.view.update_message(interaction)
 
-        emojis = [e.strip() for e in self.emojis_input.value.split(",")]
-        roles = [r.strip() for r in self.roles_input.value.split(",")]
-        mode = self.mode_input.value.lower().strip()
+
+class EditDescriptionModal(discord.ui.Modal, title="Edit Description"):
+    def __init__(self, view):
+        super().__init__()
+        self.view = view
+
+        self.input = discord.ui.TextInput(
+            label="New Description",
+            style=discord.TextStyle.paragraph,
+            required=False
+        )
+        self.add_item(self.input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        self.view.data["description"] = self.input.value
+        await self.view.update_message(interaction)
+
+
+class EditColorModal(discord.ui.Modal, title="Edit Color (HEX)"):
+    def __init__(self, view):
+        super().__init__()
+        self.view = view
+
+        self.input = discord.ui.TextInput(
+            label="Hex Color (vd: FF0000)",
+            required=True
+        )
+        self.add_item(self.input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            self.view.data["color"] = int(self.input.value.replace("#", ""), 16)
+            await self.view.update_message(interaction)
+        except:
+            await interaction.response.send_message("Hex không hợp lệ.", ephemeral=True)
+
+
+class EditImageModal(discord.ui.Modal, title="Set Image URL"):
+    def __init__(self, view):
+        super().__init__()
+        self.view = view
+
+        self.input = discord.ui.TextInput(label="Image URL", required=False)
+        self.add_item(self.input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        self.view.data["image"] = self.input.value
+        await self.view.update_message(interaction)
+
+
+# =========================
+# REACTION ROLE MODAL
+# =========================
+
+class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
+    def __init__(self, view):
+        super().__init__()
+        self.view = view
+
+        self.emojis = discord.ui.TextInput(label="Emojis (😀, 😎)", required=True)
+        self.roles = discord.ui.TextInput(label="Role IDs (123,456)", required=True)
+        self.mode = discord.ui.TextInput(label="Mode (single/multi)", default="single")
+
+        self.add_item(self.emojis)
+        self.add_item(self.roles)
+        self.add_item(self.mode)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        emojis = [e.strip() for e in self.emojis.value.split(",")]
+        roles = [r.strip() for r in self.roles.value.split(",")]
+        mode = self.mode.value.lower().strip()
 
         if len(emojis) != len(roles):
-            await interaction.response.send_message(
-                "❌ Emoji và role không khớp.",
-                ephemeral=True
-            )
+            await interaction.response.send_message("Emoji và role không khớp.", ephemeral=True)
             return
 
         guild_id = interaction.guild.id
@@ -89,10 +138,7 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
         data[key] = config
         save_reaction_data(data)
 
-        await interaction.response.send_message(
-            "✅ Reaction role đã lưu.",
-            ephemeral=True
-        )
+        await interaction.response.send_message("Reaction role đã lưu.", ephemeral=True)
 
 
 # =========================
@@ -111,8 +157,8 @@ class EmbedUIView(discord.ui.View):
 
     def build_embed(self):
         embed = discord.Embed(
-            title=self.data.get("title", ""),
-            description=self.data.get("description", ""),
+            title=self.data.get("title"),
+            description=self.data.get("description"),
             color=self.data.get("color", 0x5865F2)
         )
 
@@ -121,19 +167,42 @@ class EmbedUIView(discord.ui.View):
 
         return embed
 
-    # ===== REACTION ROLE BUTTON =====
+    async def update_message(self, interaction):
+        embed = self.build_embed()
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    # ===== EDIT BUTTONS =====
+
+    @discord.ui.button(label="Edit Title", style=discord.ButtonStyle.secondary)
+    async def edit_title(self, interaction, button):
+        await interaction.response.send_modal(EditTitleModal(self))
+
+    @discord.ui.button(label="Edit Description", style=discord.ButtonStyle.secondary)
+    async def edit_description(self, interaction, button):
+        await interaction.response.send_modal(EditDescriptionModal(self))
+
+    @discord.ui.button(label="Set Image", style=discord.ButtonStyle.secondary)
+    async def set_image(self, interaction, button):
+        await interaction.response.send_modal(EditImageModal(self))
+
+    @discord.ui.button(label="Edit Color", style=discord.ButtonStyle.secondary)
+    async def edit_color(self, interaction, button):
+        await interaction.response.send_modal(EditColorModal(self))
+
+    # ===== REACTION =====
+
     @discord.ui.button(label="Reaction Roles", style=discord.ButtonStyle.success)
-    async def reaction_roles(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def reaction_roles(self, interaction, button):
         await interaction.response.send_modal(ReactionRoleModal(self))
 
-    # ===== SAVE BUTTON =====
-    @discord.ui.button(label="Save Embed", style=discord.ButtonStyle.primary)
-    async def save_embed_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        save_embed(self.name, self.data)
-        await interaction.response.send_message("💾 Embed đã lưu.", ephemeral=True)
+    # ===== SAVE / DELETE =====
 
-    # ===== DELETE BUTTON =====
+    @discord.ui.button(label="Save Embed", style=discord.ButtonStyle.primary)
+    async def save_btn(self, interaction, button):
+        save_embed(self.name, self.data)
+        await interaction.response.send_message("Embed đã lưu.", ephemeral=True)
+
     @discord.ui.button(label="Delete Embed", style=discord.ButtonStyle.danger)
-    async def delete_embed_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def delete_btn(self, interaction, button):
         delete_embed(self.name)
-        await interaction.response.send_message("🗑 Embed đã xoá.", ephemeral=True)
+        await interaction.response.send_message("Embed đã xoá.", ephemeral=True)
