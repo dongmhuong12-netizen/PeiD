@@ -160,7 +160,6 @@ class EmbedGroup(app_commands.Group):
             ephemeral=True
         )
 
-    # 🔥🔥🔥 FIX Ở ĐÂY
     @app_commands.command(name="show", description="Send embed to channel")
     @app_commands.autocomplete(name=embed_name_autocomplete)
     async def show(self, interaction: discord.Interaction, name: str):
@@ -174,12 +173,11 @@ class EmbedGroup(app_commands.Group):
             )
             return
 
-        # 🔥 DÙNG send_embed ĐỂ AUTO REPLACE BIẾN
         await send_embed(
             interaction.channel,
             data,
             interaction.guild,
-            interaction.user
+            interaction.user,  # ✅ FIX: thêm dấu phẩy
             embed_name=name
         )
 
