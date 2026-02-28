@@ -16,7 +16,6 @@ def load_all():
         with open(DATA_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     except (json.JSONDecodeError, ValueError):
-        # Nếu file bị hỏng → reset an toàn
         return {}
 
 
@@ -54,7 +53,6 @@ def delete_embed(guild_id: int, name: str):
     if guild_id in all_data and name in all_data[guild_id]:
         del all_data[guild_id][name]
 
-        # Nếu guild không còn embed nào → xoá luôn guild key
         if not all_data[guild_id]:
             del all_data[guild_id]
 
@@ -67,3 +65,8 @@ def delete_embed(guild_id: int, name: str):
 def get_all_embeds(guild_id: int):
     all_data = load_all()
     return all_data.get(str(guild_id), {})
+
+
+def get_all_embed_names(guild_id: int):
+    all_data = load_all()
+    return list(all_data.get(str(guild_id), {}).keys())
