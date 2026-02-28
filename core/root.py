@@ -180,6 +180,7 @@ class EmbedGroup(app_commands.Group):
             data,
             interaction.guild,
             interaction.user
+            embed_name=name
         )
 
         await interaction.response.send_message(
