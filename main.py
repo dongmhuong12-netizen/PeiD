@@ -9,8 +9,8 @@ TOKEN = os.getenv("TOKEN")
 # INTENTS (QUAN TRỌNG)
 # =========================
 intents = discord.Intents.default()
-intents.members = True          # cần cho add/remove role
-intents.reactions = True        # cần cho reaction events
+intents.members = True
+intents.reactions = True
 intents.guilds = True
 intents.message_content = True
 
@@ -25,7 +25,7 @@ bot = commands.Bot(
 async def load_extensions():
     await bot.load_extension("core.root")
     await bot.load_extension("systems.reaction_role")
-    await bot.load_extension("systems.warn_system")  # <-- thêm dòng này
+    await bot.load_extension("systems.warn_system")
 
 
 # =========================
@@ -37,8 +37,13 @@ async def on_ready():
     print("------")
 
     try:
+        # Xoá toàn bộ global commands cũ
+        bot.tree.clear_commands(guild=None)
+
+        # Sync lại đúng command hiện tại
         synced = await bot.tree.sync()
-        print(f"Synced {len(synced)} global commands.")
+
+        print(f"Synced sạch {len(synced)} global commands.")
     except Exception as e:
         print(f"Sync error: {e}")
 
