@@ -49,7 +49,7 @@ class WarnSystem(commands.Cog):
 
         embed.description = (
             "━━━━━━━━━━━━━━━━━━\n"
-            "**WARNING**\n"
+            "**WARNING | CẢNH CÁO**\n"
             "━━━━━━━━━━━━━━━━━━\n\n"
             f"• **CẤP ĐỘ:** LEVEL **{current_level}**\n"
             f"• **ĐỐI TƯỢNG:** {member.mention}  `{member.id}`\n"
