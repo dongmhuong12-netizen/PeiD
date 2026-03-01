@@ -2,7 +2,7 @@ import discord
 import json
 import os
 
-from core.embed_storage import save_embed, delete_embed
+from core.embed_storage import save_embed, delete_embed, load_embed
 from core.variable_engine import apply_variables
 
 DATA_FILE = "data/reaction_roles.json"
@@ -89,7 +89,7 @@ class EditImageModal(discord.ui.Modal, title="Set Image URL"):
 
 
 # =========================
-# REACTION ROLE MODAL (FIXED PROPERLY)
+# REACTION ROLE MODAL
 # =========================
 
 class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
@@ -129,7 +129,6 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
             "roles": roles
         }
 
-        # 🔥 FIX THẬT SỰ: append group thay vì overwrite
         if key not in data:
             data[key] = {
                 "guild_id": guild_id,
@@ -138,7 +137,6 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
             }
 
         data[key]["groups"].append(new_group)
-
         save_reaction_data(data)
 
         await interaction.response.send_message("Reaction role đã lưu.", ephemeral=True)
@@ -196,7 +194,7 @@ class EmbedUIView(discord.ui.View):
         await interaction.response.send_modal(EditTitleModal(self))
 
     @discord.ui.button(label="Edit Description", style=discord.ButtonStyle.secondary)
-    async def edit_description(self, interaction: discord.Interaction, button):
+    async def edit_description(self, interaction: discord.Interation, button):
         await interaction.response.send_modal(EditDescriptionModal(self))
 
     @discord.ui.button(label="Set Image", style=discord.ButtonStyle.secondary)
@@ -211,21 +209,44 @@ class EmbedUIView(discord.ui.View):
     async def reaction_roles(self, interaction: discord.Interaction, button):
         await interaction.response.send_modal(ReactionRoleModal(self))
 
-    # ===== SAVE / DELETE =====
+    # ===== SAVE =====
 
     @discord.ui.button(label="Save Embed", style=discord.ButtonStyle.secondary)
     async def save_btn(self, interaction: discord.Interaction, button):
         save_embed(interaction.guild.id, self.name, self.data)
         await interaction.response.send_message("Embed đã lưu.", ephemeral=True)
 
-    @discord.ui.button(label="Delete Embed", style=discord.ButtonStyle.secondary)
+    # ===== DELETE (SYNC WITH SLASH COMMAND) =====
+
+    @discord.ui.button(label="Delete Embed", style=discord.ButtonStyle.danger)
     async def delete_btn(self, interaction: discord.Interaction, button):
-        delete_embed(interaction.guild.id, self.name)
 
-        if self.name in ACTIVE_EMBED_VIEWS:
-            ACTIVE_EMBED_VIEWS[self.name].remove(self)
+        guild_id = interaction.guild.id
+        name = self.name
 
-        for item in self.children:
-            item.disabled = True
+        data = load_embed(guild_id, name)
 
-        await interaction.response.edit_message(view=self)
+        if not data:
+            await interaction.response.send_message(
+                f"Embed tên `{name}` không tồn tại, không thể dùng lệnh.",
+                ephemeral=True
+            )
+            return
+
+        if name in ACTIVE_EMBED_VIEWS:
+            for view in ACTIVE_EMBED_VIEWS[name]:
+                try:
+                    if view.message:
+                        await view.message.delete()
+                except:
+                    pass
+                view.stop()
+
+            ACTIVE_EMBED_VIEWS[name] = []
+
+        delete_embed(guild_id, name)
+
+        await interaction.response.send_message(
+            f"Embed `{name}` đã được xoá vĩnh viễn, có thể tạo embed mới bằng tên của embed này.",
+            ephemeral=True
+        )
