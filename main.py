@@ -29,7 +29,7 @@ async def load_extensions():
 
 
 # =========================
-# READY EVENT (CLEAR 1 LẦN)
+# READY EVENT
 # =========================
 @bot.event
 async def on_ready():
@@ -37,10 +37,8 @@ async def on_ready():
     print("------")
 
     try:
-        # 🔥 XÓA TOÀN BỘ GLOBAL COMMAND CŨ
-        bot.tree.clear_commands(guild=None)
-        await bot.tree.sync()
-        print("Đã xoá toàn bộ GLOBAL commands.")
+        synced = await bot.tree.sync()
+        print(f"Synced {len(synced)} global commands.")
     except Exception as e:
         print(f"Sync error: {e}")
 
