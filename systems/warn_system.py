@@ -66,7 +66,6 @@ class WarnGroup(app_commands.Group):
             )
             return
 
-        # Xử lý punishment
         if punishment.lower() in ["kick", "ban"]:
             punishment_value = punishment.lower()
         else:
@@ -112,6 +111,18 @@ class WarnGroup(app_commands.Group):
     ):
         await interaction.response.defer()
 
+        # ===== CHECK KHÔNG CHO WARN =====
+        if (
+            member == interaction.guild.owner
+            or member.guild_permissions.administrator
+            or member.top_role >= interaction.guild.me.top_role
+        ):
+            await interaction.followup.send(
+                "Không thể warn. Nhập sai hoặc người bị warn có quyền quản lý.",
+                ephemeral=True
+            )
+            return
+
         guild_id = str(interaction.guild.id)
         user_id = str(member.id)
 
@@ -148,25 +159,24 @@ class WarnGroup(app_commands.Group):
         # ===== RESET CHECK =====
         if current_level > 0 and user_data["last_warn"]:
             level_config = levels.get(str(current_level))
-            reset_minutes = self.parse_duration(level_config["reset"])
-            last_warn_time = discord.utils.parse_time(user_data["last_warn"])
+            if level_config:
+                reset_minutes = self.parse_duration(level_config["reset"])
+                last_warn_time = discord.utils.parse_time(user_data["last_warn"])
 
-            if now - last_warn_time >= timedelta(minutes=reset_minutes):
-                current_level = 0
-                reset_triggered = True
+                if reset_minutes and now - last_warn_time >= timedelta(minutes=reset_minutes):
+                    current_level = 0
+                    reset_triggered = True
+                    data[guild_id][user_id]["level"] = 0
+                    data[guild_id][user_id]["last_warn"] = None
 
         # ===== TĂNG LEVEL =====
         if current_level < max_level:
-            current_level += 1
+            new_level = current_level + 1
+        else:
+            new_level = current_level
 
-        level_config = levels[str(current_level)]
+        level_config = levels[str(new_level)]
         punishment = level_config["punishment"]
-
-        data[guild_id][user_id]["level"] = current_level
-        data[guild_id][user_id]["last_warn"] = now.isoformat()
-
-        with open(DATA_FILE, "w") as f:
-            json.dump(data, f, indent=4)
 
         punishment_text = "Không có"
 
@@ -189,7 +199,18 @@ class WarnGroup(app_commands.Group):
                     punishment_text = f"Timeout {duration_str}"
 
         except Exception:
-            punishment_text = "Bot thiếu quyền hoặc lỗi"
+            await interaction.followup.send(
+                "Không thể warn. Nhập sai hoặc người bị warn có quyền quản lý.",
+                ephemeral=True
+            )
+            return
+
+        # ===== CHỈ LƯU SAU KHI PHẠT THÀNH CÔNG =====
+        data[guild_id][user_id]["level"] = new_level
+        data[guild_id][user_id]["last_warn"] = now.isoformat()
+
+        with open(DATA_FILE, "w") as f:
+            json.dump(data, f, indent=4)
 
         embed = discord.Embed(
             title="WARNING",
@@ -198,7 +219,7 @@ class WarnGroup(app_commands.Group):
         )
 
         embed.add_field(name="Thành viên", value=member.mention, inline=False)
-        embed.add_field(name="Level", value=str(current_level))
+        embed.add_field(name="Level", value=str(new_level))
         embed.add_field(name="Lý do", value=reason, inline=False)
         embed.add_field(name="Hình phạt", value=punishment_text, inline=False)
 
@@ -211,8 +232,6 @@ class WarnGroup(app_commands.Group):
 
         await interaction.followup.send(embed=embed)
 
-
-# ================= EXTENSION SETUP =================
 
 async def setup(bot):
     bot.tree.add_command(WarnGroup())
