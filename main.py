@@ -37,13 +37,8 @@ async def on_ready():
     print("------")
 
     try:
-        # Xoá toàn bộ global commands cũ
-        bot.tree.clear_commands(guild=None)
-
-        # Sync lại đúng command hiện tại
         synced = await bot.tree.sync()
-
-        print(f"Synced sạch {len(synced)} global commands.")
+        print(f"Synced {len(synced)} global commands.")
     except Exception as e:
         print(f"Sync error: {e}")
 
