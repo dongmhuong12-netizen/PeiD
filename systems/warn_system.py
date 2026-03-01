@@ -66,8 +66,7 @@ class WarnGroup(app_commands.Group):
             )
             return
 
-        punishment_value = None
-
+        # Xử lý punishment
         if punishment.lower() in ["kick", "ban"]:
             punishment_value = punishment.lower()
         else:
@@ -146,7 +145,7 @@ class WarnGroup(app_commands.Group):
         now = discord.utils.utcnow()
         reset_triggered = False
 
-        # RESET CHECK
+        # ===== RESET CHECK =====
         if current_level > 0 and user_data["last_warn"]:
             level_config = levels.get(str(current_level))
             reset_minutes = self.parse_duration(level_config["reset"])
@@ -156,6 +155,7 @@ class WarnGroup(app_commands.Group):
                 current_level = 0
                 reset_triggered = True
 
+        # ===== TĂNG LEVEL =====
         if current_level < max_level:
             current_level += 1
 
@@ -215,4 +215,4 @@ class WarnGroup(app_commands.Group):
 # ================= EXTENSION SETUP =================
 
 async def setup(bot):
-    await bot.tree.add_command(WarnGroup())
+    bot.tree.add_command(WarnGroup())
