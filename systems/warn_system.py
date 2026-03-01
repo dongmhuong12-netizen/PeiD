@@ -37,11 +37,11 @@ class WarnGroup(app_commands.Group):
             return None
 
         if unit == "m":
-            return amount
+                return amount
         if unit == "h":
-            return amount * 60
+                return amount * 60
         if unit == "d":
-            return amount * 60 * 24
+                return amount * 60 * 24
 
         return None
 
@@ -64,14 +64,22 @@ class WarnGroup(app_commands.Group):
             )
             return
 
-        if punishment.startswith("timeout:"):
-            timeout_value = punishment.split(":")[1]
-            if self.parse_duration(timeout_value) is None:
+        punishment_value = None
+
+        # Nếu là kick hoặc ban
+        if punishment.lower() in ["kick", "ban"]:
+            punishment_value = punishment.lower()
+
+        # Nếu là thời gian → hiểu là timeout
+        else:
+            timeout_minutes = self.parse_duration(punishment)
+            if timeout_minutes is None:
                 await interaction.response.send_message(
-                    "Timeout không hợp lệ. Ví dụ: timeout:30m",
+                    "Hình phạt không hợp lệ. Nhập: kick / ban / 5m / 1h / 1d",
                     ephemeral=True
                 )
                 return
+            punishment_value = f"timeout:{punishment}"
 
         guild_id = str(interaction.guild.id)
 
@@ -83,7 +91,7 @@ class WarnGroup(app_commands.Group):
 
         config[guild_id]["levels"][str(level)] = {
             "reset": reset,
-            "punishment": punishment
+            "punishment": punishment_value
         }
 
         with open(CONFIG_FILE, "w") as f:
@@ -110,7 +118,7 @@ class WarnGroup(app_commands.Group):
         with open(CONFIG_FILE, "r") as f:
             config = json.load(f)
 
-        if guild_id not in config:
+        if guild_id not in config or not config[guild_id]["levels"]:
             await interaction.response.send_message(
                 "Server chưa cấu hình level.",
                 ephemeral=True
@@ -118,13 +126,6 @@ class WarnGroup(app_commands.Group):
             return
 
         levels = config[guild_id]["levels"]
-        if not levels:
-            await interaction.response.send_message(
-                "Chưa có level nào.",
-                ephemeral=True
-            )
-            return
-
         max_level = max(map(int, levels.keys()))
 
         with open(DATA_FILE, "r") as f:
