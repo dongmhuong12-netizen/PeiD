@@ -25,6 +25,7 @@ bot = commands.Bot(
 async def load_extensions():
     await bot.load_extension("core.root")
     await bot.load_extension("systems.reaction_role")
+    await bot.load_extension("systems.warn_system")  # <-- thêm dòng này
 
 
 # =========================
