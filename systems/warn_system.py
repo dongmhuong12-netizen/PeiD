@@ -2,13 +2,31 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from datetime import datetime
+import json
+import os
 
 
 class WarnSystem(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.reset_hours = 24
-        self.user_levels = {}
+        self.data_file = "warn_data.json"
+        self.user_levels = self.load_data()
+
+    # ===== LOAD DATA =====
+    def load_data(self):
+        if not os.path.exists(self.data_file):
+            with open(self.data_file, "w") as f:
+                json.dump({}, f)
+            return {}
+
+        with open(self.data_file, "r") as f:
+            return json.load(f)
+
+    # ===== SAVE DATA =====
+    def save_data(self):
+        with open(self.data_file, "w") as f:
+            json.dump(self.user_levels, f, indent=4)
 
     @app_commands.command(name="warn", description="Cảnh cáo thành viên")
     @app_commands.describe(
@@ -38,9 +56,11 @@ class WarnSystem(commands.Cog):
         if reason is None:
             reason = "Không công khai lý do phạt."
 
-        user_id = member.id
+        user_id = str(member.id)
+
         current_level = self.user_levels.get(user_id, 0) + 1
         self.user_levels[user_id] = current_level
+        self.save_data()
 
         embed = discord.Embed(
             color=0x2B2D31,
