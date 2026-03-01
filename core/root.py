@@ -14,6 +14,9 @@ from core.greet_leave import GreetGroup, LeaveGroup, GreetLeaveListener
 from core.booster import BoosterGroup, BoosterListener
 from core.wellcome import WellcomeGroup, WellcomeListener
 
+# ====== THÊM WARN ======
+from systems.warn_system import WarnGroup
+
 
 # =============================
 # AUTOCOMPLETE
@@ -202,6 +205,7 @@ class PGroup(app_commands.Group):
         self.add_command(LeaveGroup())
         self.add_command(BoosterGroup())
         self.add_command(WellcomeGroup())
+        self.add_command(WarnGroup())  # <-- THÊM WARN
 
 
 # =============================
