@@ -218,7 +218,7 @@ class EmbedUIView(discord.ui.View):
 
     # ===== DELETE (SYNC WITH SLASH COMMAND) =====
 
-    @discord.ui.button(label="Delete Embed", style=discord.ButtonStyle.danger)
+    @discord.ui.button(label="Delete Embed", style=discord.ButtonStyle.secondary)
     async def delete_btn(self, interaction: discord.Interaction, button):
 
         guild_id = interaction.guild.id
