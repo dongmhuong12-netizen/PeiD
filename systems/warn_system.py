@@ -3,6 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 from datetime import datetime
 
+
 class WarnSystem(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -29,17 +30,36 @@ class WarnSystem(commands.Cog):
             reason = "Không công khai lí do phạt"
 
         embed = discord.Embed(
-            title="⚠️ CẢNH CÁO",
-            color=discord.Color.orange(),
+            title="⚠️ | CẢNH CÁO THÀNH VIÊN",
+            description=f"{member.mention} đã bị cảnh cáo.",
+            color=0xFF9F1C,
             timestamp=datetime.utcnow()
         )
 
-        embed.add_field(name="Thành viên", value=member.mention, inline=False)
-        embed.add_field(name="Moderator", value=interaction.user.mention, inline=False)
-        embed.add_field(name="Lý do", value=reason, inline=False)
+        embed.set_thumbnail(url=member.display_avatar.url)
+
+        embed.add_field(
+            name="👤 Thành viên",
+            value=f"{member.mention}\nID: `{member.id}`",
+            inline=False
+        )
+
+        embed.add_field(
+            name="🛡️ Moderator",
+            value=f"{interaction.user.mention}",
+            inline=False
+        )
+
+        embed.add_field(
+            name="📄 Lý do",
+            value=f"```{reason}```",
+            inline=False
+        )
+
+        embed.set_footer(text=f"Server: {interaction.guild.name}")
 
         await interaction.response.send_message(embed=embed)
-        
+
 
 async def setup(bot):
     await bot.add_cog(WarnSystem(bot))
