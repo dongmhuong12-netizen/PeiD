@@ -194,7 +194,7 @@ class EmbedUIView(discord.ui.View):
         await interaction.response.send_modal(EditTitleModal(self))
 
     @discord.ui.button(label="Edit Description", style=discord.ButtonStyle.secondary)
-    async def edit_description(self, interaction: discord.Interation, button):
+    async def edit_description(self, interaction: discord.Interaction, button):
         await interaction.response.send_modal(EditDescriptionModal(self))
 
     @discord.ui.button(label="Set Image", style=discord.ButtonStyle.secondary)
