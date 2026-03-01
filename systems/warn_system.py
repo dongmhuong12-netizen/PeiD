@@ -61,6 +61,23 @@ class WarnGroup(app_commands.Group):
 
         return None
 
+    def format_time(self):
+        now = discord.utils.utcnow()
+        return f"Hôm nay lúc {now.strftime('%H:%M')}"
+
+    async def send_log_or_here(self, interaction, embed):
+        config = self.load_json(CONFIG_FILE)
+        guild_id = str(interaction.guild.id)
+        log_channel_id = config.get(guild_id, {}).get("log_channel")
+
+        if log_channel_id:
+            channel = interaction.guild.get_channel(log_channel_id)
+            if channel:
+                await channel.send(embed=embed)
+                return
+
+        await interaction.followup.send(embed=embed)
+
     # ========= SET LOG =========
 
     @app_commands.command(name="setlog")
@@ -108,7 +125,7 @@ class WarnGroup(app_commands.Group):
         }
 
         self.save_json(CONFIG_FILE, config)
-        await interaction.followup.send(f"Đã thiết lập level {level}.", ephemeral=True)
+        await interaction.followup.send(f"Đã thiết lập / cập nhật level {level}.", ephemeral=True)
 
     # ========= WARN ADD =========
 
@@ -149,7 +166,6 @@ class WarnGroup(app_commands.Group):
         current_level = user_data["level"]
         now = discord.utils.utcnow()
 
-        # check auto reset cũ
         reset_at = user_data.get("reset_at")
         if reset_at:
             reset_time = datetime.fromisoformat(reset_at)
@@ -184,9 +200,31 @@ class WarnGroup(app_commands.Group):
 
         self.save_json(DATA_FILE, data)
 
-        await interaction.followup.send(
-            f"{member.mention} đã bị warn. Level hiện tại: {new_level}"
+        next_level = min(new_level + 1, max_level)
+
+        embed = discord.Embed(
+            description=(
+                "━━━━━━━━━━━━━━━━━━\n"
+                "WARNING | CẢNH CÁO\n"
+                "━━━━━━━━━━━━━━━━━━\n\n"
+                f"• CẤP ĐỘ: LEVEL {new_level}\n"
+                f"• ĐỐI TƯỢNG: {member.mention}\n"
+                f"{member.id}\n"
+                f"• HÌNH PHẠT: {punishment.upper()}\n\n"
+                "LÝ DO\n"
+                f"{reason}\n\n"
+                f"• RESET: {level_config['reset'].upper()}\n"
+                f"• NẾU TÁI PHẠM KHI CHƯA HẾT RESET: LEVEL {next_level}\n\n"
+                "━━━━━━━━━━━━━━━━━━\n"
+                "HỆ THỐNG QUẢN LÝ KỶ LUẬT\n"
+                f"{self.format_time()}"
+            ),
+            color=discord.Color.red()
         )
+
+        embed.set_thumbnail(url=member.display_avatar.url)
+
+        await self.send_log_or_here(interaction, embed)
 
     # ========= WARN REMOVE =========
 
@@ -232,10 +270,25 @@ class WarnGroup(app_commands.Group):
 
         self.save_json(DATA_FILE, data)
 
-        await interaction.followup.send(
-            f"Đã giảm warn của {member.mention} từ {current_level} xuống {new_level}.",
-            ephemeral=True
+        embed = discord.Embed(
+            description=(
+                "━━━━━━━━━━━━━━━━━━\n"
+                "REMOVE WARNING\n"
+                "━━━━━━━━━━━━━━━━━━\n\n"
+                f"• ĐỐI TƯỢNG: {member.mention}\n"
+                f"{member.id}\n"
+                f"• TỪ LEVEL: {current_level}\n"
+                f"• XUỐNG LEVEL: {new_level}\n\n"
+                "━━━━━━━━━━━━━━━━━━\n"
+                "HỆ THỐNG QUẢN LÝ KỶ LUẬT\n"
+                f"{self.format_time()}"
+            ),
+            color=discord.Color.gold()
         )
+
+        embed.set_thumbnail(url=member.display_avatar.url)
+
+        await self.send_log_or_here(interaction, embed)
 
     # ========= WARN RESET =========
 
@@ -254,7 +307,25 @@ class WarnGroup(app_commands.Group):
             data[guild_id][user_id]["reset_at"] = None
             self.save_json(DATA_FILE, data)
 
-        await interaction.followup.send(f"Đã reset warn của {member.mention}.", ephemeral=True)
+        embed = discord.Embed(
+            description=(
+                "━━━━━━━━━━━━━━━━━━\n"
+                "RESET WARNING\n"
+                "━━━━━━━━━━━━━━━━━━\n\n"
+                f"• ĐỐI TƯỢNG: {member.mention}\n"
+                f"{member.id}\n"
+                f"• LEVEL: 0\n"
+                f"• TRẠNG THÁI: ĐÃ TRẮNG ÁN\n\n"
+                "━━━━━━━━━━━━━━━━━━\n"
+                "HỆ THỐNG QUẢN LÝ KỶ LUẬT\n"
+                f"{self.format_time()}"
+            ),
+            color=discord.Color.green()
+        )
+
+        embed.set_thumbnail(url=member.display_avatar.url)
+
+        await self.send_log_or_here(interaction, embed)
 
     # ========= WARN INFO =========
 
@@ -270,10 +341,24 @@ class WarnGroup(app_commands.Group):
         if guild_id in data and user_id in data[guild_id]:
             level = data[guild_id][user_id]["level"]
 
-        await interaction.followup.send(
-            f"{member.mention} hiện đang ở level warn: {level}",
-            ephemeral=True
+        embed = discord.Embed(
+            description=(
+                "━━━━━━━━━━━━━━━━━━\n"
+                "THÔNG TIN WARNING\n"
+                "━━━━━━━━━━━━━━━━━━\n\n"
+                f"• ĐỐI TƯỢNG: {member.mention}\n"
+                f"{member.id}\n"
+                f"• LEVEL HIỆN TẠI: {level}\n\n"
+                "━━━━━━━━━━━━━━━━━━\n"
+                "HỆ THỐNG QUẢN LÝ KỶ LUẬT\n"
+                f"{self.format_time()}"
+            ),
+            color=discord.Color.blue()
         )
+
+        embed.set_thumbnail(url=member.display_avatar.url)
+
+        await interaction.followup.send(embed=embed, ephemeral=True)
 
 
 # ==============================
@@ -323,16 +408,23 @@ class WarnBackground(commands.Cog):
                         member = guild.get_member(int(user_id))
                         if member:
                             embed = discord.Embed(
-                                title="AUTO RESET | HẾT THỜI GIAN",
                                 description=(
+                                    "━━━━━━━━━━━━━━━━━━\n"
+                                    "AUTO RESET | HẾT THỜI GIAN\n"
+                                    "━━━━━━━━━━━━━━━━━━\n\n"
                                     f"• ĐỐI TƯỢNG: {member.mention}\n"
+                                    f"{member.id}\n"
                                     f"• LEVEL: {old_level} → 0\n"
-                                    f"• LÝ DO: Hết thời gian reset\n"
-                                    f"• TRẠNG THÁI: ĐÃ TRẮNG ÁN"
+                                    f"• TRẠNG THÁI: ĐÃ TRẮNG ÁN\n\n"
+                                    "━━━━━━━━━━━━━━━━━━\n"
+                                    "HỆ THỐNG QUẢN LÝ KỶ LUẬT\n"
+                                    f"Hôm nay lúc {now.strftime('%H:%M')}"
                                 ),
                                 color=discord.Color.green()
                             )
-                            embed.set_footer(text="HỆ THỐNG QUẢN LÝ KỶ LUẬT")
+
+                            embed.set_thumbnail(url=member.display_avatar.url)
+
                             await channel.send(embed=embed)
 
         if changed:
