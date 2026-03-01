@@ -13,13 +13,23 @@ class WarnGroup(app_commands.Group):
     def __init__(self):
         super().__init__(name="warn", description="Hệ thống cảnh cáo")
 
-        if not os.path.exists(DATA_FILE):
-            with open(DATA_FILE, "w") as f:
-                json.dump({}, f)
+        for file in [DATA_FILE, CONFIG_FILE]:
+            if not os.path.exists(file):
+                with open(file, "w") as f:
+                    json.dump({}, f)
 
-        if not os.path.exists(CONFIG_FILE):
-            with open(CONFIG_FILE, "w") as f:
-                json.dump({}, f)
+    # ================= FILE HELPERS =================
+
+    def load_json(self, file):
+        with open(file, "r") as f:
+            try:
+                return json.load(f)
+            except:
+                return {}
+
+    def save_json(self, file, data):
+        with open(file, "w") as f:
+            json.dump(data, f, indent=4)
 
     # ================= TIME PARSER =================
 
@@ -41,29 +51,42 @@ class WarnGroup(app_commands.Group):
         if unit == "h":
             return amount * 60
         if unit == "d":
-            return amount * 60 * 24
+            return amount * 1440
 
         return None
+
+    # ================= SET LOG CHANNEL =================
+
+    @app_commands.command(name="setlog", description="Thiết lập kênh log cho warn")
+    @app_commands.checks.has_permissions(manage_guild=True)
+    async def setlog(self, interaction: discord.Interaction, channel: discord.TextChannel):
+        await interaction.response.defer(ephemeral=True)
+
+        config = self.load_json(CONFIG_FILE)
+        guild_id = str(interaction.guild.id)
+
+        if guild_id not in config:
+            config[guild_id] = {"levels": {}}
+
+        config[guild_id]["log_channel"] = channel.id
+
+        self.save_json(CONFIG_FILE, config)
+
+        await interaction.followup.send(
+            f"Đã thiết lập kênh log: {channel.mention}",
+            ephemeral=True
+        )
 
     # ================= SET LEVEL =================
 
     @app_commands.command(name="setlevel", description="Thiết lập level cảnh cáo")
     @app_commands.checks.has_permissions(manage_guild=True)
-    async def setlevel(
-        self,
-        interaction: discord.Interaction,
-        level: int,
-        reset: str,
-        punishment: str
-    ):
+    async def setlevel(self, interaction: discord.Interaction, level: int, reset: str, punishment: str):
         await interaction.response.defer(ephemeral=True)
 
         reset_minutes = self.parse_duration(reset)
         if reset_minutes is None:
-            await interaction.followup.send(
-                "Reset không hợp lệ. Ví dụ: 10m / 1h / 1d",
-                ephemeral=True
-            )
+            await interaction.followup.send("Reset không hợp lệ. Ví dụ: 10m / 1h / 1d", ephemeral=True)
             return
 
         if punishment.lower() in ["kick", "ban"]:
@@ -78,37 +101,28 @@ class WarnGroup(app_commands.Group):
                 return
             punishment_value = f"timeout:{punishment}"
 
+        config = self.load_json(CONFIG_FILE)
         guild_id = str(interaction.guild.id)
-
-        with open(CONFIG_FILE, "r") as f:
-            config = json.load(f)
 
         if guild_id not in config:
             config[guild_id] = {"levels": {}}
+
+        config[guild_id].setdefault("levels", {})
 
         config[guild_id]["levels"][str(level)] = {
             "reset": reset,
             "punishment": punishment_value
         }
 
-        with open(CONFIG_FILE, "w") as f:
-            json.dump(config, f, indent=4)
+        self.save_json(CONFIG_FILE, config)
 
-        await interaction.followup.send(
-            f"Đã thiết lập level {level}.",
-            ephemeral=True
-        )
+        await interaction.followup.send(f"Đã thiết lập level {level}.", ephemeral=True)
 
     # ================= WARN ADD =================
 
     @app_commands.command(name="add", description="Cảnh cáo thành viên")
     @app_commands.checks.has_permissions(manage_messages=True)
-    async def add(
-        self,
-        interaction: discord.Interaction,
-        member: discord.Member,
-        reason: str = "Không có lý do"
-    ):
+    async def add(self, interaction: discord.Interaction, member: discord.Member, reason: str = "Không có lý do"):
         await interaction.response.defer()
 
         # ===== CHECK KHÔNG CHO WARN =====
@@ -118,38 +132,26 @@ class WarnGroup(app_commands.Group):
             or member.top_role >= interaction.guild.me.top_role
         ):
             await interaction.followup.send(
-                "Không thể warn. Nhập sai hoặc người bị warn có quyền quản lý.",
+                "Không thể warn. Người này có quyền cao hơn hoặc ngang bot.",
                 ephemeral=True
             )
             return
 
+        config = self.load_json(CONFIG_FILE)
+        data = self.load_json(DATA_FILE)
+
         guild_id = str(interaction.guild.id)
         user_id = str(member.id)
 
-        with open(CONFIG_FILE, "r") as f:
-            config = json.load(f)
-
-        if guild_id not in config or not config[guild_id]["levels"]:
-            await interaction.followup.send(
-                "Server chưa cấu hình level.",
-                ephemeral=True
-            )
+        if guild_id not in config or not config[guild_id].get("levels"):
+            await interaction.followup.send("Server chưa cấu hình level.", ephemeral=True)
             return
 
         levels = config[guild_id]["levels"]
         max_level = max(map(int, levels.keys()))
 
-        with open(DATA_FILE, "r") as f:
-            data = json.load(f)
-
-        if guild_id not in data:
-            data[guild_id] = {}
-
-        if user_id not in data[guild_id]:
-            data[guild_id][user_id] = {
-                "level": 0,
-                "last_warn": None
-            }
+        data.setdefault(guild_id, {})
+        data[guild_id].setdefault(user_id, {"level": 0, "last_warn": None})
 
         user_data = data[guild_id][user_id]
         current_level = user_data["level"]
@@ -166,18 +168,10 @@ class WarnGroup(app_commands.Group):
                 if reset_minutes and now - last_warn_time >= timedelta(minutes=reset_minutes):
                     current_level = 0
                     reset_triggered = True
-                    data[guild_id][user_id]["level"] = 0
-                    data[guild_id][user_id]["last_warn"] = None
 
-        # ===== TĂNG LEVEL =====
-        if current_level < max_level:
-            new_level = current_level + 1
-        else:
-            new_level = current_level
-
+        new_level = min(current_level + 1, max_level)
         level_config = levels[str(new_level)]
         punishment = level_config["punishment"]
-
         punishment_text = "Không có"
 
         try:
@@ -198,19 +192,17 @@ class WarnGroup(app_commands.Group):
                     await member.timeout(until)
                     punishment_text = f"Timeout {duration_str}"
 
-        except Exception:
+        except:
             await interaction.followup.send(
-                "Không thể warn. Nhập sai hoặc người bị warn có quyền quản lý.",
+                "Không thể thực hiện hình phạt. Bot thiếu quyền.",
                 ephemeral=True
             )
             return
 
-        # ===== CHỈ LƯU SAU KHI PHẠT THÀNH CÔNG =====
+        # ===== SAVE AFTER SUCCESS =====
         data[guild_id][user_id]["level"] = new_level
         data[guild_id][user_id]["last_warn"] = now.isoformat()
-
-        with open(DATA_FILE, "w") as f:
-            json.dump(data, f, indent=4)
+        self.save_json(DATA_FILE, data)
 
         embed = discord.Embed(
             title="WARNING",
@@ -229,6 +221,16 @@ class WarnGroup(app_commands.Group):
                 value="Level cũ đã hết hạn và được reset.",
                 inline=False
             )
+
+        # ===== SEND TO LOG OR CURRENT CHANNEL =====
+        log_channel_id = config[guild_id].get("log_channel")
+
+        if log_channel_id:
+            log_channel = interaction.guild.get_channel(log_channel_id)
+            if log_channel:
+                await log_channel.send(embed=embed)
+                await interaction.followup.send("Đã xử lý cảnh cáo.", ephemeral=True)
+                return
 
         await interaction.followup.send(embed=embed)
 
