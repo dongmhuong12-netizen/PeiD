@@ -21,11 +21,11 @@ class WarnGroup(app_commands.Group):
     # ================= FILE HELPERS =================
 
     def load_json(self, file):
-        with open(file, "r") as f:
-            try:
+        try:
+            with open(file, "r") as f:
                 return json.load(f)
-            except:
-                return {}
+        except:
+            return {}
 
     def save_json(self, file, data):
         with open(file, "w") as f:
@@ -34,8 +34,11 @@ class WarnGroup(app_commands.Group):
     # ================= TIME PARSER =================
 
     def parse_duration(self, value: str):
+        if not value:
+            return None
+
         pattern = r"^(\d+)([mhd])$"
-        match = re.match(pattern, value.lower()) if value else None
+        match = re.match(pattern, value.lower())
 
         if not match:
             return None
@@ -65,9 +68,7 @@ class WarnGroup(app_commands.Group):
         config = self.load_json(CONFIG_FILE)
         guild_id = str(interaction.guild.id)
 
-        if guild_id not in config:
-            config[guild_id] = {"levels": {}}
-
+        config.setdefault(guild_id, {"levels": {}})
         config[guild_id]["log_channel"] = channel.id
 
         self.save_json(CONFIG_FILE, config)
@@ -86,7 +87,10 @@ class WarnGroup(app_commands.Group):
 
         reset_minutes = self.parse_duration(reset)
         if reset_minutes is None:
-            await interaction.followup.send("Reset không hợp lệ. Ví dụ: 10m / 1h / 1d", ephemeral=True)
+            await interaction.followup.send(
+                "Reset không hợp lệ. Ví dụ: 10m / 1h / 1d",
+                ephemeral=True
+            )
             return
 
         if punishment.lower() in ["kick", "ban"]:
@@ -99,24 +103,23 @@ class WarnGroup(app_commands.Group):
                     ephemeral=True
                 )
                 return
-            punishment_value = f"timeout:{punishment}"
+            punishment_value = f"timeout:{punishment.lower()}"
 
         config = self.load_json(CONFIG_FILE)
         guild_id = str(interaction.guild.id)
 
-        if guild_id not in config:
-            config[guild_id] = {"levels": {}}
-
-        config[guild_id].setdefault("levels", {})
-
+        config.setdefault(guild_id, {"levels": {}})
         config[guild_id]["levels"][str(level)] = {
-            "reset": reset,
+            "reset": reset.lower(),
             "punishment": punishment_value
         }
 
         self.save_json(CONFIG_FILE, config)
 
-        await interaction.followup.send(f"Đã thiết lập level {level}.", ephemeral=True)
+        await interaction.followup.send(
+            f"Đã thiết lập level {level}.",
+            ephemeral=True
+        )
 
     # ================= WARN ADD =================
 
@@ -132,7 +135,7 @@ class WarnGroup(app_commands.Group):
             or member.top_role >= interaction.guild.me.top_role
         ):
             await interaction.followup.send(
-                "Không thể warn. Người này có quyền cao hơn hoặc ngang bot.",
+                "Không thể warn. Người bị warn có quyền quản lí hoặc cao hơn bot.",
                 ephemeral=True
             )
             return
@@ -144,7 +147,10 @@ class WarnGroup(app_commands.Group):
         user_id = str(member.id)
 
         if guild_id not in config or not config[guild_id].get("levels"):
-            await interaction.followup.send("Server chưa cấu hình level.", ephemeral=True)
+            await interaction.followup.send(
+                "Server chưa cấu hình level.",
+                ephemeral=True
+            )
             return
 
         levels = config[guild_id]["levels"]
@@ -156,7 +162,6 @@ class WarnGroup(app_commands.Group):
         user_data = data[guild_id][user_id]
         current_level = user_data["level"]
         now = discord.utils.utcnow()
-        reset_triggered = False
 
         # ===== RESET CHECK =====
         if current_level > 0 and user_data["last_warn"]:
@@ -167,13 +172,14 @@ class WarnGroup(app_commands.Group):
 
                 if reset_minutes and now - last_warn_time >= timedelta(minutes=reset_minutes):
                     current_level = 0
-                    reset_triggered = True
 
         new_level = min(current_level + 1, max_level)
         level_config = levels[str(new_level)]
         punishment = level_config["punishment"]
+
         punishment_text = "Không có"
 
+        # ===== THỰC HIỆN HÌNH PHẠT =====
         try:
             if punishment == "kick":
                 await member.kick(reason="Warn system")
@@ -194,12 +200,12 @@ class WarnGroup(app_commands.Group):
 
         except:
             await interaction.followup.send(
-                "Không thể thực hiện hình phạt. Bot thiếu quyền.",
+                "Không thể warn, nhập sai số hoặc người bị warn có quyền quản lí.",
                 ephemeral=True
             )
             return
 
-        # ===== SAVE AFTER SUCCESS =====
+        # ===== SAVE CHỈ KHI THÀNH CÔNG =====
         data[guild_id][user_id]["level"] = new_level
         data[guild_id][user_id]["last_warn"] = now.isoformat()
         self.save_json(DATA_FILE, data)
@@ -215,14 +221,6 @@ class WarnGroup(app_commands.Group):
         embed.add_field(name="Lý do", value=reason, inline=False)
         embed.add_field(name="Hình phạt", value=punishment_text, inline=False)
 
-        if reset_triggered:
-            embed.add_field(
-                name="Reset",
-                value="Level cũ đã hết hạn và được reset.",
-                inline=False
-            )
-
-        # ===== SEND TO LOG OR CURRENT CHANNEL =====
         log_channel_id = config[guild_id].get("log_channel")
 
         if log_channel_id:
@@ -235,5 +233,6 @@ class WarnGroup(app_commands.Group):
         await interaction.followup.send(embed=embed)
 
 
+# ⚠️ QUAN TRỌNG: KHÔNG ADD COMMAND Ở ĐÂY
 async def setup(bot):
-    bot.tree.add_command(WarnGroup())
+    pass
