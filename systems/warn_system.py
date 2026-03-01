@@ -25,7 +25,7 @@ class WarnGroup(app_commands.Group):
 
     def parse_duration(self, value: str):
         pattern = r"^(\d+)([mhd])$"
-        match = re.match(pattern, value.lower())
+        match = re.match(pattern.lower(), value.lower()) if value else None
 
         if not match:
             return None
@@ -111,12 +111,18 @@ class WarnGroup(app_commands.Group):
             config = json.load(f)
 
         if guild_id not in config:
-            await interaction.response.send_message("Server chưa cấu hình level.", ephemeral=True)
+            await interaction.response.send_message(
+                "Server chưa cấu hình level.",
+                ephemeral=True
+            )
             return
 
         levels = config[guild_id]["levels"]
         if not levels:
-            await interaction.response.send_message("Chưa có level nào.", ephemeral=True)
+            await interaction.response.send_message(
+                "Chưa có level nào.",
+                ephemeral=True
+            )
             return
 
         max_level = max(map(int, levels.keys()))
@@ -184,6 +190,7 @@ class WarnGroup(app_commands.Group):
 
         embed = discord.Embed(
             title="WARNING",
+            description="**HỆ THỐNG QUẢN LÝ KỶ LUẬT**",
             color=discord.Color.red()
         )
 
