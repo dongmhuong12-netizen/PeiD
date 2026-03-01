@@ -7,8 +7,8 @@ from datetime import datetime, timedelta
 class WarnSystem(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.reset_hours = 24  # có thể chỉnh sau
-        self.user_levels = {}  # lưu tạm level (chưa DB)
+        self.reset_hours = 24  # thời gian reset level
+        self.user_levels = {}  # lưu tạm level (restart bot sẽ mất)
 
     @app_commands.command(name="warn", description="Cảnh cáo thành viên")
     @app_commands.describe(
@@ -21,6 +21,7 @@ class WarnSystem(commands.Cog):
         member: discord.Member,
         reason: str = None
     ):
+        # kiểm tra quyền
         if not interaction.user.guild_permissions.manage_messages:
             await interaction.response.send_message(
                 "Bạn không có quyền sử dụng lệnh này.",
@@ -28,6 +29,7 @@ class WarnSystem(commands.Cog):
             )
             return
 
+        # không warn bot
         if member.bot:
             await interaction.response.send_message(
                 "Không thể cảnh cáo bot.",
@@ -35,6 +37,7 @@ class WarnSystem(commands.Cog):
             )
             return
 
+        # lý do mặc định
         if reason is None:
             reason = "Không công khai lý do phạt."
 
@@ -42,8 +45,6 @@ class WarnSystem(commands.Cog):
         user_id = member.id
         current_level = self.user_levels.get(user_id, 0) + 1
         self.user_levels[user_id] = current_level
-
-        reset_time = datetime.utcnow() + timedelta(hours=self.reset_hours)
 
         embed = discord.Embed(
             color=0x2B2D31,
@@ -54,15 +55,12 @@ class WarnSystem(commands.Cog):
             "━━━━━━━━━━━━━━━━━━\n"
             "**KỶ LUẬT HỆ THỐNG**\n"
             "━━━━━━━━━━━━━━━━━━\n\n"
-            f"• **CẤP ĐỘ HIỆN TẠI :** LEVEL **{current_level}**\n\n"
-            f"• **Đối tượng :** {member.mention}  `{member.id}`\n"
-            f"• **Hình phạt :** WARN\n\n"
-            "━━━━━━━━━━━━━━━━━━\n\n"
+            f"• **CẤP ĐỘ:** LEVEL **{current_level}**\n"
+            f"• **ĐỐI TƯỢNG:** {member.mention}  `{member.id}`\n"
+            f"• **HÌNH PHẠT:** WARN\n\n"
             f"**LÝ DO**\n{reason}\n\n"
-            "━━━━━━━━━━━━━━━━━━\n\n"
-            f"• **RESET SAU :** {self.reset_hours} GIỜ\n"
-            f"• **TÁI PHẠM :** LEVEL {current_level + 1}\n\n"
-            "━━━━━━━━━━━━━━━━━━\n"
+            f"• **RESET:** {self.reset_hours} GIỜ\n"
+            f"• **TÁI PHẠM:** LEVEL {current_level + 1}\n\n"
             "*HỆ THỐNG QUẢN LÝ KỶ LUẬT*"
         )
 
