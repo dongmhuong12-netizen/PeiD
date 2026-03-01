@@ -21,7 +21,7 @@ class WarnSystem(commands.Cog):
     ):
         if not interaction.user.guild_permissions.manage_messages:
             await interaction.response.send_message(
-                "❌ Bạn không có quyền sử dụng lệnh này.",
+                "Bạn không có quyền sử dụng lệnh này.",
                 ephemeral=True
             )
             return
@@ -30,33 +30,26 @@ class WarnSystem(commands.Cog):
             reason = "Không công khai lí do phạt"
 
         embed = discord.Embed(
-            title="⚠️ | CẢNH CÁO THÀNH VIÊN",
-            description=f"{member.mention} đã bị cảnh cáo.",
-            color=0xFF9F1C,
+            color=0x2B2D31,
             timestamp=datetime.utcnow()
+        )
+
+        embed.set_author(
+            name="CẢNH CÁO",
+            icon_url="https://cdn-icons-png.flaticon.com/512/595/595067.png"
+        )
+
+        embed.description = (
+            f"{member.mention} đã bị cảnh cáo.\n"
+            f"> **Moderator:** {interaction.user.mention}\n"
+            f"> **Lý do:** {reason}"
         )
 
         embed.set_thumbnail(url=member.display_avatar.url)
 
-        embed.add_field(
-            name="👤 Thành viên",
-            value=f"{member.mention}\nID: `{member.id}`",
-            inline=False
+        embed.set_footer(
+            text=f"{interaction.guild.name}"
         )
-
-        embed.add_field(
-            name="🛡️ Moderator",
-            value=f"{interaction.user.mention}",
-            inline=False
-        )
-
-        embed.add_field(
-            name="📄 Lý do",
-            value=f"```{reason}```",
-            inline=False
-        )
-
-        embed.set_footer(text=f"Server: {interaction.guild.name}")
 
         await interaction.response.send_message(embed=embed)
 
