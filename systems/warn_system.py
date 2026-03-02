@@ -258,7 +258,24 @@ class WarnGroup(app_commands.Group):
 
         reset_time = datetime.fromisoformat(user_data["reset_at"])
         reset_text = f"<t:{int(reset_time.timestamp())}:R>"
+        
+        next_level = min(new_level + 1, max_level)
+        next_config = levels.get(str(next_level))
 
+        if next_config:
+            next_punishment_raw = next_config["punishment"]
+
+            if next_punishment_raw.startswith("timeout:"):
+                duration_str = next_punishment_raw.split(":")[1]
+                next_punishment_text = self.format_time_text(duration_str)
+            else:
+                next_punishment_text = next_punishment_raw.capitalize()
+
+            next_reset_text = self.format_time_text(next_config["reset"])
+        else:
+            next_punishment_text = "Không có"
+            next_reset_text = "Không có"
+        
         body = (
             f"• CẤP ĐỘ: LEVEL {new_level}\n"
             f"• ĐỐI TƯỢNG: {member.mention}\n"
@@ -266,7 +283,10 @@ class WarnGroup(app_commands.Group):
             "LÝ DO\n"
             f"{reason}\n\n"
             f"• RESET: {reset_text}\n"
-            f"• NẾU TÁI PHẠM KHI CHƯA HẾT RESET: LEVEL {min(new_level+1,max_level)}"
+            f"• NẾU TÁI PHẠM KHI CHƯA HẾT RESET:\n"
+            f"LEVEL {next_level}\n"
+            f"Hình phạt: {next_punishment_text}\n"
+            f"Reset: {next_reset_text}"
         )
 
         embed = self.build_embed(
