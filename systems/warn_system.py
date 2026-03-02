@@ -299,11 +299,4 @@ class WarnBackground(commands.Cog):
 # ==============================
 
 async def setup(bot):
-    # Xoá mọi instance warn đang tồn tại
-    existing = bot.tree.get_commands()
-    for cmd in existing:
-        if cmd.name == "warn":
-            bot.tree.remove_command("warn", type=discord.AppCommandType.chat_input)
-
-    bot.tree.add_command(WarnGroup())
     await bot.add_cog(WarnBackground(bot))
