@@ -308,7 +308,7 @@ async def add(self, interaction: discord.Interaction, member: discord.Member, re
 
     @app_commands.command(name="remove", description="Giảm 1 cấp cảnh cáo")
     @app_commands.checks.has_permissions(manage_messages=True)
-    async def remove(self, interaction: discord.Interaction, member: discord.Member):
+    async def remove(self, interaction, member: discord.Member):
         await interaction.response.defer()
 
         config = self.load_json(CONFIG_FILE)
