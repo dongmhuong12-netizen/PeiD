@@ -497,3 +497,4 @@ class WarnBackground(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(WarnBackground(bot))
+    bot.tree.add_command(WarnGroup())
