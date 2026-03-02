@@ -262,19 +262,21 @@ class WarnGroup(app_commands.Group):
         next_level = min(new_level + 1, max_level)
         next_config = levels.get(str(next_level))
 
-        if next_config:
-            next_punishment_raw = next_config["punishment"]
+if next_config:
+    next_punishment_raw = next_config["punishment"]
 
-            if next_punishment_raw.startswith("timeout:"):
-                duration_str = next_punishment_raw.split(":")[1]
-                next_punishment_text = self.format_time_text(duration_str)
-            else:
-                next_punishment_text = next_punishment_raw.capitalize()
+    if next_punishment_raw.startswith("timeout"):
+        duration_str = next_punishment_raw.split(" ")[1]
+        next_punishment_text = self.format_time_text(duration_str)
+    else:
+        next_punishment_text = next_punishment_raw
 
-            next_reset_text = self.format_time_text(next_config["reset"])
-        else:
-            next_punishment_text = "Không có"
-            next_reset_text = "Không có"
+    next_reset_minutes = self.parse_duration(next_config["reset"])
+
+    if next_reset_minutes:
+        next_reset_text = self.format_time_text(next_config["reset"])
+    else:
+        next_reset_text = "Không có"
         
         body = (
             f"• CẤP ĐỘ: LEVEL {new_level}\n"
