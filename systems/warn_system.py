@@ -23,7 +23,7 @@ class WarnGroup(app_commands.Group):
                 with open(file, "w") as f:
                     json.dump({}, f)
 
-    # ========= JSON =========
+    # ================= JSON =================
 
     def load_json(self, file):
         try:
@@ -36,7 +36,7 @@ class WarnGroup(app_commands.Group):
         with open(file, "w") as f:
             json.dump(data, f, indent=4)
 
-    # ========= TIME =========
+    # ================= TIME =================
 
     def parse_duration(self, value: str):
         if not value:
@@ -97,14 +97,14 @@ class WarnGroup(app_commands.Group):
             channel = interaction.guild.get_channel(log_channel_id)
             if channel:
                 await channel.send(embed=embed)
-                await interaction.followup.send("Warn thành công.", ephemeral=True)
+                await interaction.followup.send("Thực hiện thành công.", ephemeral=True)
                 return
 
         await interaction.followup.send(embed=embed)
 
-    # ========= SET LOG =========
+    # ================= SET LOG =================
 
-    @app_commands.command(name="setlog")
+    @app_commands.command(name="setlog", description="Thiết lập kênh log cảnh cáo")
     @app_commands.checks.has_permissions(manage_guild=True)
     async def setlog(self, interaction: discord.Interaction, channel: discord.TextChannel):
         await interaction.response.defer(ephemeral=True)
@@ -118,9 +118,9 @@ class WarnGroup(app_commands.Group):
         self.save_json(CONFIG_FILE, config)
         await interaction.followup.send("Đã thiết lập kênh log.", ephemeral=True)
 
-    # ========= SET LEVEL =========
+    # ================= SET LEVEL =================
 
-    @app_commands.command(name="setlevel")
+    @app_commands.command(name="setlevel", description="Thiết lập level và hình phạt")
     @app_commands.checks.has_permissions(manage_guild=True)
     async def setlevel(self, interaction: discord.Interaction, level: int, reset: str, punishment: str):
         await interaction.response.defer(ephemeral=True)
@@ -149,11 +149,11 @@ class WarnGroup(app_commands.Group):
         }
 
         self.save_json(CONFIG_FILE, config)
-        await interaction.followup.send(f"Đã thiết lập / cập nhật level {level}.", ephemeral=True)
+        await interaction.followup.send(f"Đã thiết lập level {level}.", ephemeral=True)
 
-    # ========= WARN ADD =========
+    # ================= WARN ADD =================
 
-    @app_commands.command(name="add")
+    @app_commands.command(name="add", description="Cảnh cáo thành viên")
     @app_commands.checks.has_permissions(manage_messages=True)
     async def add(self, interaction: discord.Interaction, member: discord.Member, reason: str = "Không có lý do"):
         await interaction.response.defer()
@@ -190,9 +190,8 @@ class WarnGroup(app_commands.Group):
         current_level = user_data["level"]
         now = discord.utils.utcnow()
 
-        reset_at = user_data.get("reset_at")
-        if reset_at:
-            reset_time = datetime.fromisoformat(reset_at)
+        if user_data.get("reset_at"):
+            reset_time = datetime.fromisoformat(user_data["reset_at"])
             if now >= reset_time:
                 current_level = 0
 
@@ -209,37 +208,32 @@ class WarnGroup(app_commands.Group):
                 duration_str = punishment.split(":")[1]
                 timeout_minutes = self.parse_duration(duration_str)
                 if timeout_minutes:
-                    until = now + timedelta(minutes=timeout_minutes)
-                    await member.timeout(until)
+                    await member.timeout(now + timedelta(minutes=timeout_minutes))
         except:
             await interaction.followup.send("Bot thiếu quyền để thực hiện hình phạt.", ephemeral=True)
             return
 
         reset_minutes = self.parse_duration(level_config["reset"])
-        reset_time = now + timedelta(minutes=reset_minutes)
-
         user_data["level"] = new_level
         user_data["last_warn"] = now.isoformat()
-        user_data["reset_at"] = reset_time.isoformat()
+        user_data["reset_at"] = (now + timedelta(minutes=reset_minutes)).isoformat()
 
         self.save_json(DATA_FILE, data)
-
-        next_level = min(new_level + 1, max_level)
 
         embed = self.build_warn_embed(
             member,
             new_level,
             punishment,
             level_config["reset"],
-            next_level,
+            min(new_level + 1, max_level),
             reason
         )
 
         await self.send_log_or_here(interaction, embed)
 
-    # ========= WARN REMOVE =========
+    # ================= WARN REMOVE =================
 
-    @app_commands.command(name="remove")
+    @app_commands.command(name="remove", description="Giảm 1 cấp cảnh cáo")
     @app_commands.checks.has_permissions(manage_messages=True)
     async def remove(self, interaction: discord.Interaction, member: discord.Member):
         await interaction.response.defer()
@@ -281,9 +275,9 @@ class WarnGroup(app_commands.Group):
 
         await self.send_log_or_here(interaction, embed)
 
-    # ========= WARN NOTE =========
+    # ================= WARN NOTE =================
 
-    @app_commands.command(name="note")
+    @app_commands.command(name="note", description="Ghi chú nội bộ")
     @app_commands.checks.has_permissions(manage_messages=True)
     async def note(self, interaction: discord.Interaction, member: discord.Member, content: str):
         await interaction.response.defer(ephemeral=True)
@@ -325,51 +319,17 @@ class WarnBackground(commands.Cog):
         with open(DATA_FILE, "r") as f:
             data = json.load(f)
 
-        with open(CONFIG_FILE, "r") as f:
-            config = json.load(f)
-
         now = discord.utils.utcnow()
         changed = False
 
         for guild_id, guild_data in data.items():
-            guild = self.bot.get_guild(int(guild_id))
-            if not guild:
-                continue
-
-            log_channel_id = config.get(guild_id, {}).get("log_channel")
-            channel = guild.get_channel(log_channel_id) if log_channel_id else None
-
             for user_id, user_data in guild_data.items():
-                reset_at = user_data.get("reset_at")
-                if not reset_at:
-                    continue
-
-                reset_time = datetime.fromisoformat(reset_at)
-                if now >= reset_time and user_data["level"] > 0:
-                    old_level = user_data["level"]
-                    user_data["level"] = 0
-                    user_data["reset_at"] = None
-                    changed = True
-
-                    if channel:
-                        member = guild.get_member(int(user_id))
-                        if member:
-                            embed = discord.Embed(
-                                description=(
-                                    "━━━━━━━━━━━━━━━━━━\n"
-                                    "AUTO RESET | HẾT THỜI GIAN\n"
-                                    "━━━━━━━━━━━━━━━━━━\n\n"
-                                    f"• ĐỐI TƯỢNG: {member.mention}\n"
-                                    f"{member.id}\n"
-                                    f"• LEVEL: {old_level} → 0\n\n"
-                                    "━━━━━━━━━━━━━━━━━━\n"
-                                    "HỆ THỐNG QUẢN LÝ KỶ LUẬT\n"
-                                    f"Hôm nay lúc {now.strftime('%H:%M')}"
-                                ),
-                                color=discord.Color.green()
-                            )
-                            embed.set_thumbnail(url=member.display_avatar.url)
-                            await channel.send(embed=embed)
+                if user_data.get("reset_at"):
+                    reset_time = datetime.fromisoformat(user_data["reset_at"])
+                    if now >= reset_time and user_data["level"] > 0:
+                        user_data["level"] = 0
+                        user_data["reset_at"] = None
+                        changed = True
 
         if changed:
             with open(DATA_FILE, "w") as f:
@@ -377,9 +337,8 @@ class WarnBackground(commands.Cog):
 
 
 # ==============================
-# SETUP
+# SETUP (NO GLOBAL ADD)
 # ==============================
 
 async def setup(bot):
     await bot.add_cog(WarnBackground(bot))
-    bot.tree.add_command(WarnGroup())
