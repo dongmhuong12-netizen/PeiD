@@ -116,7 +116,7 @@ class WellcomeGroup(app_commands.Group):
         )
 
         await interaction.followup.send(
-            "Test Wellcome thành công, hãy kiểm tra tại kênh được chỉ định embed." if success else "Lỗi. Không thể Test, hãy đảm bảo .",
+            "Test Wellcome thành công, hãy kiểm tra tại kênh được chỉ định embed." if success else "Lỗi. Không thể Test Wellcome vì thiếu cấu hình. Hãy đảm bảo rằng Test sau khi có đủ kênh thông báo, text + embed.",
             ephemeral=True
         )
 
