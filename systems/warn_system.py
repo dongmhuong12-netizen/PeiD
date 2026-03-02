@@ -65,6 +65,29 @@ class WarnGroup(app_commands.Group):
         now = discord.utils.utcnow()
         return f"Hôm nay lúc {now.strftime('%H:%M')}"
 
+    def build_warn_embed(self, member, level, punishment, reset_text, next_level, reason):
+        embed = discord.Embed(
+            description=(
+                "━━━━━━━━━━━━━━━━━━\n"
+                "WARNING | CẢNH CÁO\n"
+                "━━━━━━━━━━━━━━━━━━\n\n"
+                f"• CẤP ĐỘ: LEVEL {level}\n"
+                f"• ĐỐI TƯỢNG: {member.mention}\n"
+                f"{member.id}\n"
+                f"• HÌNH PHẠT: {punishment.upper()}\n\n"
+                "LÝ DO\n"
+                f"{reason}\n\n"
+                f"• RESET: {reset_text.upper()}\n"
+                f"• NẾU TÁI PHẠM KHI CHƯA HẾT RESET: LEVEL {next_level}\n\n"
+                "━━━━━━━━━━━━━━━━━━\n"
+                "HỆ THỐNG QUẢN LÝ KỶ LUẬT\n"
+                f"{self.format_time()}"
+            ),
+            color=discord.Color.red()
+        )
+        embed.set_thumbnail(url=member.display_avatar.url)
+        return embed
+
     async def send_log_or_here(self, interaction, embed):
         config = self.load_json(CONFIG_FILE)
         guild_id = str(interaction.guild.id)
@@ -74,11 +97,7 @@ class WarnGroup(app_commands.Group):
             channel = interaction.guild.get_channel(log_channel_id)
             if channel:
                 await channel.send(embed=embed)
-
-                # ====== FIX TREO INTERACTION ======
                 await interaction.followup.send("Warn thành công.", ephemeral=True)
-                # ==================================
-
                 return
 
         await interaction.followup.send(embed=embed)
@@ -207,27 +226,85 @@ class WarnGroup(app_commands.Group):
 
         next_level = min(new_level + 1, max_level)
 
+        embed = self.build_warn_embed(
+            member,
+            new_level,
+            punishment,
+            level_config["reset"],
+            next_level,
+            reason
+        )
+
+        await self.send_log_or_here(interaction, embed)
+
+    # ========= WARN REMOVE =========
+
+    @app_commands.command(name="remove")
+    @app_commands.checks.has_permissions(manage_messages=True)
+    async def remove(self, interaction: discord.Interaction, member: discord.Member):
+        await interaction.response.defer()
+
+        data = self.load_json(DATA_FILE)
+        guild_id = str(interaction.guild.id)
+        user_id = str(member.id)
+
+        if guild_id not in data or user_id not in data[guild_id]:
+            await interaction.followup.send("Người này chưa có cảnh cáo.", ephemeral=True)
+            return
+
+        user_data = data[guild_id][user_id]
+
+        if user_data["level"] <= 0:
+            await interaction.followup.send("Không thể giảm thêm.", ephemeral=True)
+            return
+
+        user_data["level"] -= 1
+        user_data["reset_at"] = None
+
+        self.save_json(DATA_FILE, data)
+
         embed = discord.Embed(
             description=(
                 "━━━━━━━━━━━━━━━━━━\n"
-                "WARNING | CẢNH CÁO\n"
+                "REMOVE WARNING\n"
                 "━━━━━━━━━━━━━━━━━━\n\n"
-                f"• CẤP ĐỘ: LEVEL {new_level}\n"
                 f"• ĐỐI TƯỢNG: {member.mention}\n"
                 f"{member.id}\n"
-                f"• HÌNH PHẠT: {punishment.upper()}\n\n"
-                "LÝ DO\n"
-                f"{reason}\n\n"
-                f"• RESET: {level_config['reset'].upper()}\n"
-                f"• NẾU TÁI PHẠM KHI CHƯA HẾT RESET: LEVEL {next_level}\n\n"
+                f"• LEVEL HIỆN TẠI: {user_data['level']}\n\n"
                 "━━━━━━━━━━━━━━━━━━\n"
                 "HỆ THỐNG QUẢN LÝ KỶ LUẬT\n"
                 f"{self.format_time()}"
             ),
-            color=discord.Color.red()
+            color=discord.Color.orange()
         )
-
         embed.set_thumbnail(url=member.display_avatar.url)
+
+        await self.send_log_or_here(interaction, embed)
+
+    # ========= WARN NOTE =========
+
+    @app_commands.command(name="note")
+    @app_commands.checks.has_permissions(manage_messages=True)
+    async def note(self, interaction: discord.Interaction, member: discord.Member, content: str):
+        await interaction.response.defer(ephemeral=True)
+
+        embed = discord.Embed(
+            description=(
+                "━━━━━━━━━━━━━━━━━━\n"
+                "GHI CHÚ NỘI BỘ\n"
+                "━━━━━━━━━━━━━━━━━━\n\n"
+                f"• ĐỐI TƯỢNG: {member.mention}\n"
+                f"{member.id}\n\n"
+                "NỘI DUNG\n"
+                f"{content}\n\n"
+                "━━━━━━━━━━━━━━━━━━\n"
+                "HỆ THỐNG QUẢN LÝ KỶ LUẬT\n"
+                f"{self.format_time()}"
+            ),
+            color=discord.Color.blue()
+        )
+        embed.set_thumbnail(url=member.display_avatar.url)
+
         await self.send_log_or_here(interaction, embed)
 
 
@@ -305,3 +382,4 @@ class WarnBackground(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(WarnBackground(bot))
+    bot.tree.add_command(WarnGroup())
