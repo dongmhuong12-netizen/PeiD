@@ -74,6 +74,11 @@ class WarnGroup(app_commands.Group):
             channel = interaction.guild.get_channel(log_channel_id)
             if channel:
                 await channel.send(embed=embed)
+
+                # ====== FIX TREO INTERACTION ======
+                await interaction.followup.send("Warn thành công.", ephemeral=True)
+                # ==================================
+
                 return
 
         await interaction.followup.send(embed=embed)
@@ -295,7 +300,7 @@ class WarnBackground(commands.Cog):
 
 
 # ==============================
-# SETUP (FIX X2 HERE)
+# SETUP
 # ==============================
 
 async def setup(bot):
