@@ -57,7 +57,7 @@ class BoosterGroup(app_commands.Group):
         update_guild_config(interaction.guild.id, "booster", "message", text)
 
         await interaction.response.send_message(
-            "Đã cập nhật nội dung booster.",
+            f"Đã cập nhật nội dung booster: {text}",
             ephemeral=True
         )
 
@@ -145,14 +145,14 @@ class BoosterGroup(app_commands.Group):
         if role:
             if role >= bot_member.top_role:
                 await interaction.followup.send(
-                    "Bot không thể gán role này vì role cao hơn hoặc bằng role của bot.",
+                    "Lỗi, không thể test vì role bot thấp hơn role được gán.",
                     ephemeral=True
                 )
                 return
 
             if role in member.roles:
                 await interaction.followup.send(
-                    "Bạn đã có role này rồi.",
+                    "Role đã tồn tại trong vai trò của bạn.",
                     ephemeral=True
                 )
                 return
@@ -170,12 +170,12 @@ class BoosterGroup(app_commands.Group):
 
         if not success:
             await interaction.followup.send(
-                "Chưa cấu hình booster.",
+                "Không thể test vì thiếu cấu hình. Hãy đảm bảo rằng booster chạy được khi có đủ kênh thông báo, role boost và text + embed.",
                 ephemeral=True
             )
         else:
             await interaction.followup.send(
-                "Đã test booster (role + message).",
+                "Test thành công, hãy check kênh được chỉ định embed.",
                 ephemeral=True
             )
 
