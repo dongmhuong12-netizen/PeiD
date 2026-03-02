@@ -273,7 +273,7 @@ class WarnGroup(app_commands.Group):
 
             next_reset_minutes = self.parse_duration(next_config["reset"])
             next_reset_text = (
-                self.format_time_text(next_config["reset"])
+                self.format_time_text(next_reset_minutes)
                 if next_reset_minutes else "Không có"
             )
 
