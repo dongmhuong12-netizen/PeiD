@@ -46,7 +46,8 @@ class ReactionRole(commands.Cog):
 
         for config in data.values():
 
-            if config.get("guild_id") != guild_id:
+            # FIX: ép kiểu guild_id về int để tránh mismatch
+            if int(config.get("guild_id")) != guild_id:
                 continue
 
             for group in config.get("groups", []):
@@ -68,7 +69,8 @@ class ReactionRole(commands.Cog):
                     return
 
                 # ===== SINGLE MODE =====
-                if group.get("mode") == "single":
+                # FIX: check mode an toàn (không phân biệt hoa/thường)
+                if str(group.get("mode", "")).lower() == "single":
 
                     # remove role khác trong cùng group
                     for r_data in group["roles"]:
@@ -112,7 +114,8 @@ class ReactionRole(commands.Cog):
 
         for config in data.values():
 
-            if config.get("guild_id") != guild_id:
+            # FIX: ép kiểu guild_id về int để tránh mismatch
+            if int(config.get("guild_id")) != guild_id:
                 continue
 
             for group in config.get("groups", []):
