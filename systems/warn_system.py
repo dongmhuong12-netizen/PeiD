@@ -210,10 +210,10 @@ class WarnGroup(app_commands.Group):
         now = discord.utils.utcnow()
 
         if user_data.get("reset_at"):
-    reset_time = datetime.fromisoformat(user_data["reset_at"])
-    if now >= reset_time:
-        user_data["level"] = 0
-        user_data["reset_at"] = None
+            reset_time = datetime.fromisoformat(user_data["reset_at"])
+            if now >= reset_time:
+                user_data["level"] = 0
+                user_data["reset_at"] = None
 
         new_level = min(user_data["level"] + 1, max_level)
         level_config = levels[str(new_level)]
