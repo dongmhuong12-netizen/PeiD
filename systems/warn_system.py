@@ -280,9 +280,9 @@ class WarnGroup(app_commands.Group):
             # ================= WARN REMOVE =================
 
     @app_commands.command(name="remove", description="Giảm 1 cấp cảnh cáo")
-@app_commands.checks.has_permissions(manage_messages=True)
-async def remove(self, interaction: discord.Interaction, member: discord.Member):
-    await interaction.response.defer()
+    @app_commands.checks.has_permissions(manage_messages=True)
+    async def remove(self, interaction: discord.Interaction, member: discord.Member):
+        await interaction.response.defer()
 
     config = self.load_json(CONFIG_FILE)
     data = self.load_json(DATA_FILE)
@@ -346,9 +346,9 @@ async def remove(self, interaction: discord.Interaction, member: discord.Member)
     # ================= WARN CLEAR =================
 
     @app_commands.command(name="clear", description="Xóa toàn bộ cảnh cáo")
-@app_commands.checks.has_permissions(manage_messages=True)
-async def clear(self, interaction: discord.Interaction, member: discord.Member):
-    await interaction.response.defer()
+    @app_commands.checks.has_permissions(manage_messages=True)
+    async def clear(self, interaction: discord.Interaction, member: discord.Member):
+        await interaction.response.defer()
 
     data = self.load_json(DATA_FILE)
     guild_id = str(interaction.guild.id)
