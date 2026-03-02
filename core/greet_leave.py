@@ -117,7 +117,7 @@ class GreetGroup(app_commands.Group):
         )
 
         await interaction.followup.send(
-            "Đã gửi thử." if success else "Chưa cấu hình.",
+            "Test thành công, hãy kiểm tra ở kênh gán embed." if success else "Chưa cấu hình.",
             ephemeral=True
         )
 
