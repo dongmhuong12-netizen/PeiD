@@ -173,9 +173,12 @@ class WarnGroup(app_commands.Group):
     # ================= WARN ADD =================
 
     @app_commands.command(name="add", description="Cảnh cáo thành viên")
-    @app_commands.checks.has_permissions(manage_messages=True)
-    async def add(self, interaction: discord.Interaction, member: discord.Member, reason: str = "Không có lý do"):
-        await interaction.response.defer()
+@app_commands.checks.has_permissions(manage_messages=True)
+async def add(self, interaction: discord.Interaction, member: discord.Member, reason: str = "Không có lý do"):
+
+    await interaction.response.defer()
+
+    try:
 
         if (
             member == interaction.guild.owner
@@ -298,6 +301,9 @@ class WarnGroup(app_commands.Group):
             )
 
             await self.send_log_or_here(interaction, embed)
+
+    except Exception as e:
+        await interaction.followup.send(f"Lỗi hệ thống: {e}", ephemeral=True)
                 # ================= WARN REMOVE =================
 
     @app_commands.command(name="remove", description="Giảm 1 cấp cảnh cáo")
