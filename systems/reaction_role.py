@@ -38,7 +38,13 @@ class ReactionRole(commands.Cog):
             return
 
         member = guild.get_member(payload.user_id)
-        if not member or member.bot:
+        if not member:
+            try:
+                member = await guild.fetch_member(payload.user_id)
+            except:
+                return
+
+        if member.bot:
             return
 
         emoji_str = str(payload.emoji)
@@ -46,7 +52,6 @@ class ReactionRole(commands.Cog):
 
         for config in data.values():
 
-            # FIX: ép kiểu guild_id về int để tránh mismatch
             if int(config.get("guild_id")) != guild_id:
                 continue
 
@@ -68,11 +73,15 @@ class ReactionRole(commands.Cog):
                 if not roles:
                     return
 
+                # REFRESH MEMBER STATE TRƯỚC KHI XỬ LÝ SINGLE
+                try:
+                    member = await guild.fetch_member(member.id)
+                except:
+                    pass
+
                 # ===== SINGLE MODE =====
-                # FIX: check mode an toàn (không phân biệt hoa/thường)
                 if str(group.get("mode", "")).lower() == "single":
 
-                    # remove role khác trong cùng group
                     for r_data in group["roles"]:
                         ids = r_data if isinstance(r_data, list) else [r_data]
 
@@ -82,9 +91,7 @@ class ReactionRole(commands.Cog):
                                 await member.remove_roles(r)
 
                 # ===== MULTI MODE =====
-                # không remove gì
 
-                # add role nếu chưa có
                 for role in roles:
                     if role not in member.roles:
                         await member.add_roles(role)
@@ -106,7 +113,13 @@ class ReactionRole(commands.Cog):
             return
 
         member = guild.get_member(payload.user_id)
-        if not member or member.bot:
+        if not member:
+            try:
+                member = await guild.fetch_member(payload.user_id)
+            except:
+                return
+
+        if member.bot:
             return
 
         emoji_str = str(payload.emoji)
@@ -114,7 +127,6 @@ class ReactionRole(commands.Cog):
 
         for config in data.values():
 
-            # FIX: ép kiểu guild_id về int để tránh mismatch
             if int(config.get("guild_id")) != guild_id:
                 continue
 
