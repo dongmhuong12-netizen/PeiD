@@ -117,7 +117,7 @@ class GreetGroup(app_commands.Group):
         )
 
         await interaction.followup.send(
-            "Test Greet thành công, hãy kiểm tra tại kênh được chỉ định embed." if success else "Lỗi. Không thể test vì thiếu cấu hình. Hãy đảm bảo rằng Test sau khi có đủ kênh thông báo, text + embed.",
+            "Test Greet thành công, hãy kiểm tra tại kênh được chỉ định embed." if success else "Lỗi. Không thể Test Greet vì thiếu cấu hình. Hãy đảm bảo rằng Test sau khi có đủ kênh thông báo, text + embed.",
             ephemeral=True
         )
 
@@ -185,7 +185,7 @@ class LeaveGroup(app_commands.Group):
         )
 
         await interaction.followup.send(
-            "Text Leave thành công, hãy kiểm tra tại kênh được chỉ định embed." if success else "Lỗi. Không thể Test vì thiếu cấu hình. Hãy đảm bảo rằng Test sau khi có đủ kênh thông báo, text + embed.",
+            "Text Leave thành công, hãy kiểm tra tại kênh được chỉ định embed." if success else "Lỗi. Không thể Test Leave vì thiếu cấu hình. Hãy đảm bảo rằng Test sau khi có đủ kênh thông báo, text + embed.",
             ephemeral=True
         )
 
