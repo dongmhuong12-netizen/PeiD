@@ -172,7 +172,7 @@ class WarnGroup(app_commands.Group):
 
     # ================= WARN ADD =================
 
-    @app_commands.command(name="add", description="Cảnh cáo thành viên")
+@app_commands.command(name="add", description="Cảnh cáo thành viên")
 @app_commands.checks.has_permissions(manage_messages=True)
 async def add(self, interaction: discord.Interaction, member: discord.Member, reason: str = "Không có lý do"):
 
