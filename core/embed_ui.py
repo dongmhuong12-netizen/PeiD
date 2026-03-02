@@ -115,7 +115,7 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
             return
 
         if mode not in ["single", "multi"]:
-            await interaction.response.send_message("Mode phải là single hoặc multi.", ephemeral=True)
+            await interaction.response.send_message("Mode phải là 1 trong 2 single hoặc multi.", ephemeral=True)
             return
 
         guild_id = interaction.guild.id
