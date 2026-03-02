@@ -280,88 +280,116 @@ class WarnGroup(app_commands.Group):
             # ================= WARN REMOVE =================
 
     @app_commands.command(name="remove", description="Giảm 1 cấp cảnh cáo")
-    @app_commands.checks.has_permissions(manage_messages=True)
-    async def remove(self, interaction: discord.Interaction, member: discord.Member):
-        await interaction.response.defer()
+@app_commands.checks.has_permissions(manage_messages=True)
+async def remove(self, interaction: discord.Interaction, member: discord.Member):
+    await interaction.response.defer()
 
-        config = self.load_json(CONFIG_FILE)
-        data = self.load_json(DATA_FILE)
+    config = self.load_json(CONFIG_FILE)
+    data = self.load_json(DATA_FILE)
 
-        guild_id = str(interaction.guild.id)
-        user_id = str(member.id)
+    guild_id = str(interaction.guild.id)
+    user_id = str(member.id)
 
-        if guild_id not in data or user_id not in data[guild_id]:
-            await interaction.followup.send("Chưa có cảnh cáo.", ephemeral=True)
-            return
+    if guild_id not in data or user_id not in data[guild_id]:
+        await interaction.followup.send("Chưa có cảnh cáo.", ephemeral=True)
+        return
 
-        user_data = data[guild_id][user_id]
+    user_data = data[guild_id][user_id]
 
-        if user_data["level"] <= 0:
-            await interaction.followup.send("Không thể giảm thêm.", ephemeral=True)
-            return
+    if user_data["level"] <= 0:
+        await interaction.followup.send("Không thể giảm thêm.", ephemeral=True)
+        return
 
-        user_data["level"] -= 1
-        new_level = user_data["level"]
+    # Giảm level
+    user_data["level"] -= 1
+    new_level = user_data["level"]
 
+    now = discord.utils.utcnow()
+
+    # Nếu level mới = 0 thì xoá reset
+    if new_level == 0:
+        user_data["reset_at"] = None
         reset_text = "Không có"
-        if user_data.get("reset_at"):
-            reset_time = datetime.fromisoformat(user_data["reset_at"])
-            reset_text = f"<t:{int(reset_time.timestamp())}:R>"
+    else:
+        # Lấy reset theo level mới
+        levels = config.get(guild_id, {}).get("levels", {})
+        level_config = levels.get(str(new_level))
 
-        self.save_json(DATA_FILE, data)
+        if level_config:
+            reset_minutes = self.parse_duration(level_config["reset"])
+            if reset_minutes:
+                new_reset_time = now + timedelta(minutes=reset_minutes)
+                user_data["reset_at"] = new_reset_time.isoformat()
+                reset_text = f"<t:{int(new_reset_time.timestamp())}:R>"
+            else:
+                reset_text = "Không có"
+        else:
+            reset_text = "Không có"
 
-        body = (
-            f"• CẤP ĐỘ MỚI: LEVEL {new_level}\n"
-            f"• ĐỐI TƯỢNG: {member.mention}\n"
-            f"• RESET HIỆN TẠI: {reset_text}"
-        )
+    self.save_json(DATA_FILE, data)
 
-        embed = self.build_embed(
-            "REMOVE | GIẢM CẤP CẢNH CÁO",
-            body,
-            self.get_level_color(new_level),
-            member
-        )
+    body = (
+        f"• CẤP ĐỘ MỚI: LEVEL {new_level}\n"
+        f"• ĐỐI TƯỢNG: {member.mention}\n"
+        f"• RESET MỚI: {reset_text}"
+    )
 
-        await self.send_log_or_here(interaction, embed)
+    embed = self.build_embed(
+        "REMOVE | GIẢM CẤP CẢNH CÁO",
+        body,
+        self.get_level_color(new_level),
+        member
+    )
+
+    await self.send_log_or_here(interaction, embed)
 
     # ================= WARN CLEAR =================
 
     @app_commands.command(name="clear", description="Xóa toàn bộ cảnh cáo")
-    @app_commands.checks.has_permissions(manage_messages=True)
-    async def clear(self, interaction: discord.Interaction, member: discord.Member):
-        await interaction.response.defer()
+@app_commands.checks.has_permissions(manage_messages=True)
+async def clear(self, interaction: discord.Interaction, member: discord.Member):
+    await interaction.response.defer()
 
-        data = self.load_json(DATA_FILE)
-        guild_id = str(interaction.guild.id)
-        user_id = str(member.id)
+    data = self.load_json(DATA_FILE)
+    guild_id = str(interaction.guild.id)
+    user_id = str(member.id)
 
-        if guild_id not in data or user_id not in data[guild_id]:
-            await interaction.followup.send("Chưa có cảnh cáo.", ephemeral=True)
-            return
+    if guild_id not in data or user_id not in data[guild_id]:
+        await interaction.followup.send("Chưa có cảnh cáo.", ephemeral=True)
+        return
 
-        data[guild_id][user_id] = {
-            "level": 0,
-            "last_warn": None,
-            "reset_at": None,
-            "history": []
-        }
+    # Reset data
+    data[guild_id][user_id] = {
+        "level": 0,
+        "last_warn": None,
+        "reset_at": None,
+        "history": []
+    }
 
-        self.save_json(DATA_FILE, data)
+    self.save_json(DATA_FILE, data)
 
-        body = (
-            f"• CẤP ĐỘ HIỆN TẠI: LEVEL 0\n"
-            f"• ĐỐI TƯỢNG: {member.mention}"
-        )
+    # 🔥 Gỡ timeout nếu đang bị mute
+    try:
+        if member.timed_out_until:
+            await member.timeout(None)
+    except:
+        await interaction.followup.send("Bot thiếu quyền để gỡ mute.", ephemeral=True)
+        return
 
-        embed = self.build_embed(
-            "CLEAR | XÓA TOÀN BỘ CẢNH CÁO",
-            body,
-            discord.Color.green(),
-            member
-        )
+    body = (
+        f"• CẤP ĐỘ HIỆN TẠI: LEVEL 0\n"
+        f"• ĐỐI TƯỢNG: {member.mention}\n"
+        f"• ĐÃ GỠ MUTE (nếu có)"
+    )
 
-        await self.send_log_or_here(interaction, embed)
+    embed = self.build_embed(
+        "CLEAR | XÓA TOÀN BỘ CẢNH CÁO",
+        body,
+        discord.Color.green(),
+        member
+    )
+
+    await self.send_log_or_here(interaction, embed)
 
     # ================= WARN INFO =================
 
