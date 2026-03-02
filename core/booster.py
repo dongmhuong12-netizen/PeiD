@@ -170,12 +170,12 @@ class BoosterGroup(app_commands.Group):
 
         if not success:
             await interaction.followup.send(
-                "Không thể test vì thiếu cấu hình. Hãy đảm bảo rằng booster chạy được khi có đủ kênh thông báo, role boost và text + embed.",
+                "Lỗi. Không thể test vì thiếu cấu hình. Hãy đảm bảo rằng Test sau khi có đủ kênh thông báo, role boost và text + embed.",
                 ephemeral=True
             )
         else:
             await interaction.followup.send(
-                "Test thành công, hãy check kênh được chỉ định embed.",
+                "Test thành công, hãy check tại kênh được chỉ định embed.",
                 ephemeral=True
             )
 
