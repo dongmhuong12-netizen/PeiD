@@ -64,37 +64,40 @@ class ReactionRole(commands.Cog):
                 role_data = group["roles"][index]
                 role_ids = role_data if isinstance(role_data, list) else [role_data]
 
-                roles = []
+                roles_to_add = []
                 for rid in role_ids:
                     role = guild.get_role(int(rid))
                     if role:
-                        roles.append(role)
+                        roles_to_add.append(role)
 
-                if not roles:
+                if not roles_to_add:
                     return
 
-                # REFRESH MEMBER STATE TRƯỚC KHI XỬ LÝ SINGLE
-                try:
-                    member = await guild.fetch_member(member.id)
-                except:
-                    pass
-
-                # ===== SINGLE MODE =====
+                # =============================
+                # SINGLE MODE (FIX DỨT ĐIỂM)
+                # =============================
                 if str(group.get("mode", "")).lower() == "single":
 
+                    # Lấy toàn bộ role trong group
+                    group_roles = []
                     for r_data in group["roles"]:
                         ids = r_data if isinstance(r_data, list) else [r_data]
-
                         for rid in ids:
-                            r = guild.get_role(int(rid))
-                            if r and r in member.roles and r not in roles:
-                                await member.remove_roles(r)
+                            role = guild.get_role(int(rid))
+                            if role:
+                                group_roles.append(role)
 
-                # ===== MULTI MODE =====
+                    # Remove toàn bộ role trong group trừ role sắp add
+                    roles_to_remove = [
+                        r for r in group_roles
+                        if r not in roles_to_add and r in member.roles
+                    ]
 
-                for role in roles:
-                    if role not in member.roles:
-                        await member.add_roles(role)
+                    if roles_to_remove:
+                        await member.remove_roles(*roles_to_remove)
+
+                # Add role mới
+                await member.add_roles(*roles_to_add)
 
                 return
 
@@ -139,10 +142,14 @@ class ReactionRole(commands.Cog):
                 role_data = group["roles"][index]
                 role_ids = role_data if isinstance(role_data, list) else [role_data]
 
+                roles_to_remove = []
                 for rid in role_ids:
                     role = guild.get_role(int(rid))
-                    if role and role in member.roles:
-                        await member.remove_roles(role)
+                    if role:
+                        roles_to_remove.append(role)
+
+                if roles_to_remove:
+                    await member.remove_roles(*roles_to_remove)
 
                 return
 
