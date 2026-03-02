@@ -275,10 +275,15 @@ class WarnGroup(app_commands.Group):
                     next_punishment_text = next_punishment_raw.capitalize()
 
                 next_reset_minutes = self.parse_duration(next_config["reset"])
-                next_reset_text = (
-                    self.format_time_text(next_reset_minutes)
-                    if next_reset_minutes else "Không có"
-                )
+
+                if next_reset_minutes:
+                    if next_reset_minutes < 60:
+                        next_reset_text = f"{next_reset_minutes} phút"
+                    else:
+                        hours = next_reset_minutes // 60
+                        next_reset_text = f"{hours} giờ"
+                else:
+                    next_reset_text = "Không có"
 
                 body = (
                     f"• CẤP ĐỘ: LEVEL {new_level}\n"
