@@ -258,8 +258,8 @@ class WarnGroup(app_commands.Group):
 
         reset_time = datetime.fromisoformat(user_data["reset_at"])
         reset_text = f"<t:{int(reset_time.timestamp())}:R>"
-        
-                next_level = min(new_level + 1, max_level)
+
+        next_level = min(new_level + 1, max_level)
         next_config = levels.get(str(next_level))
 
         if next_config:
@@ -298,8 +298,7 @@ class WarnGroup(app_commands.Group):
             )
 
             await self.send_log_or_here(interaction, embed)
-
-    # ================= WARN REMOVE =================
+                # ================= WARN REMOVE =================
 
     @app_commands.command(name="remove", description="Giảm 1 cấp cảnh cáo")
     @app_commands.checks.has_permissions(manage_messages=True)
@@ -360,7 +359,8 @@ class WarnGroup(app_commands.Group):
         )
 
         await self.send_log_or_here(interaction, embed)
-            # ================= WARN CLEAR =================
+
+    # ================= WARN CLEAR =================
 
     @app_commands.command(name="clear", description="Xóa toàn bộ cảnh cáo")
     @app_commands.checks.has_permissions(manage_messages=True)
@@ -375,7 +375,6 @@ class WarnGroup(app_commands.Group):
             await interaction.followup.send("Chưa có cảnh cáo.", ephemeral=True)
             return
 
-        # Reset data
         data[guild_id][user_id] = {
             "level": 0,
             "last_warn": None,
@@ -385,7 +384,6 @@ class WarnGroup(app_commands.Group):
 
         self.save_json(DATA_FILE, data)
 
-        # 🔥 Gỡ timeout nếu đang bị mute
         try:
             if member.timed_out_until:
                 await member.timeout(None)
