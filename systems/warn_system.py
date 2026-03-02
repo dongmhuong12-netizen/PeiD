@@ -57,6 +57,33 @@ class WarnGroup(app_commands.Group):
 
         return None
 
+    # ================= FORMAT TIME TEXT (THÊM) =================
+
+    def format_time_text(self, duration: str):
+        minutes = self.parse_duration(duration)
+        if not minutes:
+            return duration
+
+        if minutes < 60:
+            return f"Mute {minutes} phút"
+        else:
+            hours = minutes // 60
+            return f"Mute {hours} giờ"
+
+    # ================= MÀU THEO LEVEL (THÊM) =================
+
+    def get_level_color(self, level: int):
+        if level <= 1:
+            return discord.Color.green()
+        elif level == 2:
+            return discord.Color.yellow()
+        elif level == 3:
+            return discord.Color.orange()
+        elif level == 4:
+            return discord.Color.red()
+        else:
+            return discord.Color.dark_red()
+
     # ================= STYLE EMBED =================
 
     def build_embed(self, title, body, color, member=None):
@@ -191,11 +218,11 @@ class WarnGroup(app_commands.Group):
         level_config = levels[str(new_level)]
         punishment_raw = level_config["punishment"]
 
-        # Format hiển thị hình phạt
         if punishment_raw in ["kick", "ban"]:
             punishment_text = punishment_raw.capitalize()
         elif punishment_raw.startswith("timeout:"):
-            punishment_text = punishment_raw.split(":")[1]
+            duration_str = punishment_raw.split(":")[1]
+            punishment_text = self.format_time_text(duration_str)
         else:
             punishment_text = punishment_raw
 
@@ -241,10 +268,16 @@ class WarnGroup(app_commands.Group):
             f"• NẾU TÁI PHẠM KHI CHƯA HẾT RESET: LEVEL {min(new_level+1,max_level)}"
         )
 
-        embed = self.build_embed("WARNING | CẢNH CÁO", body, discord.Color.red(), member)
-        await self.send_log_or_here(interaction, embed)
+        embed = self.build_embed(
+            "WARNING | CẢNH CÁO",
+            body,
+            self.get_level_color(new_level),
+            member
+        )
 
-    # ================= WARN REMOVE =================
+        await self.send_log_or_here(interaction, embed)
+        
+            # ================= WARN REMOVE =================
 
     @app_commands.command(name="remove", description="Giảm 1 cấp cảnh cáo")
     @app_commands.checks.has_permissions(manage_messages=True)
@@ -270,14 +303,26 @@ class WarnGroup(app_commands.Group):
         user_data["level"] -= 1
         new_level = user_data["level"]
 
+        reset_text = "Không có"
+        if user_data.get("reset_at"):
+            reset_time = datetime.fromisoformat(user_data["reset_at"])
+            reset_text = f"<t:{int(reset_time.timestamp())}:R>"
+
         self.save_json(DATA_FILE, data)
 
         body = (
             f"• CẤP ĐỘ MỚI: LEVEL {new_level}\n"
-            f"• ĐỐI TƯỢNG: {member.mention}"
+            f"• ĐỐI TƯỢNG: {member.mention}\n"
+            f"• RESET HIỆN TẠI: {reset_text}"
         )
 
-        embed = self.build_embed("REMOVE | GIẢM CẤP CẢNH CÁO", body, discord.Color.orange(), member)
+        embed = self.build_embed(
+            "REMOVE | GIẢM CẤP CẢNH CÁO",
+            body,
+            self.get_level_color(new_level),
+            member
+        )
+
         await self.send_log_or_here(interaction, embed)
 
     # ================= WARN CLEAR =================
@@ -309,7 +354,13 @@ class WarnGroup(app_commands.Group):
             f"• ĐỐI TƯỢNG: {member.mention}"
         )
 
-        embed = self.build_embed("CLEAR | XÓA TOÀN BỘ CẢNH CÁO", body, discord.Color.green(), member)
+        embed = self.build_embed(
+            "CLEAR | XÓA TOÀN BỘ CẢNH CÁO",
+            body,
+            discord.Color.green(),
+            member
+        )
+
         await self.send_log_or_here(interaction, embed)
 
     # ================= WARN INFO =================
@@ -351,7 +402,13 @@ class WarnGroup(app_commands.Group):
             f"• RESET: {reset_text}"
         )
 
-        embed = self.build_embed("WARNING | THÔNG TIN CẢNH CÁO", body, discord.Color.blue(), member)
+        embed = self.build_embed(
+            "WARNING | THÔNG TIN CẢNH CÁO",
+            body,
+            self.get_level_color(level),
+            member
+        )
+
         await interaction.followup.send(embed=embed, ephemeral=True)
 
 
