@@ -29,7 +29,7 @@ class BoosterGroup(app_commands.Group):
     async def channel(self, interaction: discord.Interaction, channel_id: str):
 
         if not channel_id.isdigit():
-            await interaction.response.send_message("Channel ID không hợp lệ.", ephemeral=True)
+            await interaction.response.send_message("ID kênh không hợp lệ.", ephemeral=True)
             return
 
         channel = interaction.guild.get_channel(int(channel_id))
@@ -40,7 +40,7 @@ class BoosterGroup(app_commands.Group):
         update_guild_config(interaction.guild.id, "booster", "channel", channel.id)
 
         await interaction.response.send_message(
-            f"Đã đặt kênh booster: {channel.mention}",
+            f"Đặt kênh Boost thành công: {channel.mention}",
             ephemeral=True
         )
 
@@ -57,7 +57,7 @@ class BoosterGroup(app_commands.Group):
         update_guild_config(interaction.guild.id, "booster", "message", text)
 
         await interaction.response.send_message(
-            f"Đã cập nhật nội dung booster: {text}",
+            f"Đặt nội dung Boost thành công: {text}",
             ephemeral=True
         )
 
@@ -81,7 +81,7 @@ class BoosterGroup(app_commands.Group):
         update_guild_config(interaction.guild.id, "booster", "embed", name)
 
         await interaction.response.send_message(
-            f"Đã đặt embed booster: `{name}`",
+            f"Đặt embed Boost thành công: `{name}`",
             ephemeral=True
         )
 
@@ -104,7 +104,7 @@ class BoosterGroup(app_commands.Group):
 
         if not role_id.isdigit():
             await interaction.response.send_message(
-                "Role ID không hợp lệ.",
+                "ID Role không hợp lệ.",
                 ephemeral=True
             )
             return
@@ -113,7 +113,7 @@ class BoosterGroup(app_commands.Group):
 
         if not role:
             await interaction.response.send_message(
-                "Không tìm thấy role.",
+                "Role không tồn tại.",
                 ephemeral=True
             )
             return
@@ -121,7 +121,7 @@ class BoosterGroup(app_commands.Group):
         update_guild_config(guild.id, "booster", "role", role.id)
 
         await interaction.response.send_message(
-            f"Đã đặt booster role: {role.mention}",
+            f"Đặt role Boost thành công: {role.mention}",
             ephemeral=True
         )
 
@@ -175,7 +175,7 @@ class BoosterGroup(app_commands.Group):
             )
         else:
             await interaction.followup.send(
-                "Test thành công, hãy check tại kênh được chỉ định embed.",
+                "Test Boost thành công, hãy kiểm tra tại kênh được chỉ định embed.",
                 ephemeral=True
             )
 
