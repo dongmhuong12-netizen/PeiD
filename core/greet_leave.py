@@ -72,7 +72,7 @@ class GreetGroup(app_commands.Group):
         update_guild_config(interaction.guild.id, "greet", "channel", channel.id)
 
         await interaction.response.send_message(
-            f"Đã đặt kênh chào mừng: {channel.mention}",
+            f"Đặt kênh Greet thành công: {channel.mention}",
             ephemeral=True
         )
 
@@ -83,7 +83,7 @@ class GreetGroup(app_commands.Group):
         update_guild_config(interaction.guild.id, "greet", "message", message)
 
         await interaction.response.send_message(
-            "Đã cập nhật nội dung chào mừng.",
+            "Đặt nội dung Greet thành công: '{text}'.",
             ephemeral=True
         )
 
@@ -101,7 +101,7 @@ class GreetGroup(app_commands.Group):
         update_guild_config(interaction.guild.id, "greet", "embed", name)
 
         await interaction.response.send_message(
-            f"Đã đặt embed chào mừng: `{name}`",
+            f"Đặt embed Greet thành công: `{name}`",
             ephemeral=True
         )
 
@@ -117,7 +117,7 @@ class GreetGroup(app_commands.Group):
         )
 
         await interaction.followup.send(
-            "Test thành công, hãy kiểm tra ở kênh gán embed." if success else "Chưa cấu hình.",
+            "Test Greet thành công, hãy kiểm tra tại kênh được chỉ định embed." if success else "Lỗi. Không thể test vì thiếu cấu hình. Hãy đảm bảo rằng Test sau khi có đủ kênh thông báo, text + embed.",
             ephemeral=True
         )
 
@@ -140,7 +140,7 @@ class LeaveGroup(app_commands.Group):
         update_guild_config(interaction.guild.id, "leave", "channel", channel.id)
 
         await interaction.response.send_message(
-            f"Đã đặt kênh rời đi: {channel.mention}",
+            f"Đặt kênh Leave thành công: {channel.mention}",
             ephemeral=True
         )
 
@@ -151,7 +151,7 @@ class LeaveGroup(app_commands.Group):
         update_guild_config(interaction.guild.id, "leave", "message", message)
 
         await interaction.response.send_message(
-            "Đã cập nhật nội dung rời đi.",
+            "Đặt nội dung Leave thành công: '{text}'.",
             ephemeral=True
         )
 
@@ -169,7 +169,7 @@ class LeaveGroup(app_commands.Group):
         update_guild_config(interaction.guild.id, "leave", "embed", name)
 
         await interaction.response.send_message(
-            f"Đã đặt embed rời đi: `{name}`",
+            f"Đặt embed Leave thành công: `{name}`",
             ephemeral=True
         )
 
@@ -185,7 +185,7 @@ class LeaveGroup(app_commands.Group):
         )
 
         await interaction.followup.send(
-            "Đã gửi thử." if success else "Chưa cấu hình.",
+            "Text Leave thành công, hãy kiểm tra tại kênh được chỉ định embed." if success else "Lỗi. Không thể Test vì thiếu cấu hình. Hãy đảm bảo rằng Test sau khi có đủ kênh thông báo, text + embed.",
             ephemeral=True
         )
 
