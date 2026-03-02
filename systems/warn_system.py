@@ -447,7 +447,12 @@ class WarnGroup(app_commands.Group):
         history_text = ""
         for h in history[-5:]:
             t = datetime.fromisoformat(h["time"])
-            history_text += f"Level {h['level']} | <t:{int(t.timestamp())}:R>\n"
+            reason = h.get("reason", "Không có")
+
+            history_text += (
+                f"Level {h['level']} | <t:{int(t.timestamp())}:R>\n"
+                f"Lý do: {reason}\n\n"
+            )
 
         body = (
             f"• CẤP ĐỘ HIỆN TẠI: LEVEL {level}\n"
