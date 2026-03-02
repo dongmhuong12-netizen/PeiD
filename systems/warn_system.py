@@ -471,6 +471,90 @@ class WarnGroup(app_commands.Group):
 
         await interaction.followup.send(embed=embed, ephemeral=True)
 
+# ================= WARN KICK =================
+
+    @app_commands.command(name="kick", description="Kick thành viên")
+    @app_commands.checks.has_permissions(kick_members=True)
+    async def kick(self, interaction: discord.Interaction, member: discord.Member, reason: str = "Không có lý do"):
+        await interaction.response.defer()
+
+        try:
+            await member.kick(reason=f"Warn system | {reason}")
+        except:
+            await interaction.followup.send("Bot thiếu quyền để kick.", ephemeral=True)
+            return
+
+        body = (
+            f"• ĐỐI TƯỢNG: {member.mention}\n"
+            f"• HÌNH PHẠT: Kick\n"
+            f"• LÝ DO: {reason}"
+        )
+
+        embed = self.build_embed(
+            "KICK | KỶ LUẬT THÀNH VIÊN",
+            body,
+            discord.Color.orange(),
+            member
+        )
+
+        await interaction.followup.send(embed=embed)
+
+# ================= WARN BAN =================
+
+    @app_commands.command(name="ban", description="Ban vĩnh viễn thành viên")
+    @app_commands.checks.has_permissions(ban_members=True)
+    async def ban(self, interaction: discord.Interaction, member: discord.Member, reason: str = "Không có lý do"):
+        await interaction.response.defer()
+
+        try:
+            await member.ban(reason=f"Warn system | {reason}")
+        except:
+            await interaction.followup.send("Bot thiếu quyền để ban.", ephemeral=True)
+            return
+
+        body = (
+            f"• ĐỐI TƯỢNG: {member.mention}\n"
+            f"• HÌNH PHẠT: Ban vĩnh viễn\n"
+            f"• LÝ DO: {reason}"
+        )
+
+        embed = self.build_embed(
+            "BAN | KỶ LUẬT THÀNH VIÊN",
+            body,
+            discord.Color.red(),
+            member
+        )
+
+        await interaction.followup.send(embed=embed)
+
+# ================= WARN UNBAN =================
+
+    @app_commands.command(name="unban", description="Gỡ ban thành viên")
+    @app_commands.checks.has_permissions(ban_members=True)
+    async def unban(self, interaction: discord.Interaction, user_id: str):
+        await interaction.response.defer()
+
+        try:
+            user = await self.bot.fetch_user(int(user_id))
+            await interaction.guild.unban(user)
+        except:
+            await interaction.followup.send("Không thể unban. Kiểm tra lại ID.", ephemeral=True)
+            return
+
+        body = (
+            f"• ĐỐI TƯỢNG: <@{user_id}>\n"
+            f"• HÀNH ĐỘNG: Đã gỡ ban"
+        )
+
+        embed = self.build_embed(
+            "UNBAN | GỠ BAN THÀNH VIÊN",
+            body,
+            discord.Color.green(),
+            user
+        )
+
+        await interaction.followup.send(embed=embed)
+
 
 class WarnBackground(commands.Cog):
     def __init__(self, bot):
@@ -534,4 +618,3 @@ class WarnBackground(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(WarnBackground(bot))
-
