@@ -50,7 +50,7 @@ class EmbedGroup(app_commands.Group):
         if existing:
             await interaction.response.send_message(
                 f"Đã có embed tồn tại với tên `{name}`. "
-                f"Nếu tạo embed mà không tìm thấy, thử tìm embed đó bằng cách dùng lệnh /p embed edit.",
+                f"Nếu tạo embed mà không tìm thấy, thử tìm embed đó bằng cách dùng lệnh **/p embed edit**.",
                 ephemeral=True
             )
             return
@@ -90,7 +90,7 @@ class EmbedGroup(app_commands.Group):
                 "hoặc các banner hệ thống khi dùng lệnh `/p embed show`.\n\n"
                 "• Lưu ý: hãy Save sau khi chỉnh sửa. Nếu không embed sẽ không được lưu lại, "
                 "hoặc sẽ bị coi là không tồn tại nếu chưa từng Save.\n"
-                "• Nếu có thắc mắc, dùng lệnh `/help` hoặc tham gia server hỗ trợ."
+                "• Nếu có thắc mắc, dùng lệnh **/help** hoặc tham gia server hỗ trợ."
             ),
             embed=embed,
             view=view
@@ -174,7 +174,7 @@ class EmbedGroup(app_commands.Group):
 
         if not data:
             await interaction.response.send_message(
-                f"Embed tên `{name}` không tồn tại, không thể gửi.",
+                f"Embed tên `{name}` không tồn tại, không thể show.",
                 ephemeral=True
             )
             return
@@ -188,7 +188,7 @@ class EmbedGroup(app_commands.Group):
         )
 
         await interaction.response.send_message(
-            f"Embed `{name}` đã được gửi.",
+            f"Embed `{name}` show thành công.",
             ephemeral=True
         )
 
