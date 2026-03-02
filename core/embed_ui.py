@@ -73,7 +73,7 @@ class EditColorModal(discord.ui.Modal, title="Edit Color (HEX)"):
             self.view.data["color"] = int(self.input.value.replace("#", ""), 16)
             await self.view.update_message(interaction)
         except ValueError:
-            await interaction.response.send_message("Hex không hợp lệ.", ephemeral=True)
+            await interaction.response.send_message("Mã màu không hợp lệ.", ephemeral=True)
 
 
 class EditImageModal(discord.ui.Modal, title="Set Image URL"):
@@ -97,9 +97,9 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
         super().__init__()
         self.view = view
 
-        self.emojis = discord.ui.TextInput(label="Emojis (😀, 😎)", required=True)
-        self.roles = discord.ui.TextInput(label="Role IDs (123,456)", required=True)
-        self.mode = discord.ui.TextInput(label="Mode (single/multi)", default="single")
+        self.emojis = discord.ui.TextInput(label="Emojis", required=True)
+        self.roles = discord.ui.TextInput(label="Role IDs", required=True)
+        self.mode = discord.ui.TextInput(label="Mode (single= chọn 1 role/multi = chọn nhiều role)", default="single")
 
         self.add_item(self.emojis)
         self.add_item(self.roles)
@@ -139,7 +139,7 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
         data[key]["groups"].append(new_group)
         save_reaction_data(data)
 
-        await interaction.response.send_message("Reaction role đã lưu.", ephemeral=True)
+        await interaction.response.send_message("Reaction role lưu thành công.", ephemeral=True)
 
 
 # =========================
@@ -214,7 +214,7 @@ class EmbedUIView(discord.ui.View):
     @discord.ui.button(label="Save Embed", style=discord.ButtonStyle.secondary)
     async def save_btn(self, interaction: discord.Interaction, button):
         save_embed(interaction.guild.id, self.name, self.data)
-        await interaction.response.send_message("Embed đã lưu.", ephemeral=True)
+        await interaction.response.send_message("Embed lưu thành công.", ephemeral=True)
 
     # ===== DELETE (SYNC WITH SLASH COMMAND) =====
 
