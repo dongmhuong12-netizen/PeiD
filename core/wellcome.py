@@ -72,7 +72,7 @@ class WellcomeGroup(app_commands.Group):
         update_guild_config(interaction.guild.id, "wellcome", "channel", channel.id)
 
         await interaction.response.send_message(
-            f"Đã đặt kênh wellcome: {channel.mention}",
+            f"Đặt kênh Wellcome thành công: {channel.mention}",
             ephemeral=True
         )
 
@@ -83,7 +83,7 @@ class WellcomeGroup(app_commands.Group):
         update_guild_config(interaction.guild.id, "wellcome", "message", message)
 
         await interaction.response.send_message(
-            "Đã cập nhật nội dung wellcome.",
+            f"Đặt nội dung Wellcome thành công: '{text}'.",
             ephemeral=True
         )
 
@@ -101,7 +101,7 @@ class WellcomeGroup(app_commands.Group):
         update_guild_config(interaction.guild.id, "wellcome", "embed", name)
 
         await interaction.response.send_message(
-            f"Đã đặt embed wellcome: `{name}`",
+            f"Đặt embed Wellcome thành công: `{name}`",
             ephemeral=True
         )
 
@@ -116,7 +116,7 @@ class WellcomeGroup(app_commands.Group):
         )
 
         await interaction.followup.send(
-            "Đã gửi thử." if success else "Chưa cấu hình.",
+            "Test Wellcome thành công, hãy kiểm tra tại kênh được chỉ định embed." if success else "Lỗi. Không thể Test, hãy đảm bảo .",
             ephemeral=True
         )
 
