@@ -74,22 +74,27 @@ class ReactionRole(commands.Cog):
                     return
 
                 # =============================
-                # SINGLE MODE (FIX DỨT ĐIỂM)
+                # SINGLE MODE – REMOVE TOÀN BỘ ROLE REACTION CỦA GUILD
                 # =============================
                 if str(group.get("mode", "")).lower() == "single":
 
-                    # Lấy toàn bộ role trong group
-                    group_roles = []
-                    for r_data in group["roles"]:
-                        ids = r_data if isinstance(r_data, list) else [r_data]
-                        for rid in ids:
-                            role = guild.get_role(int(rid))
-                            if role:
-                                group_roles.append(role)
+                    all_reaction_roles = []
 
-                    # Remove toàn bộ role trong group trừ role sắp add
+                    # Lấy tất cả role reaction trong guild (mọi config)
+                    for cfg in data.values():
+                        if int(cfg.get("guild_id")) != guild_id:
+                            continue
+
+                        for g in cfg.get("groups", []):
+                            for r_data in g["roles"]:
+                                ids = r_data if isinstance(r_data, list) else [r_data]
+                                for rid in ids:
+                                    role = guild.get_role(int(rid))
+                                    if role:
+                                        all_reaction_roles.append(role)
+
                     roles_to_remove = [
-                        r for r in group_roles
+                        r for r in all_reaction_roles
                         if r not in roles_to_add and r in member.roles
                     ]
 
