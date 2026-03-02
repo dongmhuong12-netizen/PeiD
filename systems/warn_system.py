@@ -299,20 +299,11 @@ class WarnBackground(commands.Cog):
 # ==============================
 
 async def setup(bot):
-    # 🔒 Chống extension bị load 2 lần
-    if getattr(bot, "_warn_loaded", False):
-        return
+    # Xoá mọi instance warn đang tồn tại
+    existing = bot.tree.get_commands()
+    for cmd in existing:
+        if cmd.name == "warn":
+            bot.tree.remove_command("warn", type=discord.AppCommandType.chat_input)
 
-    bot._warn_loaded = True
-
-    # Xoá group warn cũ nếu đã tồn tại (tránh x2 khi reload)
-    try:
-        bot.tree.remove_command("warn", type=discord.AppCommandType.chat_input)
-    except:
-        pass
-
-    # Add lại group warn
     bot.tree.add_command(WarnGroup())
-
-    # Add background task (auto reset của bạn vẫn giữ nguyên)
     await bot.add_cog(WarnBackground(bot))
