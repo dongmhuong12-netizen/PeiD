@@ -10,10 +10,6 @@ DATA_FILE = "warn_data.json"
 CONFIG_FILE = "warn_config.json"
 
 
-# ==============================
-# WARN COMMAND GROUP
-# ==============================
-
 class WarnGroup(app_commands.Group):
     def __init__(self):
         super().__init__(name="warn", description="Hệ thống cảnh cáo")
@@ -60,6 +56,27 @@ class WarnGroup(app_commands.Group):
             return amount * 1440
 
         return None
+
+    # ================= STYLE EMBED =================
+
+    def build_embed(self, title, body, color, member=None):
+        embed = discord.Embed(
+            description=(
+                "────────────────────\n"
+                f"{title}\n"
+                "────────────────────\n\n"
+                f"{body}\n\n"
+                "────────────────────\n"
+                "HỆ THỐNG QUẢN LÝ KỶ LUẬT"
+            ),
+            color=color
+        )
+
+        if member:
+            embed.set_thumbnail(url=member.display_avatar.url)
+
+        embed.timestamp = discord.utils.utcnow()
+        return embed
 
     # ================= LOG =================
 
@@ -172,15 +189,23 @@ class WarnGroup(app_commands.Group):
 
         new_level = min(user_data["level"] + 1, max_level)
         level_config = levels[str(new_level)]
-        punishment = level_config["punishment"]
+        punishment_raw = level_config["punishment"]
+
+        # Format hiển thị hình phạt
+        if punishment_raw in ["kick", "ban"]:
+            punishment_text = punishment_raw.capitalize()
+        elif punishment_raw.startswith("timeout:"):
+            punishment_text = punishment_raw.split(":")[1]
+        else:
+            punishment_text = punishment_raw
 
         try:
-            if punishment == "kick":
+            if punishment_raw == "kick":
                 await member.kick(reason="Warn system")
-            elif punishment == "ban":
+            elif punishment_raw == "ban":
                 await member.ban(reason="Warn system")
-            elif punishment.startswith("timeout:"):
-                duration_str = punishment.split(":")[1]
+            elif punishment_raw.startswith("timeout:"):
+                duration_str = punishment_raw.split(":")[1]
                 timeout_minutes = self.parse_duration(duration_str)
                 if timeout_minutes:
                     await member.timeout(now + timedelta(minutes=timeout_minutes))
@@ -203,12 +228,20 @@ class WarnGroup(app_commands.Group):
 
         self.save_json(DATA_FILE, data)
 
-        embed = discord.Embed(
-            title="WARN",
-            description=f"{member.mention} → Level {new_level}\nLý do: {reason}",
-            color=discord.Color.red()
+        reset_time = datetime.fromisoformat(user_data["reset_at"])
+        reset_text = f"<t:{int(reset_time.timestamp())}:R>"
+
+        body = (
+            f"• CẤP ĐỘ: LEVEL {new_level}\n"
+            f"• ĐỐI TƯỢNG: {member.mention}\n"
+            f"• HÌNH PHẠT: {punishment_text}\n\n"
+            "LÝ DO\n"
+            f"{reason}\n\n"
+            f"• RESET: {reset_text}\n"
+            f"• NẾU TÁI PHẠM KHI CHƯA HẾT RESET: LEVEL {min(new_level+1,max_level)}"
         )
 
+        embed = self.build_embed("WARNING | CẢNH CÁO", body, discord.Color.red(), member)
         await self.send_log_or_here(interaction, embed)
 
     # ================= WARN REMOVE =================
@@ -237,25 +270,14 @@ class WarnGroup(app_commands.Group):
         user_data["level"] -= 1
         new_level = user_data["level"]
 
-        if new_level == 0:
-            user_data["reset_at"] = None
-        else:
-            levels = config.get(guild_id, {}).get("levels", {})
-            level_config = levels.get(str(new_level))
-            if level_config:
-                reset_minutes = self.parse_duration(level_config["reset"])
-                user_data["reset_at"] = (
-                    discord.utils.utcnow() + timedelta(minutes=reset_minutes)
-                ).isoformat()
-
         self.save_json(DATA_FILE, data)
 
-        embed = discord.Embed(
-            title="REMOVE WARN",
-            description=f"{member.mention} → Level {new_level}",
-            color=discord.Color.orange()
+        body = (
+            f"• CẤP ĐỘ MỚI: LEVEL {new_level}\n"
+            f"• ĐỐI TƯỢNG: {member.mention}"
         )
 
+        embed = self.build_embed("REMOVE | GIẢM CẤP CẢNH CÁO", body, discord.Color.orange(), member)
         await self.send_log_or_here(interaction, embed)
 
     # ================= WARN CLEAR =================
@@ -282,12 +304,12 @@ class WarnGroup(app_commands.Group):
 
         self.save_json(DATA_FILE, data)
 
-        embed = discord.Embed(
-            title="CLEAR WARN",
-            description=f"{member.mention} đã được reset về Level 0.",
-            color=discord.Color.green()
+        body = (
+            f"• CẤP ĐỘ HIỆN TẠI: LEVEL 0\n"
+            f"• ĐỐI TƯỢNG: {member.mention}"
         )
 
+        embed = self.build_embed("CLEAR | XÓA TOÀN BỘ CẢNH CÁO", body, discord.Color.green(), member)
         await self.send_log_or_here(interaction, embed)
 
     # ================= WARN INFO =================
@@ -321,23 +343,17 @@ class WarnGroup(app_commands.Group):
             t = datetime.fromisoformat(h["time"])
             history_text += f"Level {h['level']} | <t:{int(t.timestamp())}:R>\n"
 
-        embed = discord.Embed(
-            title="WARN INFO",
-            description=(
-                f"{member.mention}\n"
-                f"Level: {level}\n"
-                f"Reset: {reset_text}\n\n"
-                f"Lịch sử gần nhất:\n{history_text or 'Không có'}"
-            ),
-            color=discord.Color.blue()
+        body = (
+            f"• CẤP ĐỘ HIỆN TẠI: LEVEL {level}\n"
+            f"• ĐỐI TƯỢNG: {member.mention}\n\n"
+            "LỊCH SỬ GẦN NHẤT\n"
+            f"{history_text or 'Không có'}\n\n"
+            f"• RESET: {reset_text}"
         )
 
+        embed = self.build_embed("WARNING | THÔNG TIN CẢNH CÁO", body, discord.Color.blue(), member)
         await interaction.followup.send(embed=embed, ephemeral=True)
 
-
-# ==============================
-# AUTO RESET BACKGROUND
-# ==============================
 
 class WarnBackground(commands.Cog):
     def __init__(self, bot):
@@ -378,21 +394,26 @@ class WarnBackground(commands.Cog):
                         changed = True
 
                         if channel and member:
+                            body = f"{member.mention} đã hết thời gian cảnh cáo."
                             embed = discord.Embed(
-                                title="AUTO RESET",
-                                description=f"{member.mention} đã hết thời gian cảnh cáo.",
+                                description=(
+                                    "────────────────────\n"
+                                    "AUTO RESET\n"
+                                    "────────────────────\n\n"
+                                    f"{body}\n\n"
+                                    "────────────────────\n"
+                                    "HỆ THỐNG QUẢN LÝ KỶ LUẬT"
+                                ),
                                 color=discord.Color.green()
                             )
+                            embed.set_thumbnail(url=member.display_avatar.url)
+                            embed.timestamp = now
                             await channel.send(embed=embed)
 
         if changed:
             with open(DATA_FILE, "w") as f:
                 json.dump(data, f, indent=4)
 
-
-# ==============================
-# SETUP
-# ==============================
 
 async def setup(bot):
     await bot.add_cog(WarnBackground(bot))
