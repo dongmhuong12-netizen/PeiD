@@ -99,7 +99,10 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
 
         self.emojis = discord.ui.TextInput(label="Emojis", required=True)
         self.roles = discord.ui.TextInput(label="Role IDs", required=True)
-        self.mode = discord.ui.TextInput(label="Mode (single= chọn 1 role/multi = chọn nhiều role)", default="single")
+        self.mode = discord.ui.TextInput(
+            label="Mode (single = chọn 1 role/multi = chọn nhiều role)",
+            default="single"
+        )
 
         self.add_item(self.emojis)
         self.add_item(self.roles)
@@ -111,15 +114,21 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
         mode = self.mode.value.lower().strip()
 
         if len(emojis) != len(roles):
-            await interaction.response.send_message("Emoji và role không khớp.", ephemeral=True)
+            await interaction.response.send_message(
+                "Emoji và role không khớp.",
+                ephemeral=True
+            )
             return
 
         if mode not in ["single", "multi"]:
-            await interaction.response.send_message("Mode phải là 1 trong 2 single hoặc multi.", ephemeral=True)
+            await interaction.response.send_message(
+                "Mode phải là single hoặc multi.",
+                ephemeral=True
+            )
             return
 
         guild_id = interaction.guild.id
-        data = load_reaction_data()
+        data = load_data()  # DÙNG CHUNG FILE reaction.py
 
         key = f"{guild_id}::embed::{self.view.name}"
 
@@ -137,10 +146,14 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
             }
 
         data[key]["groups"].append(new_group)
-        save_reaction_data(data)
 
-        await interaction.response.send_message("Reaction role lưu thành công.", ephemeral=True)
+        with open(DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4, ensure_ascii=False)
 
+        await interaction.response.send_message(
+            "Reaction Role lưu thành công.",
+            ephemeral=True
+        )
 
 # =========================
 # EMBED VIEW
