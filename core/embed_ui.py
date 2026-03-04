@@ -89,7 +89,7 @@ class EditImageModal(discord.ui.Modal, title="Set Image URL"):
 
 
 # =========================
-# REACTION ROLE MODAL (UPDATED)
+# REACTION ROLE MODAL (FIXED)
 # =========================
 
 class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
@@ -98,8 +98,14 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
         super().__init__()
         self.view = view
 
-        self.emojis = discord.ui.TextInput(label="Emojis (cách nhau bằng ,)", required=True)
-        self.roles = discord.ui.TextInput(label="Role IDs (cách nhau bằng ,)", required=True)
+        self.emojis = discord.ui.TextInput(
+            label="Emojis (cách nhau bằng ,)",
+            required=True
+        )
+        self.roles = discord.ui.TextInput(
+            label="Role IDs (cách nhau bằng ,)",
+            required=True
+        )
         self.mode = discord.ui.TextInput(
             label="Mode (single/multi)",
             default="single",
@@ -110,109 +116,109 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
         self.add_item(self.roles)
         self.add_item(self.mode)
 
-async def on_submit(self, interaction: discord.Interaction):
-    try:
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
 
-        # ===== ROLE PARSER =====
-        def extract_role_id(role_input: str) -> str:
-            role_input = role_input.strip()
-            if role_input.startswith("<@&") and role_input.endswith(">"):
-                return role_input.replace("<@&", "").replace(">", "")
-            return role_input
+            # ===== ROLE PARSER =====
+            def extract_role_id(role_input: str) -> str:
+                role_input = role_input.strip()
+                if role_input.startswith("<@&") and role_input.endswith(">"):
+                    return role_input.replace("<@&", "").replace(">", "")
+                return role_input
 
-        # ===== EMOJI PARSER =====
-        def extract_emoji(emoji_input: str) -> str:
-            emoji_input = emoji_input.strip()
+            # ===== EMOJI PARSER =====
+            def extract_emoji(emoji_input: str) -> str:
+                emoji_input = emoji_input.strip()
 
-            if emoji_input.startswith("<") and emoji_input.endswith(">"):
+                if emoji_input.startswith("<") and emoji_input.endswith(">"):
+                    return emoji_input
+
+                if len(emoji_input) <= 4:
+                    return emoji_input
+
+                for emoji in interaction.guild.emojis:
+                    if emoji.name == emoji_input:
+                        return str(emoji)
+
                 return emoji_input
 
-            if len(emoji_input) <= 4:
-                return emoji_input
+            emojis = [
+                extract_emoji(e)
+                for e in self.emojis.value.split(",")
+                if e.strip()
+            ]
 
-            for emoji in interaction.guild.emojis:
-                if emoji.name == emoji_input:
-                    return str(emoji)
+            roles = [
+                extract_role_id(r)
+                for r in self.roles.value.split(",")
+                if r.strip()
+            ]
 
-            return emoji_input
+            mode = self.mode.value.lower().strip()
 
-        emojis = [
-            extract_emoji(e)
-            for e in self.emojis.value.split(",")
-            if e.strip()
-        ]
-
-        roles = [
-            extract_role_id(r)
-            for r in self.roles.value.split(",")
-            if r.strip()
-        ]
-
-        mode = self.mode.value.lower().strip()
-
-        if len(emojis) != len(roles):
-            await interaction.response.send_message(
-                "Emoji và role không khớp.",
-                ephemeral=True
-            )
-            return
-
-        if mode not in ["single", "multi"]:
-            await interaction.response.send_message(
-                "Mode phải là single hoặc multi.",
-                ephemeral=True
-            )
-            return
-
-        for role_id in roles:
-            if not role_id.isdigit() or not interaction.guild.get_role(int(role_id)):
+            if len(emojis) != len(roles):
                 await interaction.response.send_message(
-                    f"Role `{role_id}` không tồn tại.",
+                    "Emoji và role không khớp.",
                     ephemeral=True
                 )
                 return
 
-        for emoji in emojis:
-            if emoji.startswith("<") and not any(str(e) == emoji for e in interaction.guild.emojis):
+            if mode not in ["single", "multi"]:
                 await interaction.response.send_message(
-                    f"Emoji `{emoji}` không tồn tại trong server.",
+                    "Mode phải là single hoặc multi.",
                     ephemeral=True
                 )
                 return
 
-        guild_id = interaction.guild.id
-        data = load_reaction_data()
+            for role_id in roles:
+                if not role_id.isdigit() or not interaction.guild.get_role(int(role_id)):
+                    await interaction.response.send_message(
+                        f"Role `{role_id}` không tồn tại.",
+                        ephemeral=True
+                    )
+                    return
 
-        key = f"{guild_id}::embed::{self.view.name}"
+            for emoji in emojis:
+                if emoji.startswith("<") and not any(str(e) == emoji for e in interaction.guild.emojis):
+                    await interaction.response.send_message(
+                        f"Emoji `{emoji}` không tồn tại trong server.",
+                        ephemeral=True
+                    )
+                    return
 
-        new_group = {
-            "mode": mode,
-            "emojis": emojis,
-            "roles": roles
-        }
+            guild_id = interaction.guild.id
+            data = load_reaction_data()
 
-        if key not in data:
-            data[key] = {
-                "guild_id": guild_id,
-                "embed_name": self.view.name,
-                "groups": []
+            key = f"{guild_id}::embed::{self.view.name}"
+
+            new_group = {
+                "mode": mode,
+                "emojis": emojis,
+                "roles": roles
             }
 
-        data[key]["groups"].append(new_group)
-        save_reaction_data(data)
+            if key not in data:
+                data[key] = {
+                    "guild_id": guild_id,
+                    "embed_name": self.view.name,
+                    "groups": []
+                }
 
-        await interaction.response.send_message(
-            "Reaction role lưu thành công.",
-            ephemeral=True
-        )
+            data[key]["groups"].append(new_group)
+            save_reaction_data(data)
 
-    except Exception as e:
-        print("ReactionRoleModal ERROR:", e)
-        if not interaction.response.is_done():
             await interaction.response.send_message(
-                "Có lỗi xảy ra khi xử lý reaction role.",
+                "Reaction role lưu thành công.",
                 ephemeral=True
             )
+
+        except Exception as e:
+            print("ReactionRoleModal ERROR:", e)
+            if not interaction.response.is_done():
+                await interaction.response.send_message(
+                    "Có lỗi xảy ra khi xử lý reaction role.",
+                    ephemeral=True
+                )
 
 
 # =========================
