@@ -110,7 +110,7 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
         self.add_item(self.roles)
         self.add_item(self.mode)
 
-    async def on_submit(self, interaction: discord.Interaction):
+async def on_submit(self, interaction: discord.Interaction):
     try:
 
         # ===== ROLE PARSER =====
