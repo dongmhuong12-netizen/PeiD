@@ -89,7 +89,7 @@ class EditImageModal(discord.ui.Modal, title="Set Image URL"):
 
 
 # =========================
-# REACTION ROLE MODAL
+# REACTION ROLE MODAL (UPDATED)
 # =========================
 
 class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
@@ -112,8 +112,44 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
 
     async def on_submit(self, interaction: discord.Interaction):
 
-        emojis = [e.strip() for e in self.emojis.value.split(",") if e.strip()]
-        roles = [r.strip() for r in self.roles.value.split(",") if r.strip()]
+        # ===== ROLE PARSER =====
+        def extract_role_id(role_input: str) -> str:
+            role_input = role_input.strip()
+            if role_input.startswith("<@&") and role_input.endswith(">"):
+                return role_input.replace("<@&", "").replace(">", "")
+            return role_input
+
+        # ===== EMOJI PARSER =====
+        def extract_emoji(emoji_input: str) -> str:
+            emoji_input = emoji_input.strip()
+
+            # Nếu đã là dạng <:name:id> hoặc <a:name:id>
+            if emoji_input.startswith("<") and emoji_input.endswith(">"):
+                return emoji_input
+
+            # Nếu là emoji unicode (🔥)
+            if len(emoji_input) <= 4:
+                return emoji_input
+
+            # Nếu chỉ nhập tên emoji custom -> tìm trong guild
+            for emoji in interaction.guild.emojis:
+                if emoji.name == emoji_input:
+                    return str(emoji)
+
+            return emoji_input
+
+        emojis = [
+            extract_emoji(e)
+            for e in self.emojis.value.split(",")
+            if e.strip()
+        ]
+
+        roles = [
+            extract_role_id(r)
+            for r in self.roles.value.split(",")
+            if r.strip()
+        ]
+
         mode = self.mode.value.lower().strip()
 
         if len(emojis) != len(roles):
@@ -129,6 +165,24 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
                 ephemeral=True
             )
             return
+
+        # ===== VALIDATE ROLE =====
+        for role_id in roles:
+            if not role_id.isdigit() or not interaction.guild.get_role(int(role_id)):
+                await interaction.response.send_message(
+                    f"Role `{role_id}` không tồn tại.",
+                    ephemeral=True
+                )
+                return
+
+        # ===== VALIDATE CUSTOM EMOJI =====
+        for emoji in emojis:
+            if emoji.startswith("<") and not any(str(e) == emoji for e in interaction.guild.emojis):
+                await interaction.response.send_message(
+                    f"Emoji `{emoji}` không tồn tại trong server.",
+                    ephemeral=True
+                )
+                return
 
         guild_id = interaction.guild.id
         data = load_reaction_data()
@@ -155,6 +209,7 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
             "Reaction role lưu thành công.",
             ephemeral=True
         )
+
 
 # =========================
 # EMBED VIEW
@@ -201,8 +256,6 @@ class EmbedUIView(discord.ui.View):
         else:
             await interaction.response.edit_message(embed=embed, view=self)
 
-    # ===== EDIT BUTTONS =====
-
     @discord.ui.button(label="Edit Title", style=discord.ButtonStyle.secondary)
     async def edit_title(self, interaction: discord.Interaction, button):
         await interaction.response.send_modal(EditTitleModal(self))
@@ -223,14 +276,10 @@ class EmbedUIView(discord.ui.View):
     async def reaction_roles(self, interaction: discord.Interaction, button):
         await interaction.response.send_modal(ReactionRoleModal(self))
 
-    # ===== SAVE =====
-
     @discord.ui.button(label="Save Embed", style=discord.ButtonStyle.secondary)
     async def save_btn(self, interaction: discord.Interaction, button):
         save_embed(interaction.guild.id, self.name, self.data)
         await interaction.response.send_message("Embed lưu thành công.", ephemeral=True)
-
-    # ===== DELETE (SYNC WITH SLASH COMMAND) =====
 
     @discord.ui.button(label="Delete Embed", style=discord.ButtonStyle.secondary)
     async def delete_btn(self, interaction: discord.Interaction, button):
