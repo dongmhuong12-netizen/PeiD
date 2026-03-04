@@ -111,6 +111,7 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
         self.add_item(self.mode)
 
     async def on_submit(self, interaction: discord.Interaction):
+    try:
 
         # ===== ROLE PARSER =====
         def extract_role_id(role_input: str) -> str:
@@ -123,15 +124,12 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
         def extract_emoji(emoji_input: str) -> str:
             emoji_input = emoji_input.strip()
 
-            # Nếu đã là dạng <:name:id> hoặc <a:name:id>
             if emoji_input.startswith("<") and emoji_input.endswith(">"):
                 return emoji_input
 
-            # Nếu là emoji unicode (🔥)
             if len(emoji_input) <= 4:
                 return emoji_input
 
-            # Nếu chỉ nhập tên emoji custom -> tìm trong guild
             for emoji in interaction.guild.emojis:
                 if emoji.name == emoji_input:
                     return str(emoji)
@@ -166,7 +164,6 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
             )
             return
 
-        # ===== VALIDATE ROLE =====
         for role_id in roles:
             if not role_id.isdigit() or not interaction.guild.get_role(int(role_id)):
                 await interaction.response.send_message(
@@ -175,7 +172,6 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
                 )
                 return
 
-        # ===== VALIDATE CUSTOM EMOJI =====
         for emoji in emojis:
             if emoji.startswith("<") and not any(str(e) == emoji for e in interaction.guild.emojis):
                 await interaction.response.send_message(
@@ -209,6 +205,14 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
             "Reaction role lưu thành công.",
             ephemeral=True
         )
+
+    except Exception as e:
+        print("ReactionRoleModal ERROR:", e)
+        if not interaction.response.is_done():
+            await interaction.response.send_message(
+                "Có lỗi xảy ra khi xử lý reaction role.",
+                ephemeral=True
+            )
 
 
 # =========================
