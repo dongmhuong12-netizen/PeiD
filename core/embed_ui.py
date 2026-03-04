@@ -89,7 +89,7 @@ class EditImageModal(discord.ui.Modal, title="Set Image URL"):
 
 
 # =========================
-# REACTION ROLE MODAL (FIXED)
+# REACTION ROLE MODAL (FINAL FIX)
 # =========================
 
 class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
@@ -103,7 +103,7 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
             required=True
         )
         self.roles = discord.ui.TextInput(
-            label="Role IDs (cách nhau bằng ,)",
+            label="Roles (ID hoặc mention, cách nhau bằng ,)",
             required=True
         )
         self.mode = discord.ui.TextInput(
@@ -118,45 +118,55 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
 
     async def on_submit(self, interaction: discord.Interaction):
         try:
+            guild = interaction.guild
 
-            # ===== ROLE PARSER =====
-            def extract_role_id(role_input: str) -> str:
+            # =========================
+            # ROLE PARSER
+            # =========================
+            def parse_role(role_input: str):
                 role_input = role_input.strip()
-                if role_input.startswith("<@&") and role_input.endswith(">"):
-                    return role_input.replace("<@&", "").replace(">", "")
-                return role_input
 
-            # ===== EMOJI PARSER =====
-            def extract_emoji(emoji_input: str) -> str:
+                # dạng mention <@&123>
+                if role_input.startswith("<@&") and role_input.endswith(">"):
+                    role_input = role_input[3:-1]
+
+                if not role_input.isdigit():
+                    return None
+
+                role_obj = guild.get_role(int(role_input))
+                return role_obj
+
+            # =========================
+            # EMOJI PARSER
+            # =========================
+            def parse_emoji(emoji_input: str):
                 emoji_input = emoji_input.strip()
 
+                # custom emoji <a:name:id> hoặc <:name:id>
                 if emoji_input.startswith("<") and emoji_input.endswith(">"):
-                    return emoji_input
+                    try:
+                        emoji_id = int(emoji_input.split(":")[-1].replace(">", ""))
+                        return guild.get_emoji(emoji_id)
+                    except:
+                        return None
 
-                if len(emoji_input) <= 4:
-                    return emoji_input
+                # thử match theo name custom emoji
+                for e in guild.emojis:
+                    if e.name == emoji_input:
+                        return e
 
-                for emoji in interaction.guild.emojis:
-                    if emoji.name == emoji_input:
-                        return str(emoji)
-
+                # nếu không phải custom thì coi là unicode
                 return emoji_input
 
-            emojis = [
-                extract_emoji(e)
-                for e in self.emojis.value.split(",")
-                if e.strip()
-            ]
+            # =========================
+            # PARSE INPUT
+            # =========================
 
-            roles = [
-                extract_role_id(r)
-                for r in self.roles.value.split(",")
-                if r.strip()
-            ]
-
+            raw_emojis = [e.strip() for e in self.emojis.value.split(",") if e.strip()]
+            raw_roles = [r.strip() for r in self.roles.value.split(",") if r.strip()]
             mode = self.mode.value.lower().strip()
 
-            if len(emojis) != len(roles):
+            if len(raw_emojis) != len(raw_roles):
                 await interaction.response.send_message(
                     "Emoji và role không khớp.",
                     ephemeral=True
@@ -170,31 +180,49 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
                 )
                 return
 
-            for role_id in roles:
-                if not role_id.isdigit() or not interaction.guild.get_role(int(role_id)):
+            parsed_emojis = []
+            parsed_roles = []
+
+            # =========================
+            # VALIDATE ROLES
+            # =========================
+            for r in raw_roles:
+                role_obj = parse_role(r)
+                if not role_obj:
                     await interaction.response.send_message(
-                        f"Role `{role_id}` không tồn tại.",
+                        f"Role `{r}` không tồn tại hoặc không hợp lệ.",
                         ephemeral=True
                     )
                     return
 
-            for emoji in emojis:
-                if emoji.startswith("<") and not any(str(e) == emoji for e in interaction.guild.emojis):
-                    await interaction.response.send_message(
-                        f"Emoji `{emoji}` không tồn tại trong server.",
-                        ephemeral=True
-                    )
-                    return
+                parsed_roles.append(str(role_obj.id))
 
-            guild_id = interaction.guild.id
+            # =========================
+            # VALIDATE EMOJIS
+            # =========================
+            for e in raw_emojis:
+                emoji_obj = parse_emoji(e)
+
+                # custom emoji phải tồn tại trong server
+                if isinstance(emoji_obj, discord.Emoji):
+                    parsed_emojis.append(str(emoji_obj))
+                else:
+                    # unicode emoji
+                    parsed_emojis.append(str(emoji_obj))
+
+            # =========================
+            # SAVE DATA
+            # =========================
+
+            guild_id = guild.id
             data = load_reaction_data()
 
             key = f"{guild_id}::embed::{self.view.name}"
 
             new_group = {
                 "mode": mode,
-                "emojis": emojis,
-                "roles": roles
+                "emojis": parsed_emojis,
+                "roles": parsed_roles
             }
 
             if key not in data:
