@@ -92,43 +92,69 @@ class EditImageModal(discord.ui.Modal, title="Set Image URL"):
 # REACTION ROLE MODAL
 # =========================
 
-async def on_submit(self, interaction: discord.Interaction):
-    emojis = [e.strip() for e in self.emojis.value.split(",") if e.strip()]
-    roles = [r.strip() for r in self.roles.value.split(",") if r.strip()]
-    mode = self.mode.value.lower().strip()
+class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
 
-    if len(emojis) != len(roles):
-        await interaction.response.send_message("Emoji và role không khớp.", ephemeral=True)
-        return
+    def __init__(self, view):
+        super().__init__()
+        self.view = view
 
-    if mode not in ["single", "multi"]:
-        await interaction.response.send_message("Mode phải là single hoặc multi.", ephemeral=True)
-        return
+        self.emojis = discord.ui.TextInput(label="Emojis (cách nhau bằng ,)", required=True)
+        self.roles = discord.ui.TextInput(label="Role IDs (cách nhau bằng ,)", required=True)
+        self.mode = discord.ui.TextInput(
+            label="Mode (single/multi)",
+            default="single",
+            required=True
+        )
 
-    guild_id = interaction.guild.id
-    data = load_data()
+        self.add_item(self.emojis)
+        self.add_item(self.roles)
+        self.add_item(self.mode)
 
-    key = f"{guild_id}::embed::{self.view.name}"
+    async def on_submit(self, interaction: discord.Interaction):
 
-    new_group = {
-        "mode": mode,
-        "emojis": emojis,
-        "roles": roles
-    }
+        emojis = [e.strip() for e in self.emojis.value.split(",") if e.strip()]
+        roles = [r.strip() for r in self.roles.value.split(",") if r.strip()]
+        mode = self.mode.value.lower().strip()
 
-    if key not in data:
-        data[key] = {
-            "guild_id": guild_id,
-            "embed_name": self.view.name,
-            "groups": []
+        if len(emojis) != len(roles):
+            await interaction.response.send_message(
+                "Emoji và role không khớp.",
+                ephemeral=True
+            )
+            return
+
+        if mode not in ["single", "multi"]:
+            await interaction.response.send_message(
+                "Mode phải là single hoặc multi.",
+                ephemeral=True
+            )
+            return
+
+        guild_id = interaction.guild.id
+        data = load_reaction_data()
+
+        key = f"{guild_id}::embed::{self.view.name}"
+
+        new_group = {
+            "mode": mode,
+            "emojis": emojis,
+            "roles": roles
         }
 
-    data[key]["groups"].append(new_group)
+        if key not in data:
+            data[key] = {
+                "guild_id": guild_id,
+                "embed_name": self.view.name,
+                "groups": []
+            }
 
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=4, ensure_ascii=False)
+        data[key]["groups"].append(new_group)
+        save_reaction_data(data)
 
-    await interaction.response.send_message("Reaction role lưu thành công.", ephemeral=True)
+        await interaction.response.send_message(
+            "Reaction role lưu thành công.",
+            ephemeral=True
+        )
 
 # =========================
 # EMBED VIEW
