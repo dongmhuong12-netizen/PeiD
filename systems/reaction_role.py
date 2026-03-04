@@ -74,32 +74,40 @@ class ReactionRole(commands.Cog):
                     return
 
                 # =============================
-                # SINGLE MODE – REMOVE TOÀN BỘ ROLE REACTION CỦA GUILD
+                # SINGLE MODE – CHỈ REMOVE TRONG GROUP HIỆN TẠI
                 # =============================
                 if str(group.get("mode", "")).lower() == "single":
 
-                    all_reaction_roles = []
+                    group_roles = []
 
-                    # Lấy tất cả role reaction trong guild (mọi config)
-                    for cfg in data.values():
-                        if int(cfg.get("guild_id")) != guild_id:
-                            continue
-
-                        for g in cfg.get("groups", []):
-                            for r_data in g["roles"]:
-                                ids = r_data if isinstance(r_data, list) else [r_data]
-                                for rid in ids:
-                                    role = guild.get_role(int(rid))
-                                    if role:
-                                        all_reaction_roles.append(role)
+                    for r_data in group["roles"]:
+                        ids = r_data if isinstance(r_data, list) else [r_data]
+                        for rid in ids:
+                            role = guild.get_role(int(rid))
+                            if role:
+                                group_roles.append(role)
 
                     roles_to_remove = [
-                        r for r in all_reaction_roles
+                        r for r in group_roles
                         if r not in roles_to_add and r in member.roles
                     ]
 
                     if roles_to_remove:
                         await member.remove_roles(*roles_to_remove)
+
+                    # Remove emoji cũ để chỉ sáng 1 cái
+                    channel = guild.get_channel(payload.channel_id)
+                    if channel:
+                        try:
+                            message = await channel.fetch_message(payload.message_id)
+
+                            for reaction in message.reactions:
+                                if str(reaction.emoji) != emoji_str:
+                                    async for user in reaction.users():
+                                        if user.id == member.id:
+                                            await reaction.remove(member)
+                        except:
+                            pass
 
                 # Add role mới
                 await member.add_roles(*roles_to_add)
