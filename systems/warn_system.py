@@ -682,6 +682,9 @@ class WarnGroup(app_commands.Group):
 async def setup(bot):
     group = WarnGroup()
     group.bot = bot
+
     root = bot.tree.get_command("p")
     if root:
         root.add_command(group)
+
+    await bot.add_cog(group)
