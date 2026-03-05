@@ -547,7 +547,7 @@ class WarnGroup(app_commands.Group):
 
         await interaction.followup.send(embed=embed)
 
-        # ================= WARN UNBAN (OPTIMIZED) =================
+            # ================= WARN UNBAN (OPTIMIZED) =================
 
     @app_commands.command(name="unban", description="Hiển thị danh sách ban để gỡ")
     @app_commands.checks.has_permissions(ban_members=True)
@@ -599,7 +599,7 @@ class WarnGroup(app_commands.Group):
 
                 try:
                     user = await self.bot.fetch_user(user_id)
-                    await interaction.guild.unban(user)
+                    await select_interaction.guild.unban(user)
 
                     embed = self.build_embed(
                         "UNBAN",
