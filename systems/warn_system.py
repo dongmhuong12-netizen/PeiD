@@ -559,6 +559,7 @@ class WarnGroup(app_commands.Group):
 
         if not banned_users:
             embed = self.build_embed(
+                "UNBAN",
                 "Không có ai đang bị ban.",
                 discord.Color.orange()
             )
@@ -609,10 +610,13 @@ class WarnGroup(app_commands.Group):
                         ephemeral=True
                     )
 
-                    await self.send_log_or_here(
-                        interaction,
-                        f"{interaction.user} đã unban {user}"
+                    log_embed = self.build_embed(
+                        "UNBAN",
+                        f"{interaction.user} đã unban {user}",
+                        discord.Color.green()
                     )
+
+                    await self.send_log_or_here(interaction, log_embed)
 
                 except Exception as e:
                     embed = self.build_embed(
@@ -672,4 +676,6 @@ class WarnGroup(app_commands.Group):
 
 
 async def setup(bot):
-    await bot.add_cog(WarnGroup())
+    group = WarnGroup()
+    group.bot = bot
+    bot.tree.add_command(group)
