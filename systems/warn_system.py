@@ -598,7 +598,7 @@ class WarnGroup(app_commands.Group):
                 user_id = int(select.values[0])
 
                 try:
-                    user = await self.bot.fetch_user(user_id)
+                    user = await select_interaction.client.fetch_user(user_id)
                     await select_interaction.guild.unban(user)
 
                     embed = self.build_embed(
