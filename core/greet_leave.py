@@ -83,7 +83,7 @@ class GreetGroup(app_commands.Group):
         update_guild_config(interaction.guild.id, "greet", "message", message)
 
         await interaction.response.send_message(
-            f"Đặt nội dung Greet thành công: `{text}`.",
+            f"Đặt nội dung Greet thành công: `{message}`.",
             ephemeral=True
         )
 
@@ -151,7 +151,7 @@ class LeaveGroup(app_commands.Group):
         update_guild_config(interaction.guild.id, "leave", "message", message)
 
         await interaction.response.send_message(
-            f"Đặt nội dung Leave thành công: `{text}`.",
+            f"Đặt nội dung Leave thành công: `{message}`.",
             ephemeral=True
         )
 
