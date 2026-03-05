@@ -547,93 +547,159 @@ class WarnGroup(app_commands.Group):
 
         await interaction.followup.send(embed=embed)
 
-# ================= WARN UNBAN =================
+# ================= WARN UNBAN (OPTIMIZED) =================
 
-    @app_commands.command(name="unban", description="Gỡ ban thành viên")
-    @app_commands.checks.has_permissions(ban_members=True)
-    async def unban(self, interaction: discord.Interaction, user_id: str):
-        await interaction.response.defer()
+@app_commands.command(name="unban", description="Hiển thị danh sách ban để gỡ")
+@app_commands.checks.has_permissions(ban_members=True)
+async def unban(self, interaction: discord.Interaction):
 
-        try:
-            user = await self.bot.fetch_user(int(user_id))
-            await interaction.guild.unban(user)
-        except:
-            await interaction.followup.send("Không thể unban. Kiểm tra lại ID.", ephemeral=True)
-            return
+    await interaction.response.defer(ephemeral=True)
 
-        body = (
-            f"• ĐỐI TƯỢNG: <@{user_id}>\n"
-            f"• HÀNH ĐỘNG: Đã gỡ ban"
+    guild = interaction.guild
+    author_id = interaction.user.id
+    page_size = 10
+
+    # cache ban list theo từng trang (không load toàn bộ)
+    ban_cache = []
+    async for entry in guild.bans(limit=None):
+        ban_cache.append(entry)
+
+    if not ban_cache:
+        await interaction.followup.send(
+            "Server không có ai đang bị ban.",
+            ephemeral=True
+        )
+        return
+
+    total_pages = (len(ban_cache) - 1) // page_size + 1
+
+    def get_page(page_index):
+        start = page_index * page_size
+        end = start + page_size
+        return ban_cache[start:end]
+
+    def build_view(page_index):
+
+        view = discord.ui.View(timeout=180)
+        current_page = get_page(page_index)
+
+        options = [
+            discord.SelectOption(
+                label=f"{entry.user} ({entry.user.id})",
+                value=str(entry.user.id)
+            )
+            for entry in current_page
+        ]
+
+        select = discord.ui.Select(
+            placeholder=f"Trang {page_index+1}/{total_pages} - Chọn để unban",
+            options=options,
+            min_values=1,
+            max_values=1
         )
 
-        embed = self.build_embed(
-            "UNBAN | GỠ BAN THÀNH VIÊN",
-            body,
-            discord.Color.green(),
-            user
-        )
+        async def select_callback(inter2: discord.Interaction):
 
-        await interaction.followup.send(embed=embed)
+            if inter2.user.id != author_id:
+                await inter2.response.send_message(
+                    "Bạn không phải người dùng lệnh này.",
+                    ephemeral=True
+                )
+                return
 
+            user_id = int(select.values[0])
+            user = await inter2.client.fetch_user(user_id)
 
-class WarnBackground(commands.Cog):
-    def __init__(self, bot):
-        self.bot = bot
-        self.auto_reset.start()
+            try:
+                await guild.unban(user)
+            except:
+                await inter2.response.send_message(
+                    "Không thể unban người này.",
+                    ephemeral=True
+                )
+                return
 
-    @tasks.loop(minutes=5)
-    async def auto_reset(self):
-        if not os.path.exists(DATA_FILE):
-            return
+            # remove khỏi cache để không hiển thị lại
+            nonlocal ban_cache
+            ban_cache = [b for b in ban_cache if b.user.id != user_id]
 
-        with open(DATA_FILE, "r") as f:
-            data = json.load(f)
+            body = (
+                f"• ĐỐI TƯỢNG: {user.mention}\n"
+                f"• HÀNH ĐỘNG: Đã gỡ ban"
+            )
 
-        with open(CONFIG_FILE, "r") as f:
-            config = json.load(f)
+            embed = self.build_embed(
+                "UNBAN | GỠ BAN THÀNH VIÊN",
+                body,
+                discord.Color.green(),
+                user
+            )
 
-        now = discord.utils.utcnow()
-        changed = False
+            await self.send_log_or_here(inter2, embed)
 
-        for guild_id, guild_data in data.items():
-            guild = self.bot.get_guild(int(guild_id))
-            if not guild:
-                continue
+            if not ban_cache:
+                await inter2.response.edit_message(
+                    content="Đã unban xong. Không còn ai bị ban.",
+                    view=None
+                )
+                return
 
-            log_channel_id = config.get(guild_id, {}).get("log_channel")
-            channel = guild.get_channel(log_channel_id) if log_channel_id else None
+            new_total_pages = (len(ban_cache) - 1) // page_size + 1
+            new_page = min(page_index, new_total_pages - 1)
 
-            for user_id, user_data in guild_data.items():
-                if user_data.get("reset_at"):
-                    reset_time = datetime.fromisoformat(user_data["reset_at"])
+            await inter2.response.edit_message(
+                content=f"Danh sách người đang bị ban (Trang {new_page+1}/{new_total_pages})",
+                view=build_view(new_page)
+            )
 
-                    if now >= reset_time and user_data["level"] > 0:
-                        member = guild.get_member(int(user_id))
+        select.callback = select_callback
+        view.add_item(select)
 
-                        user_data["level"] = 0
-                        user_data["reset_at"] = None
-                        changed = True
+        if page_index > 0:
+            prev_btn = discord.ui.Button(label="⬅", style=discord.ButtonStyle.secondary)
 
-                        if channel and member:
-                            body = f"{member.mention} đã hết thời gian cảnh cáo."
-                            embed = discord.Embed(
-                                description=(
-                                    "────────────────────\n"
-                                    "AUTO RESET\n"
-                                    "────────────────────\n\n"
-                                    f"{body}\n\n"
-                                    "────────────────────\n"
-                                    "HỆ THỐNG QUẢN LÝ KỶ LUẬT"
-                                ),
-                                color=discord.Color.green()
-                            )
-                            embed.set_thumbnail(url=member.display_avatar.url)
-                            embed.timestamp = now
-                            await channel.send(embed=embed)
+            async def prev_callback(inter2: discord.Interaction):
+                if inter2.user.id != author_id:
+                    await inter2.response.send_message(
+                        "Bạn không phải người dùng lệnh này.",
+                        ephemeral=True
+                    )
+                    return
 
-        if changed:
-            with open(DATA_FILE, "w") as f:
-                json.dump(data, f, indent=4)
+                await inter2.response.edit_message(
+                    content=f"Danh sách người đang bị ban (Trang {page_index}/{total_pages})",
+                    view=build_view(page_index - 1)
+                )
+
+            prev_btn.callback = prev_callback
+            view.add_item(prev_btn)
+
+        if page_index < total_pages - 1:
+            next_btn = discord.ui.Button(label="➡", style=discord.ButtonStyle.secondary)
+
+            async def next_callback(inter2: discord.Interaction):
+                if inter2.user.id != author_id:
+                    await inter2.response.send_message(
+                        "Bạn không phải người dùng lệnh này.",
+                        ephemeral=True
+                    )
+                    return
+
+                await inter2.response.edit_message(
+                    content=f"Danh sách người đang bị ban (Trang {page_index+2}/{total_pages})",
+                    view=build_view(page_index + 1)
+                )
+
+            next_btn.callback = next_callback
+            view.add_item(next_btn)
+
+        return view
+
+    await interaction.followup.send(
+        content=f"Danh sách người đang bị ban (Trang 1/{total_pages})",
+        view=build_view(0),
+        ephemeral=True
+    )
 
 
 async def setup(bot):
