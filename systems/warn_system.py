@@ -547,7 +547,7 @@ class WarnGroup(app_commands.Group):
 
         await interaction.followup.send(embed=embed)
 
-    # ================= WARN UNBAN (OPTIMIZED) =================
+        # ================= WARN UNBAN (OPTIMIZED) =================
 
     @app_commands.command(name="unban", description="Hiển thị danh sách ban để gỡ")
     @app_commands.checks.has_permissions(ban_members=True)
@@ -571,6 +571,7 @@ class WarnGroup(app_commands.Group):
             banned_users[i:i + PER_PAGE]
             for i in range(0, len(banned_users), PER_PAGE)
         ]
+
         total_pages = len(pages)
 
         def build_view(page_index: int):
@@ -582,7 +583,7 @@ class WarnGroup(app_commands.Group):
             for user in pages[page_index]:
                 options.append(
                     discord.SelectOption(
-                        label=f"{user}",
+                        label=str(user),
                         value=str(user.id)
                     )
                 )
@@ -601,6 +602,7 @@ class WarnGroup(app_commands.Group):
                     await interaction.guild.unban(user)
 
                     embed = self.build_embed(
+                        "UNBAN",
                         f"Đã unban {user}.",
                         discord.Color.green()
                     )
@@ -619,7 +621,9 @@ class WarnGroup(app_commands.Group):
                     await self.send_log_or_here(interaction, log_embed)
 
                 except Exception as e:
+
                     embed = self.build_embed(
+                        "UNBAN",
                         f"Không thể unban: {e}",
                         discord.Color.red()
                     )
