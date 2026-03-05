@@ -170,13 +170,13 @@ class WarnGroup(app_commands.Group):
         self.save_json(CONFIG_FILE, config)
         await interaction.followup.send(f"Đã set level {level}.", ephemeral=True)
 
-    # ================= WARN ADD =================
+        # ================= WARN ADD =================
 
     @app_commands.command(name="add", description="Cảnh cáo thành viên")
     @app_commands.checks.has_permissions(manage_messages=True)
     async def add(self, interaction: discord.Interaction, member: discord.Member, reason: str = "Không có lý do"):
 
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
 
         try:
 
@@ -219,27 +219,38 @@ class WarnGroup(app_commands.Group):
                     user_data["reset_at"] = None
 
             new_level = min(user_data["level"] + 1, max_level)
-            level_config = levels[str(new_level)]
-            punishment_raw = level_config["punishment"]
 
-            if punishment_raw in ["kick", "ban"]:
-                punishment_text = punishment_raw.capitalize()
-            elif punishment_raw.startswith("timeout:"):
-                duration_str = punishment_raw.split(":")[1]
-                punishment_text = self.format_time_text(duration_str)
-            else:
-                punishment_text = punishment_raw
+            level_config = levels.get(str(new_level))
+            if not level_config:
+                await interaction.followup.send(
+                    f"Level {new_level} chưa được cấu hình.",
+                    ephemeral=True
+                )
+                return
+
+            punishment_raw = level_config["punishment"]
 
             try:
                 if punishment_raw == "kick":
                     await member.kick(reason="Warn system")
+                    punishment_text = "Kick"
+
                 elif punishment_raw == "ban":
                     await member.ban(reason="Warn system")
+                    punishment_text = "Ban"
+
                 elif punishment_raw.startswith("timeout:"):
                     duration_str = punishment_raw.split(":")[1]
                     timeout_minutes = self.parse_duration(duration_str)
+
                     if timeout_minutes:
                         await member.timeout(now + timedelta(minutes=timeout_minutes))
+                        punishment_text = self.format_time_text(duration_str)
+                    else:
+                        punishment_text = punishment_raw
+                else:
+                    punishment_text = punishment_raw
+
             except:
                 await interaction.followup.send("Bot thiếu quyền.", ephemeral=True)
                 return
@@ -262,8 +273,12 @@ class WarnGroup(app_commands.Group):
             reset_time = datetime.fromisoformat(user_data["reset_at"])
             reset_text = f"<t:{int(reset_time.timestamp())}:R>"
 
-            next_level = min(new_level + 1, max_level)
-            next_config = levels.get(str(next_level))
+            next_level = new_level + 1
+
+            if next_level <= max_level:
+                next_config = levels.get(str(next_level))
+            else:
+                next_config = None
 
             if next_config:
                 next_punishment_raw = next_config["punishment"]
@@ -280,32 +295,37 @@ class WarnGroup(app_commands.Group):
                     if next_reset_minutes < 60:
                         next_reset_text = f"{next_reset_minutes} phút"
                     else:
-                        hours = next_reset_minutes // 60
-                        next_reset_text = f"{hours} giờ"
+                        next_reset_text = f"{next_reset_minutes // 60} giờ"
                 else:
                     next_reset_text = "Không có"
 
-                body = (
-                    f"• CẤP ĐỘ: LEVEL {new_level}\n"
-                    f"• ĐỐI TƯỢNG: {member.mention}\n"
-                    f"• HÌNH PHẠT: {punishment_text}\n\n"
-                    "LÝ DO\n"
-                    f"{reason}\n\n"
-                    f"• RESET: {reset_text}\n"
-                    f"• NẾU TÁI PHẠM KHI CHƯA HẾT RESET:\n"
+                next_block = (
+                    f"\n• NẾU TÁI PHẠM KHI CHƯA HẾT RESET:\n"
                     f"LEVEL {next_level}\n"
                     f"Hình phạt: {next_punishment_text}\n"
                     f"Reset: {next_reset_text}"
                 )
+            else:
+                next_block = "\n• ĐÃ ĐẠT LEVEL CAO NHẤT"
 
-                embed = self.build_embed(
-                    "WARNING | CẢNH CÁO",
-                    body,
-                    self.get_level_color(new_level),
-                    member
-                )
+            body = (
+                f"• CẤP ĐỘ: LEVEL {new_level}\n"
+                f"• ĐỐI TƯỢNG: {member.mention}\n"
+                f"• HÌNH PHẠT: {punishment_text}\n\n"
+                "LÝ DO\n"
+                f"{reason}\n\n"
+                f"• RESET: {reset_text}"
+                f"{next_block}"
+            )
 
-                await self.send_log_or_here(interaction, embed)
+            embed = self.build_embed(
+                "WARNING | CẢNH CÁO",
+                body,
+                self.get_level_color(new_level),
+                member
+            )
+
+            await self.send_log_or_here(interaction, embed)
 
         except Exception as e:
             await interaction.followup.send(f"Lỗi hệ thống: {e}", ephemeral=True)
