@@ -618,7 +618,7 @@ class WarnGroup(app_commands.Group):
                         discord.Color.green()
                     )
 
-                    await self.send_log_or_here(interaction, log_embed)
+                    await self.send_log_or_here(select_interaction, log_embed)
 
                 except Exception as e:
 
