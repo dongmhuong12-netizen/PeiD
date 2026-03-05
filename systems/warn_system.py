@@ -685,5 +685,5 @@ async def setup(bot):
 
     root = bot.tree.get_command("p")
 
-    if root:
+    if root and not root.get_command("warn"):
         root.add_command(group)
