@@ -672,4 +672,4 @@ class WarnGroup(app_commands.Group):
 
 
 async def setup(bot):
-    await bot.add_cog(WarnBackground(bot))
+    await bot.add_cog(WarnGroup())
