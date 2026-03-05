@@ -547,159 +547,128 @@ class WarnGroup(app_commands.Group):
 
         await interaction.followup.send(embed=embed)
 
-# ================= WARN UNBAN (OPTIMIZED) =================
+    # ================= WARN UNBAN (OPTIMIZED) =================
 
-@app_commands.command(name="unban", description="Hiển thị danh sách ban để gỡ")
-@app_commands.checks.has_permissions(ban_members=True)
-async def unban(self, interaction: discord.Interaction):
+    @app_commands.command(name="unban", description="Hiển thị danh sách ban để gỡ")
+    @app_commands.checks.has_permissions(ban_members=True)
+    async def unban(self, interaction: discord.Interaction):
 
-    await interaction.response.defer(ephemeral=True)
+        banned_users = []
+        async for entry in interaction.guild.bans(limit=None):
+            banned_users.append(entry.user)
 
-    guild = interaction.guild
-    author_id = interaction.user.id
-    page_size = 10
+        if not banned_users:
+            embed = self.build_embed(
+                "Không có ai đang bị ban.",
+                discord.Color.orange()
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
 
-    # cache ban list theo từng trang (không load toàn bộ)
-    ban_cache = []
-    async for entry in guild.bans(limit=None):
-        ban_cache.append(entry)
+        PER_PAGE = 25
+        pages = [
+            banned_users[i:i + PER_PAGE]
+            for i in range(0, len(banned_users), PER_PAGE)
+        ]
+        total_pages = len(pages)
 
-    if not ban_cache:
-        await interaction.followup.send(
-            "Server không có ai đang bị ban.",
+        def build_view(page_index: int):
+
+            view = discord.ui.View(timeout=120)
+
+            options = []
+
+            for user in pages[page_index]:
+                options.append(
+                    discord.SelectOption(
+                        label=f"{user}",
+                        value=str(user.id)
+                    )
+                )
+
+            select = discord.ui.Select(
+                placeholder="Chọn người để unban",
+                options=options
+            )
+
+            async def select_callback(select_interaction: discord.Interaction):
+
+                user_id = int(select.values[0])
+
+                try:
+                    user = await self.bot.fetch_user(user_id)
+                    await interaction.guild.unban(user)
+
+                    embed = self.build_embed(
+                        f"Đã unban {user}.",
+                        discord.Color.green()
+                    )
+
+                    await select_interaction.response.send_message(
+                        embed=embed,
+                        ephemeral=True
+                    )
+
+                    await self.send_log_or_here(
+                        interaction,
+                        f"{interaction.user} đã unban {user}"
+                    )
+
+                except Exception as e:
+                    embed = self.build_embed(
+                        f"Không thể unban: {e}",
+                        discord.Color.red()
+                    )
+
+                    await select_interaction.response.send_message(
+                        embed=embed,
+                        ephemeral=True
+                    )
+
+            select.callback = select_callback
+            view.add_item(select)
+
+            if total_pages > 1:
+
+                if page_index > 0:
+
+                    prev_button = discord.ui.Button(
+                        label="◀",
+                        style=discord.ButtonStyle.secondary
+                    )
+
+                    async def prev_callback(btn_interaction: discord.Interaction):
+                        await btn_interaction.response.edit_message(
+                            content=f"Danh sách người đang bị ban (Trang {page_index}/{total_pages})",
+                            view=build_view(page_index - 1)
+                        )
+
+                    prev_button.callback = prev_callback
+                    view.add_item(prev_button)
+
+                if page_index < total_pages - 1:
+
+                    next_button = discord.ui.Button(
+                        label="▶",
+                        style=discord.ButtonStyle.secondary
+                    )
+
+                    async def next_callback(btn_interaction: discord.Interaction):
+                        await btn_interaction.response.edit_message(
+                            content=f"Danh sách người đang bị ban (Trang {page_index + 2}/{total_pages})",
+                            view=build_view(page_index + 1)
+                        )
+
+                    next_button.callback = next_callback
+                    view.add_item(next_button)
+
+            return view
+
+        await interaction.response.send_message(
+            content=f"Danh sách người đang bị ban (Trang 1/{total_pages})",
+            view=build_view(0),
             ephemeral=True
         )
-        return
-
-    total_pages = (len(ban_cache) - 1) // page_size + 1
-
-    def get_page(page_index):
-        start = page_index * page_size
-        end = start + page_size
-        return ban_cache[start:end]
-
-    def build_view(page_index):
-
-        view = discord.ui.View(timeout=180)
-        current_page = get_page(page_index)
-
-        options = [
-            discord.SelectOption(
-                label=f"{entry.user} ({entry.user.id})",
-                value=str(entry.user.id)
-            )
-            for entry in current_page
-        ]
-
-        select = discord.ui.Select(
-            placeholder=f"Trang {page_index+1}/{total_pages} - Chọn để unban",
-            options=options,
-            min_values=1,
-            max_values=1
-        )
-
-        async def select_callback(inter2: discord.Interaction):
-
-            if inter2.user.id != author_id:
-                await inter2.response.send_message(
-                    "Bạn không phải người dùng lệnh này.",
-                    ephemeral=True
-                )
-                return
-
-            user_id = int(select.values[0])
-            user = await inter2.client.fetch_user(user_id)
-
-            try:
-                await guild.unban(user)
-            except:
-                await inter2.response.send_message(
-                    "Không thể unban người này.",
-                    ephemeral=True
-                )
-                return
-
-            # remove khỏi cache để không hiển thị lại
-            nonlocal ban_cache
-            ban_cache = [b for b in ban_cache if b.user.id != user_id]
-
-            body = (
-                f"• ĐỐI TƯỢNG: {user.mention}\n"
-                f"• HÀNH ĐỘNG: Đã gỡ ban"
-            )
-
-            embed = self.build_embed(
-                "UNBAN | GỠ BAN THÀNH VIÊN",
-                body,
-                discord.Color.green(),
-                user
-            )
-
-            await self.send_log_or_here(inter2, embed)
-
-            if not ban_cache:
-                await inter2.response.edit_message(
-                    content="Đã unban xong. Không còn ai bị ban.",
-                    view=None
-                )
-                return
-
-            new_total_pages = (len(ban_cache) - 1) // page_size + 1
-            new_page = min(page_index, new_total_pages - 1)
-
-            await inter2.response.edit_message(
-                content=f"Danh sách người đang bị ban (Trang {new_page+1}/{new_total_pages})",
-                view=build_view(new_page)
-            )
-
-        select.callback = select_callback
-        view.add_item(select)
-
-        if page_index > 0:
-            prev_btn = discord.ui.Button(label="⬅", style=discord.ButtonStyle.secondary)
-
-            async def prev_callback(inter2: discord.Interaction):
-                if inter2.user.id != author_id:
-                    await inter2.response.send_message(
-                        "Bạn không phải người dùng lệnh này.",
-                        ephemeral=True
-                    )
-                    return
-
-                await inter2.response.edit_message(
-                    content=f"Danh sách người đang bị ban (Trang {page_index}/{total_pages})",
-                    view=build_view(page_index - 1)
-                )
-
-            prev_btn.callback = prev_callback
-            view.add_item(prev_btn)
-
-        if page_index < total_pages - 1:
-            next_btn = discord.ui.Button(label="➡", style=discord.ButtonStyle.secondary)
-
-            async def next_callback(inter2: discord.Interaction):
-                if inter2.user.id != author_id:
-                    await inter2.response.send_message(
-                        "Bạn không phải người dùng lệnh này.",
-                        ephemeral=True
-                    )
-                    return
-
-                await inter2.response.edit_message(
-                    content=f"Danh sách người đang bị ban (Trang {page_index+2}/{total_pages})",
-                    view=build_view(page_index + 1)
-                )
-
-            next_btn.callback = next_callback
-            view.add_item(next_btn)
-
-        return view
-
-    await interaction.followup.send(
-        content=f"Danh sách người đang bị ban (Trang 1/{total_pages})",
-        view=build_view(0),
-        ephemeral=True
-    )
 
 
 async def setup(bot):
