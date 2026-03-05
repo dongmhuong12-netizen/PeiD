@@ -83,7 +83,7 @@ class WellcomeGroup(app_commands.Group):
         update_guild_config(interaction.guild.id, "wellcome", "message", message)
 
         await interaction.response.send_message(
-            f"Đặt nội dung Wellcome thành công: '{text}'.",
+            f"Đặt nội dung Wellcome thành công: '{message}'.",
             ephemeral=True
         )
 
