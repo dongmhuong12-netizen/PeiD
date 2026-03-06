@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 import json
 import os
+import asyncio
 
 DATA_FILE = "data/reaction_roles.json"
 
@@ -9,6 +10,7 @@ DATA_FILE = "data/reaction_roles.json"
 def load_data():
     if not os.path.exists(DATA_FILE):
         return {}
+
     with open(DATA_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
 
@@ -16,9 +18,12 @@ def load_data():
 class ReactionRole(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        self.data = load_data()
+        self.lock = asyncio.Lock()
 
     def refresh(self):
-        return load_data()
+        self.data = load_data()
+        return self.data
 
     # =========================
     # REACTION ADD
@@ -38,6 +43,7 @@ class ReactionRole(commands.Cog):
             return
 
         member = guild.get_member(payload.user_id)
+
         if not member:
             try:
                 member = await guild.fetch_member(payload.user_id)
@@ -47,9 +53,8 @@ class ReactionRole(commands.Cog):
         if member.bot:
             return
 
-        data = self.refresh()
+        data = self.data
 
-        # 🔥 LẤY CONFIG THEO MESSAGE.ID
         config = data.get(str(payload.message_id))
         if not config:
             return
@@ -66,9 +71,11 @@ class ReactionRole(commands.Cog):
 
             index = group["emojis"].index(emoji_str)
             role_data = group["roles"][index]
+
             role_ids = role_data if isinstance(role_data, list) else [role_data]
 
             roles_to_add = []
+
             for rid in role_ids:
                 role = guild.get_role(int(rid))
                 if role:
@@ -77,41 +84,57 @@ class ReactionRole(commands.Cog):
             if not roles_to_add:
                 return
 
-            # SINGLE MODE
-            if str(group.get("mode", "")).lower() == "single":
+            async with self.lock:
 
-                group_roles = []
+                # SINGLE MODE
+                if str(group.get("mode", "")).lower() == "single":
 
-                for r_data in group["roles"]:
-                    ids = r_data if isinstance(r_data, list) else [r_data]
-                    for rid in ids:
-                        role = guild.get_role(int(rid))
-                        if role:
-                            group_roles.append(role)
+                    group_roles = []
 
-                roles_to_remove = [
-                    r for r in group_roles
-                    if r not in roles_to_add and r in member.roles
-                ]
+                    for r_data in group["roles"]:
+                        ids = r_data if isinstance(r_data, list) else [r_data]
 
-                if roles_to_remove:
-                    await member.remove_roles(*roles_to_remove)
+                        for rid in ids:
+                            role = guild.get_role(int(rid))
+                            if role:
+                                group_roles.append(role)
 
-                # Remove emoji cũ
-                channel = guild.get_channel(payload.channel_id)
-                if channel:
-                    try:
-                        message = await channel.fetch_message(payload.message_id)
+                    roles_to_remove = [
+                        r for r in group_roles
+                        if r not in roles_to_add and r in member.roles
+                    ]
 
-                        for reaction in message.reactions:
-                            if str(reaction.emoji) != emoji_str:
-                                async for user in reaction.users():
-                                    if user.id == member.id:
-                                        await reaction.remove(member)
-                    except:
-                        pass
+                    if roles_to_remove:
+                        try:
+                            await member.remove_roles(*roles_to_remove)
+                        except:
+                            pass
 
-            await member.add_roles(*roles_to_add)
+                    # remove reaction cũ
+                    channel = guild.get_channel(payload.channel_id)
+
+                    if channel:
+                        try:
+                            message = await channel.fetch_message(payload.message_id)
+
+                            for reaction in message.reactions:
+
+                                if str(reaction.emoji) != emoji_str:
+
+                                    async for user in reaction.users():
+                                        if user.id == member.id:
+                                            try:
+                                                await reaction.remove(member)
+                                            except:
+                                                pass
+                        except:
+                            pass
+
+                try:
+                    await member.add_roles(*roles_to_add)
+                except:
+                    pass
+
             return
 
     # =========================
@@ -129,6 +152,7 @@ class ReactionRole(commands.Cog):
             return
 
         member = guild.get_member(payload.user_id)
+
         if not member:
             try:
                 member = await guild.fetch_member(payload.user_id)
@@ -138,7 +162,7 @@ class ReactionRole(commands.Cog):
         if member.bot:
             return
 
-        data = self.refresh()
+        data = self.data
 
         config = data.get(str(payload.message_id))
         if not config:
@@ -156,16 +180,21 @@ class ReactionRole(commands.Cog):
 
             index = group["emojis"].index(emoji_str)
             role_data = group["roles"][index]
+
             role_ids = role_data if isinstance(role_data, list) else [role_data]
 
             roles_to_remove = []
+
             for rid in role_ids:
                 role = guild.get_role(int(rid))
                 if role:
                     roles_to_remove.append(role)
 
             if roles_to_remove:
-                await member.remove_roles(*roles_to_remove)
+                try:
+                    await member.remove_roles(*roles_to_remove)
+                except:
+                    pass
 
             return
 
