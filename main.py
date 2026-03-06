@@ -5,49 +5,74 @@ import os
 
 TOKEN = os.getenv("TOKEN")
 
+if not TOKEN:
+    raise RuntimeError("TOKEN environment variable not found")
+
+
 # =========================
-# INTENTS (QUAN TRỌNG)
+# INTENTS
 # =========================
+
 intents = discord.Intents.default()
 intents.members = True
 intents.guilds = True
 intents.message_content = True
+
 
 bot = commands.Bot(
     command_prefix="!",
     intents=intents
 )
 
+
 # =========================
-# LOAD EXTENSIONS
+# EXTENSIONS
 # =========================
+
+EXTENSIONS = [
+    "core.root",
+    "systems.reaction_role",
+    "systems.warn_system",
+]
+
+
 async def load_extensions():
-    await bot.load_extension("core.root")
-    await bot.load_extension("systems.reaction_role")
-    await bot.load_extension("systems.warn_system")
+
+    for ext in EXTENSIONS:
+        try:
+            await bot.load_extension(ext)
+            print(f"Loaded {ext}")
+        except Exception as e:
+            print(f"Failed to load {ext}: {e}")
 
 
 # =========================
 # READY EVENT
 # =========================
+
 @bot.event
 async def on_ready():
-    print(f"Logged in as {bot.user} (ID: {bot.user.id})")
-    print("------")
+
+    print(f"Logged in as {bot.user} ({bot.user.id})")
+    print("Bot ready")
 
     try:
         synced = await bot.tree.sync()
-        print(f"Synced {len(synced)} global commands.")
+        print(f"Slash commands synced: {len(synced)}")
     except Exception as e:
-        print(f"Sync error: {e}")
+        print(f"Command sync error: {e}")
 
 
 # =========================
-# START BOT
+# MAIN
 # =========================
+
 async def main():
+
     async with bot:
+
         await load_extensions()
+
         await bot.start(TOKEN)
 
 
