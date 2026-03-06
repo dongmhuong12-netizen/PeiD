@@ -53,11 +53,6 @@ def load_embed(guild_id, name=None):
 
     # Nếu gọi kiểu cũ load_embed(name)
     if name is None:
-        name = guild_id
-        # Tìm embed này trong mọi guild
-        for g in all_data:
-            if name in all_data[g]:
-                return all_data[g][name]
         return None
 
     return all_data.get(str(guild_id), {}).get(name)
@@ -69,14 +64,6 @@ def delete_embed(guild_id, name=None):
 
     # Kiểu cũ delete_embed(name)
     if name is None:
-        name = guild_id
-        for g in list(all_data.keys()):
-            if name in all_data[g]:
-                del all_data[g][name]
-                if not all_data[g]:
-                    del all_data[g]
-                save_all(all_data)
-                return True
         return False
 
     guild_id = str(guild_id)
@@ -101,9 +88,6 @@ def get_all_embed_names(guild_id=None):
 
     # Kiểu cũ: không truyền guild
     if guild_id is None:
-        names = []
-        for g in all_data:
-            names.extend(all_data[g].keys())
-        return names
+        return []
 
     return list(all_data.get(str(guild_id), {}).keys())
