@@ -26,7 +26,8 @@ async def embed_name_autocomplete(
     interaction: discord.Interaction,
     current: str
 ):
-    names = get_all_embed_names(interaction.guild.id)
+    guild_id = interaction.guild.id if interaction.guild else None
+    names = get_all_embed_names(guild_id)
 
     return [
         app_commands.Choice(name=name, value=name)
