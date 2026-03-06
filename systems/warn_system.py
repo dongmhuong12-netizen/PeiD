@@ -1,131 +1,151 @@
 import discord
+from discord.ext import commands
 from discord import app_commands
-from discord.ext import commands, tasks
 import json
 import os
-import re
-from datetime import timedelta, datetime
+import asyncio
+from datetime import datetime, timedelta
 
-DATA_FILE = "warn_data.json"
-CONFIG_FILE = "warn_config.json"
+DATA_FILE = "data/warn_data.json"
+CONFIG_FILE = "data/warn_config.json"
+
+MAX_HISTORY = 50
+
+file_lock = asyncio.Lock()
 
 
-class WarnGroup(app_commands.Group):
-    def __init__(self):
-        super().__init__(name="warn", description="Hệ thống cảnh cáo")
+# =========================
+# JSON LOAD
+# =========================
 
-        for file in [DATA_FILE, CONFIG_FILE]:
-            if not os.path.exists(file):
-                with open(file, "w") as f:
-                    json.dump({}, f)
+def load_json(file):
 
-    # ================= JSON =================
+    if not os.path.exists(file):
+        return {}
 
-    def load_json(self, file):
-        try:
-            with open(file, "r") as f:
-                return json.load(f)
-        except:
-            return {}
+    try:
+        with open(file, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except:
+        return {}
 
-    def save_json(self, file, data):
-        with open(file, "w") as f:
+
+# =========================
+# JSON SAVE
+# =========================
+
+async def save_json(file, data):
+
+    os.makedirs("data", exist_ok=True)
+
+    async with file_lock:
+        with open(file, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=4)
 
-    # ================= TIME =================
 
-    def parse_duration(self, value: str):
-        if not value:
-            return None
+# =========================
+# TIME FORMAT
+# =========================
 
-        match = re.match(r"^(\d+)([mhd])$", value.lower())
-        if not match:
-            return None
+def format_duration(minutes):
 
-        amount = int(match.group(1))
-        unit = match.group(2)
+    if minutes < 60:
+        return f"{minutes} phút"
 
-        if amount <= 0:
-            return None
+    hours = minutes // 60
 
-        if unit == "m":
-            return amount
-        if unit == "h":
-            return amount * 60
-        if unit == "d":
-            return amount * 1440
+    if hours < 24:
+        return f"{hours} giờ"
 
-        return None
+    days = hours // 24
 
-    # ================= FORMAT TIME TEXT =================
+    return f"{days} ngày"
 
-    def format_time_text(self, duration: str):
-        minutes = self.parse_duration(duration)
-        if not minutes:
-            return duration
 
-        if minutes < 60:
-            return f"Mute {minutes} phút"
-        else:
-            hours = minutes // 60
-            return f"Mute {hours} giờ"
+# =========================
+# WARN SYSTEM
+# =========================
 
-    # ================= MÀU THEO LEVEL =================
+class WarnSystem(commands.Cog):
 
-    def get_level_color(self, level: int):
-        if level <= 1:
-            return discord.Color.green()
-        elif level == 2:
-            return discord.Color.yellow()
-        elif level == 3:
-            return discord.Color.orange()
-        elif level == 4:
-            return discord.Color.red()
-        else:
-            return discord.Color.dark_red()
+    def __init__(self, bot: commands.Bot):
 
-    # ================= STYLE EMBED =================
+        self.bot = bot
 
-    def build_embed(self, title, body, color, member=None):
-        embed = discord.Embed(
-            description=(
-                "────────────────────\n"
-                f"{title}\n"
-                "────────────────────\n\n"
-                f"{body}\n\n"
-                "────────────────────\n"
-                "HỆ THỐNG QUẢN LÝ KỶ LUẬT"
-            ),
-            color=color
-        )
+        self.data_cache = load_json(DATA_FILE)
+        self.config_cache = load_json(CONFIG_FILE)
 
-        if member:
-            embed.set_thumbnail(url=member.display_avatar.url)
 
-        embed.timestamp = discord.utils.utcnow()
-        return embed
+# =========================
+# DATA ACCESS
+# =========================
 
-    # ================= LOG =================
+    def get_guild_data(self, guild_id):
+
+        guild_id = str(guild_id)
+
+        if guild_id not in self.data_cache:
+            self.data_cache[guild_id] = {}
+
+        return self.data_cache[guild_id]
+
+
+    def get_config(self, guild_id):
+
+        guild_id = str(guild_id)
+
+        if guild_id not in self.config_cache:
+            self.config_cache[guild_id] = {}
+
+        return self.config_cache[guild_id]
+
+
+# =========================
+# SAVE CACHE
+# =========================
+
+    async def save_data(self):
+
+        await save_json(DATA_FILE, self.data_cache)
+
+
+    async def save_config(self):
+
+        await save_json(CONFIG_FILE, self.config_cache)
+
+
+# =========================
+# LOG FUNCTION
+# =========================
 
     async def send_log_or_here(self, interaction, embed):
-        config = self.load_json(CONFIG_FILE)
-        guild_id = str(interaction.guild.id)
-        log_channel_id = config.get(guild_id, {}).get("log_channel")
+
+        config = self.get_config(interaction.guild.id)
+
+        log_channel_id = config.get("log_channel")
 
         if log_channel_id:
-            channel = interaction.guild.get_channel(log_channel_id)
+
+            channel = interaction.guild.get_channel(int(log_channel_id))
+
             if channel:
-                await channel.send(embed=embed)
-                await interaction.followup.send("Done.", ephemeral=True)
-                return
+                try:
+                    await channel.send(embed=embed)
+                    return
+                except discord.Forbidden:
+                    pass
 
-        await interaction.followup.send(embed=embed)
+        if interaction.response.is_done():
+            await interaction.followup.send(embed=embed, ephemeral=True)
+        else:
+            await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    # ================= SET LOG =================
+# ================= SET LOG =================
 
     @app_commands.command(name="setlog", description="Thiết lập kênh log")
     @app_commands.checks.has_permissions(manage_guild=True)
     async def setlog(self, interaction: discord.Interaction, channel: discord.TextChannel):
+
         await interaction.response.defer(ephemeral=True)
 
         config = self.load_json(CONFIG_FILE)
@@ -135,16 +155,20 @@ class WarnGroup(app_commands.Group):
         config[guild_id]["log_channel"] = channel.id
 
         self.save_json(CONFIG_FILE, config)
+
         await interaction.followup.send("Đã set log.", ephemeral=True)
+
 
     # ================= SET LEVEL =================
 
     @app_commands.command(name="setlevel", description="Thiết lập level")
     @app_commands.checks.has_permissions(manage_guild=True)
     async def setlevel(self, interaction: discord.Interaction, level: int, reset: str, punishment: str):
+
         await interaction.response.defer(ephemeral=True)
 
         reset_minutes = self.parse_duration(reset)
+
         if reset_minutes is None:
             await interaction.followup.send("Reset sai định dạng (10m/1h/1d).", ephemeral=True)
             return
@@ -152,25 +176,31 @@ class WarnGroup(app_commands.Group):
         if punishment.lower() in ["kick", "ban"]:
             punishment_value = punishment.lower()
         else:
+
             timeout_minutes = self.parse_duration(punishment)
+
             if timeout_minutes is None:
                 await interaction.followup.send("Punishment không hợp lệ.", ephemeral=True)
                 return
+
             punishment_value = f"timeout:{punishment.lower()}"
 
         config = self.load_json(CONFIG_FILE)
         guild_id = str(interaction.guild.id)
 
         config.setdefault(guild_id, {"levels": {}})
+
         config[guild_id]["levels"][str(level)] = {
             "reset": reset.lower(),
             "punishment": punishment_value
         }
 
         self.save_json(CONFIG_FILE, config)
+
         await interaction.followup.send(f"Đã set level {level}.", ephemeral=True)
 
-        # ================= WARN ADD =================
+
+    # ================= WARN ADD =================
 
     @app_commands.command(name="add", description="Cảnh cáo thành viên")
     @app_commands.checks.has_permissions(manage_messages=True)
@@ -202,6 +232,7 @@ class WarnGroup(app_commands.Group):
             max_level = max(map(int, levels.keys()))
 
             data.setdefault(guild_id, {})
+
             data[guild_id].setdefault(user_id, {
                 "level": 0,
                 "last_warn": None,
@@ -213,7 +244,9 @@ class WarnGroup(app_commands.Group):
             now = discord.utils.utcnow()
 
             if user_data.get("reset_at"):
+
                 reset_time = datetime.fromisoformat(user_data["reset_at"])
+
                 if now >= reset_time:
                     user_data["level"] = 0
                     user_data["reset_at"] = None
@@ -221,6 +254,7 @@ class WarnGroup(app_commands.Group):
             new_level = min(user_data["level"] + 1, max_level)
 
             level_config = levels.get(str(new_level))
+
             if not level_config:
                 await interaction.followup.send(
                     f"Level {new_level} chưa được cấu hình.",
@@ -231,27 +265,36 @@ class WarnGroup(app_commands.Group):
             punishment_raw = level_config["punishment"]
 
             try:
+
                 if punishment_raw == "kick":
+
                     await member.kick(reason="Warn system")
                     punishment_text = "Kick"
 
                 elif punishment_raw == "ban":
+
                     await member.ban(reason="Warn system")
                     punishment_text = "Ban"
 
                 elif punishment_raw.startswith("timeout:"):
+
                     duration_str = punishment_raw.split(":")[1]
+
                     timeout_minutes = self.parse_duration(duration_str)
 
                     if timeout_minutes:
+
                         await member.timeout(now + timedelta(minutes=timeout_minutes))
                         punishment_text = self.format_time_text(duration_str)
+
                     else:
                         punishment_text = punishment_raw
+
                 else:
                     punishment_text = punishment_raw
 
             except:
+
                 await interaction.followup.send("Bot thiếu quyền.", ephemeral=True)
                 return
 
@@ -271,42 +314,8 @@ class WarnGroup(app_commands.Group):
             self.save_json(DATA_FILE, data)
 
             reset_time = datetime.fromisoformat(user_data["reset_at"])
+
             reset_text = f"<t:{int(reset_time.timestamp())}:R>"
-
-            next_level = new_level + 1
-
-            if next_level <= max_level:
-                next_config = levels.get(str(next_level))
-            else:
-                next_config = None
-
-            if next_config:
-                next_punishment_raw = next_config["punishment"]
-
-                if next_punishment_raw.startswith("timeout:"):
-                    duration_str = next_punishment_raw.split(":")[1]
-                    next_punishment_text = self.format_time_text(duration_str)
-                else:
-                    next_punishment_text = next_punishment_raw.capitalize()
-
-                next_reset_minutes = self.parse_duration(next_config["reset"])
-
-                if next_reset_minutes:
-                    if next_reset_minutes < 60:
-                        next_reset_text = f"{next_reset_minutes} phút"
-                    else:
-                        next_reset_text = f"{next_reset_minutes // 60} giờ"
-                else:
-                    next_reset_text = "Không có"
-
-                next_block = (
-                    f"\n• NẾU TÁI PHẠM KHI CHƯA HẾT RESET:\n"
-                    f"LEVEL {next_level}\n"
-                    f"Hình phạt: {next_punishment_text}\n"
-                    f"Reset: {next_reset_text}"
-                )
-            else:
-                next_block = "\n• ĐÃ ĐẠT LEVEL CAO NHẤT"
 
             body = (
                 f"• CẤP ĐỘ: LEVEL {new_level}\n"
@@ -315,7 +324,6 @@ class WarnGroup(app_commands.Group):
                 "LÝ DO\n"
                 f"{reason}\n\n"
                 f"• RESET: {reset_text}"
-                f"{next_block}"
             )
 
             embed = self.build_embed(
@@ -328,121 +336,18 @@ class WarnGroup(app_commands.Group):
             await self.send_log_or_here(interaction, embed)
 
         except Exception as e:
-            await interaction.followup.send(f"Lỗi hệ thống: {e}", ephemeral=True)
 
-    # ================= WARN REMOVE =================
+            await interaction.followup.send(
+                f"Lỗi hệ thống: {e}",
+                ephemeral=True
+            )
 
-    @app_commands.command(name="remove", description="Giảm 1 cấp cảnh cáo")
+# ================= WARN REMOVE =================
+
+    @app_commands.command(name="remove", description="Giảm level cảnh cáo")
     @app_commands.checks.has_permissions(manage_messages=True)
-    async def remove(self, interaction, member: discord.Member):
-        await interaction.response.defer()
+    async def remove(self, interaction: discord.Interaction, member: discord.Member):
 
-        config = self.load_json(CONFIG_FILE)
-        data = self.load_json(DATA_FILE)
-
-        guild_id = str(interaction.guild.id)
-        user_id = str(member.id)
-
-        if guild_id not in data or user_id not in data[guild_id]:
-            await interaction.followup.send("Chưa có cảnh cáo.", ephemeral=True)
-            return
-
-        user_data = data[guild_id][user_id]
-
-        if user_data["level"] <= 0:
-            await interaction.followup.send("Không thể giảm thêm.", ephemeral=True)
-            return
-
-        user_data["level"] -= 1
-        new_level = user_data["level"]
-        now = discord.utils.utcnow()
-
-        if new_level == 0:
-            user_data["reset_at"] = None
-            reset_text = "Không có"
-        else:
-            levels = config.get(guild_id, {}).get("levels", {})
-            level_config = levels.get(str(new_level))
-
-            if level_config:
-                reset_minutes = self.parse_duration(level_config["reset"])
-                if reset_minutes:
-                    new_reset_time = now + timedelta(minutes=reset_minutes)
-                    user_data["reset_at"] = new_reset_time.isoformat()
-                    reset_text = f"<t:{int(new_reset_time.timestamp())}:R>"
-                else:
-                    reset_text = "Không có"
-            else:
-                reset_text = "Không có"
-
-        self.save_json(DATA_FILE, data)
-
-        body = (
-            f"• CẤP ĐỘ MỚI: LEVEL {new_level}\n"
-            f"• ĐỐI TƯỢNG: {member.mention}\n"
-            f"• RESET MỚI: {reset_text}"
-        )
-
-        embed = self.build_embed(
-            "REMOVE | GIẢM CẤP CẢNH CÁO",
-            body,
-            self.get_level_color(new_level),
-            member
-        )
-
-        await self.send_log_or_here(interaction, embed)
-
-    # ================= WARN CLEAR =================
-
-    @app_commands.command(name="clear", description="Xóa toàn bộ cảnh cáo")
-    @app_commands.checks.has_permissions(manage_messages=True)
-    async def clear(self, interaction: discord.Interaction, member: discord.Member):
-        await interaction.response.defer()
-
-        data = self.load_json(DATA_FILE)
-        guild_id = str(interaction.guild.id)
-        user_id = str(member.id)
-
-        if guild_id not in data or user_id not in data[guild_id]:
-            await interaction.followup.send("Chưa có cảnh cáo.", ephemeral=True)
-            return
-
-        data[guild_id][user_id] = {
-            "level": 0,
-            "last_warn": None,
-            "reset_at": None,
-            "history": []
-        }
-
-        self.save_json(DATA_FILE, data)
-
-        try:
-            if member.timed_out_until:
-                await member.timeout(None)
-        except:
-            await interaction.followup.send("Bot thiếu quyền để gỡ mute.", ephemeral=True)
-            return
-
-        body = (
-            f"• CẤP ĐỘ HIỆN TẠI: LEVEL 0\n"
-            f"• ĐỐI TƯỢNG: {member.mention}\n"
-            f"• ĐÃ GỠ MUTE (nếu có)"
-        )
-
-        embed = self.build_embed(
-            "CLEAR | XÓA TOÀN BỘ CẢNH CÁO",
-            body,
-            discord.Color.green(),
-            member
-        )
-
-        await self.send_log_or_here(interaction, embed)
-
-    # ================= WARN INFO =================
-
-    @app_commands.command(name="info", description="Xem thông tin cảnh cáo")
-    @app_commands.checks.has_permissions(manage_messages=True)
-    async def info(self, interaction: discord.Interaction, member: discord.Member):
         await interaction.response.defer(ephemeral=True)
 
         data = self.load_json(DATA_FILE)
@@ -450,40 +355,105 @@ class WarnGroup(app_commands.Group):
         user_id = str(member.id)
 
         if guild_id not in data or user_id not in data[guild_id]:
-            await interaction.followup.send("Chưa có cảnh cáo.", ephemeral=True)
+            await interaction.followup.send("Người này chưa có warn.", ephemeral=True)
+            return
+
+        user_data = data[guild_id][user_id]
+
+        if user_data["level"] <= 0:
+            await interaction.followup.send("Level đã bằng 0.", ephemeral=True)
+            return
+
+        user_data["level"] -= 1
+
+        if user_data["level"] == 0:
+            user_data["reset_at"] = None
+
+        self.save_json(DATA_FILE, data)
+
+        body = (
+            f"• ĐỐI TƯỢNG: {member.mention}\n"
+            f"• LEVEL HIỆN TẠI: {user_data['level']}"
+        )
+
+        embed = self.build_embed(
+            "WARN REMOVED",
+            body,
+            0x57F287,
+            member
+        )
+
+        await self.send_log_or_here(interaction, embed)
+
+
+    # ================= WARN CLEAR =================
+
+    @app_commands.command(name="clear", description="Xóa toàn bộ cảnh cáo")
+    @app_commands.checks.has_permissions(manage_messages=True)
+    async def clear(self, interaction: discord.Interaction, member: discord.Member):
+
+        await interaction.response.defer(ephemeral=True)
+
+        data = self.load_json(DATA_FILE)
+        guild_id = str(interaction.guild.id)
+        user_id = str(member.id)
+
+        if guild_id in data and user_id in data[guild_id]:
+            del data[guild_id][user_id]
+            self.save_json(DATA_FILE, data)
+
+        embed = self.build_embed(
+            "WARN CLEARED",
+            f"Đã xóa toàn bộ cảnh cáo của {member.mention}.",
+            0x57F287,
+            member
+        )
+
+        await self.send_log_or_here(interaction, embed)
+
+
+    # ================= WARN INFO =================
+
+    @app_commands.command(name="info", description="Xem thông tin cảnh cáo")
+    async def info(self, interaction: discord.Interaction, member: discord.Member):
+
+        await interaction.response.defer(ephemeral=True)
+
+        data = self.load_json(DATA_FILE)
+        guild_id = str(interaction.guild.id)
+        user_id = str(member.id)
+
+        if guild_id not in data or user_id not in data[guild_id]:
+
+            embed = self.build_embed(
+                "WARN INFO",
+                f"{member.mention} không có cảnh cáo.",
+                0x57F287,
+                member
+            )
+
+            await interaction.followup.send(embed=embed, ephemeral=True)
             return
 
         user_data = data[guild_id][user_id]
 
         level = user_data.get("level", 0)
-        reset_at = user_data.get("reset_at")
-        history = user_data.get("history", [])
 
         reset_text = "Không có"
-        if reset_at:
-            reset_time = datetime.fromisoformat(reset_at)
+
+        if user_data.get("reset_at"):
+            reset_time = datetime.fromisoformat(user_data["reset_at"])
             reset_text = f"<t:{int(reset_time.timestamp())}:R>"
 
-        history_text = ""
-        for h in history[-5:]:
-            t = datetime.fromisoformat(h["time"])
-            reason = h.get("reason", "Không có")
-
-            history_text += (
-                f"Level {h['level']} | <t:{int(t.timestamp())}:R>\n"
-                f"Lý do: {reason}\n\n"
-            )
-
         body = (
-            f"• CẤP ĐỘ HIỆN TẠI: LEVEL {level}\n"
-            f"• ĐỐI TƯỢNG: {member.mention}\n\n"
-            "LỊCH SỬ GẦN NHẤT\n"
-            f"{history_text or 'Không có'}\n\n"
-            f"• RESET: {reset_text}"
+            f"• THÀNH VIÊN: {member.mention}\n"
+            f"• LEVEL: {level}\n"
+            f"• RESET: {reset_text}\n"
+            f"• SỐ LẦN WARN: {len(user_data.get('history', []))}"
         )
 
         embed = self.build_embed(
-            "WARNING | THÔNG TIN CẢNH CÁO",
+            "WARN INFO",
             body,
             self.get_level_color(level),
             member
@@ -491,199 +461,8 @@ class WarnGroup(app_commands.Group):
 
         await interaction.followup.send(embed=embed, ephemeral=True)
 
-# ================= WARN KICK =================
 
-    @app_commands.command(name="kick", description="Kick thành viên")
-    @app_commands.checks.has_permissions(kick_members=True)
-    async def kick(self, interaction: discord.Interaction, member: discord.Member, reason: str = "Không có lý do"):
-        await interaction.response.defer()
+# ================= SETUP =================
 
-        try:
-            await member.kick(reason=f"Warn system | {reason}")
-        except:
-            await interaction.followup.send("Bot thiếu quyền để kick.", ephemeral=True)
-            return
-
-        body = (
-            f"• ĐỐI TƯỢNG: {member.mention}\n"
-            f"• HÌNH PHẠT: Kick\n"
-            f"• LÝ DO: {reason}"
-        )
-
-        embed = self.build_embed(
-            "KICK | KỶ LUẬT THÀNH VIÊN",
-            body,
-            discord.Color.orange(),
-            member
-        )
-
-        await interaction.followup.send(embed=embed)
-
-# ================= WARN BAN =================
-
-    @app_commands.command(name="ban", description="Ban vĩnh viễn thành viên")
-    @app_commands.checks.has_permissions(ban_members=True)
-    async def ban(self, interaction: discord.Interaction, member: discord.Member, reason: str = "Không có lý do"):
-        await interaction.response.defer()
-
-        try:
-            await member.ban(reason=f"Warn system | {reason}")
-        except:
-            await interaction.followup.send("Bot thiếu quyền để ban.", ephemeral=True)
-            return
-
-        body = (
-            f"• ĐỐI TƯỢNG: {member.mention}\n"
-            f"• HÌNH PHẠT: Ban vĩnh viễn\n"
-            f"• LÝ DO: {reason}"
-        )
-
-        embed = self.build_embed(
-            "BAN | KỶ LUẬT THÀNH VIÊN",
-            body,
-            discord.Color.red(),
-            member
-        )
-
-        await interaction.followup.send(embed=embed)
-
-            # ================= WARN UNBAN (OPTIMIZED) =================
-
-    @app_commands.command(name="unban", description="Hiển thị danh sách ban để gỡ")
-    @app_commands.checks.has_permissions(ban_members=True)
-    async def unban(self, interaction: discord.Interaction):
-
-        banned_users = []
-        async for entry in interaction.guild.bans(limit=None):
-            banned_users.append(entry.user)
-
-        if not banned_users:
-            embed = self.build_embed(
-                "UNBAN",
-                "Không có ai đang bị ban.",
-                discord.Color.orange()
-            )
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-            return
-
-        PER_PAGE = 25
-        pages = [
-            banned_users[i:i + PER_PAGE]
-            for i in range(0, len(banned_users), PER_PAGE)
-        ]
-
-        total_pages = len(pages)
-
-        def build_view(page_index: int):
-
-            view = discord.ui.View(timeout=120)
-
-            options = []
-
-            for user in pages[page_index]:
-                options.append(
-                    discord.SelectOption(
-                        label=str(user),
-                        value=str(user.id)
-                    )
-                )
-
-            select = discord.ui.Select(
-                placeholder="Chọn người để unban",
-                options=options
-            )
-
-            async def select_callback(select_interaction: discord.Interaction):
-
-                user_id = int(select.values[0])
-
-                try:
-                    user = await select_interaction.client.fetch_user(user_id)
-                    await select_interaction.guild.unban(user)
-
-                    embed = self.build_embed(
-                        "UNBAN",
-                        f"Đã unban {user}.",
-                        discord.Color.green()
-                    )
-
-                    await select_interaction.response.send_message(
-                        embed=embed,
-                        ephemeral=True
-                    )
-
-                    log_embed = self.build_embed(
-                        "UNBAN",
-                        f"{interaction.user} đã unban {user}",
-                        discord.Color.green()
-                    )
-
-                    await self.send_log_or_here(select_interaction, log_embed)
-
-                except Exception as e:
-
-                    embed = self.build_embed(
-                        "UNBAN",
-                        f"Không thể unban: {e}",
-                        discord.Color.red()
-                    )
-
-                    await select_interaction.response.send_message(
-                        embed=embed,
-                        ephemeral=True
-                    )
-
-            select.callback = select_callback
-            view.add_item(select)
-
-            if total_pages > 1:
-
-                if page_index > 0:
-
-                    prev_button = discord.ui.Button(
-                        label="◀",
-                        style=discord.ButtonStyle.secondary
-                    )
-
-                    async def prev_callback(btn_interaction: discord.Interaction):
-                        await btn_interaction.response.edit_message(
-                            content=f"Danh sách người đang bị ban (Trang {page_index}/{total_pages})",
-                            view=build_view(page_index - 1)
-                        )
-
-                    prev_button.callback = prev_callback
-                    view.add_item(prev_button)
-
-                if page_index < total_pages - 1:
-
-                    next_button = discord.ui.Button(
-                        label="▶",
-                        style=discord.ButtonStyle.secondary
-                    )
-
-                    async def next_callback(btn_interaction: discord.Interaction):
-                        await btn_interaction.response.edit_message(
-                            content=f"Danh sách người đang bị ban (Trang {page_index + 2}/{total_pages})",
-                            view=build_view(page_index + 1)
-                        )
-
-                    next_button.callback = next_callback
-                    view.add_item(next_button)
-
-            return view
-
-        await interaction.response.send_message(
-            content=f"Danh sách người đang bị ban (Trang 1/{total_pages})",
-            view=build_view(0),
-            ephemeral=True
-        )
-
-
-async def setup(bot):
-    group = WarnGroup()
-    group.bot = bot
-
-    root = bot.tree.get_command("p")
-
-    if root and not root.get_command("warn"):
-        root.add_command(group)
+async def setup(bot: commands.Bot):
+    await bot.add_cog(WarnGroup(bot))
