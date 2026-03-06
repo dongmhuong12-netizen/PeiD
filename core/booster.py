@@ -236,6 +236,9 @@ class BoosterListener(commands.Cog):
 
             for member in guild.members:
 
+                if member.bot:
+                    continue
+
                 if member.premium_since and role not in member.roles:
                     try:
                         await member.add_roles(role, reason="Booster Sync")
