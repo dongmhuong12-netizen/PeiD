@@ -71,7 +71,7 @@ class BoosterGroup(app_commands.Group):
     @app_commands.default_permissions(manage_guild=True)
     async def embed(self, interaction: discord.Interaction, name: str):
 
-        if not load_embed(name):
+        if not load_embed(interaction.guild.id, name):
             await interaction.response.send_message(
                 f"Embed `{name}` không tồn tại.",
                 ephemeral=True
