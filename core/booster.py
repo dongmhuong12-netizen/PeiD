@@ -1,3 +1,4 @@
+import asyncio
 import discord
 from discord import app_commands
 from discord.ext import commands, tasks
@@ -18,13 +19,7 @@ class BoosterGroup(app_commands.Group):
             description="Hệ thống xử lý khi thành viên Boost server"
         )
 
-    @app_commands.command(
-        name="channel",
-        description="Đặt kênh gửi thông báo khi có người boost"
-    )
-    @app_commands.describe(
-        channel_id="ID của kênh text sẽ gửi thông báo boost"
-    )
+    @app_commands.command(name="channel", description="Đặt kênh gửi thông báo khi có người boost")
     @app_commands.default_permissions(manage_guild=True)
     async def channel(self, interaction: discord.Interaction, channel_id: str):
 
@@ -33,7 +28,8 @@ class BoosterGroup(app_commands.Group):
             return
 
         channel = interaction.guild.get_channel(int(channel_id))
-        if not channel or not isinstance(channel, discord.TextChannel):
+
+        if not isinstance(channel, discord.TextChannel):
             await interaction.response.send_message("Không tìm thấy text channel.", ephemeral=True)
             return
 
@@ -44,13 +40,7 @@ class BoosterGroup(app_commands.Group):
             ephemeral=True
         )
 
-    @app_commands.command(
-        name="message",
-        description="Đặt nội dung tin nhắn khi có người boost"
-    )
-    @app_commands.describe(
-        text="Nội dung tin nhắn (có thể dùng {user}, {server})"
-    )
+    @app_commands.command(name="message", description="Đặt nội dung tin nhắn khi có người boost")
     @app_commands.default_permissions(manage_guild=True)
     async def message(self, interaction: discord.Interaction, text: str):
 
@@ -61,13 +51,7 @@ class BoosterGroup(app_commands.Group):
             ephemeral=True
         )
 
-    @app_commands.command(
-        name="embed",
-        description="Gán embed đã tạo cho thông báo booster"
-    )
-    @app_commands.describe(
-        name="Tên embed đã lưu bằng lệnh /p embed create"
-    )
+    @app_commands.command(name="embed", description="Gán embed đã tạo cho thông báo booster")
     @app_commands.default_permissions(manage_guild=True)
     async def embed(self, interaction: discord.Interaction, name: str):
 
@@ -85,13 +69,7 @@ class BoosterGroup(app_commands.Group):
             ephemeral=True
         )
 
-    @app_commands.command(
-        name="role",
-        description="Đặt role sẽ được gán cho người boost"
-    )
-    @app_commands.describe(
-        role_input="ID hoặc mention của role cần gán"
-    )
+    @app_commands.command(name="role", description="Đặt role sẽ được gán cho người boost")
     @app_commands.default_permissions(manage_guild=True)
     async def role(self, interaction: discord.Interaction, role_input: str):
 
@@ -103,19 +81,13 @@ class BoosterGroup(app_commands.Group):
             role_id = role_input
 
         if not role_id.isdigit():
-            await interaction.response.send_message(
-                "ID Role không hợp lệ.",
-                ephemeral=True
-            )
+            await interaction.response.send_message("ID Role không hợp lệ.", ephemeral=True)
             return
 
         role = guild.get_role(int(role_id))
 
         if not role:
-            await interaction.response.send_message(
-                "Role không tồn tại.",
-                ephemeral=True
-            )
+            await interaction.response.send_message("Role không tồn tại.", ephemeral=True)
             return
 
         update_guild_config(guild.id, "booster", "role", role.id)
@@ -125,10 +97,7 @@ class BoosterGroup(app_commands.Group):
             ephemeral=True
         )
 
-    @app_commands.command(
-        name="test",
-        description="Kiểm tra hệ thống booster (gán role + gửi tin nhắn thử)"
-    )
+    @app_commands.command(name="test", description="Kiểm tra hệ thống booster")
     async def test(self, interaction: discord.Interaction):
 
         await interaction.response.defer(ephemeral=True)
@@ -143,16 +112,10 @@ class BoosterGroup(app_commands.Group):
         role = guild.get_role(role_id) if role_id else None
 
         if role:
-            if role >= bot_member.top_role:
-                await interaction.followup.send(
-                    "Lỗi, không thể test vì role bot thấp hơn role được gán.",
-                    ephemeral=True
-                )
-                return
 
-            if role in member.roles:
+            if role.position >= bot_member.top_role.position:
                 await interaction.followup.send(
-                    "Role đã tồn tại trong vai trò của bạn.",
+                    "Role bot thấp hơn role booster.",
                     ephemeral=True
                 )
                 return
@@ -168,14 +131,14 @@ class BoosterGroup(app_commands.Group):
 
         success = await send_config_message(guild, member, "booster")
 
-        if not success:
+        if success:
             await interaction.followup.send(
-                "Lỗi. Không thể Test Boost vì thiếu cấu hình. Hãy đảm bảo rằng Test sau khi có đủ kênh thông báo, role boost và text + embed.",
+                "Test Boost thành công.",
                 ephemeral=True
             )
         else:
             await interaction.followup.send(
-                "Test Boost thành công, hãy kiểm tra tại kênh được chỉ định embed.",
+                "Thiếu cấu hình booster.",
                 ephemeral=True
             )
 
@@ -185,6 +148,7 @@ class BoosterGroup(app_commands.Group):
 # ======================
 
 class BoosterListener(commands.Cog):
+
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.booster_sync.start()
@@ -195,6 +159,9 @@ class BoosterListener(commands.Cog):
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member):
 
+        if after.bot:
+            return
+
         if not before.premium_since and after.premium_since:
             await self.handle_boost(after, True)
 
@@ -203,54 +170,84 @@ class BoosterListener(commands.Cog):
 
     async def handle_boost(self, member: discord.Member, boosted: bool):
 
-        config = get_section(member.guild.id, "booster")
+        guild = member.guild
+        config = get_section(guild.id, "booster")
 
         role_id = config.get("role")
-        role = member.guild.get_role(role_id) if role_id else None
+        role = guild.get_role(role_id) if role_id else None
 
-        if boosted and role:
-            try:
+        if not role:
+            return
+
+        bot_member = guild.me
+
+        if role.position >= bot_member.top_role.position:
+            return
+
+        try:
+
+            if boosted and role not in member.roles:
                 await member.add_roles(role, reason="Server Boost")
-            except:
-                pass
 
-        if not boosted and role:
-            try:
+            elif not boosted and role in member.roles:
                 await member.remove_roles(role, reason="Boost Ended")
-            except:
-                pass
 
-        await send_config_message(member.guild, member, "booster")
+        except discord.Forbidden:
+            pass
+
+        await send_config_message(guild, member, "booster")
+
+    # ======================
+    # BOOST SYNC LOOP
+    # ======================
 
     @tasks.loop(minutes=10)
     async def booster_sync(self):
 
         for guild in self.bot.guilds:
 
+            if guild.unavailable:
+                continue
+
             config = get_section(guild.id, "booster")
+
             role_id = config.get("role")
             role = guild.get_role(role_id) if role_id else None
 
             if not role:
                 continue
 
-            for member in guild.members:
+            bot_member = guild.me
 
-                if member.bot:
-                    continue
+            if role.position >= bot_member.top_role.position:
+                continue
 
-                if member.premium_since and role not in member.roles:
+            try:
+                async for member in guild.fetch_members(limit=None):
+
+                    if member.bot:
+                        continue
+
                     try:
-                        await member.add_roles(role, reason="Booster Sync")
-                    except:
+
+                        if member.premium_since and role not in member.roles:
+                            await member.add_roles(role, reason="Booster Sync")
+
+                        elif not member.premium_since and role in member.roles:
+                            await member.remove_roles(role, reason="Booster Sync")
+
+                    except discord.Forbidden:
                         pass
 
-                if not member.premium_since and role in member.roles:
-                    try:
-                        await member.remove_roles(role, reason="Booster Sync")
-                    except:
-                        pass
+                    await asyncio.sleep(0.2)
+
+            except discord.HTTPException:
+                continue
 
     @booster_sync.before_loop
     async def before_booster_sync(self):
         await self.bot.wait_until_ready()
+
+
+async def setup(bot):
+    await bot.add_cog(BoosterListener(bot))
