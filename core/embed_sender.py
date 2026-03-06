@@ -15,12 +15,14 @@ DATA_FILE = "data/reaction_roles.json"
 def load_reaction_data():
     if not os.path.exists(DATA_FILE):
         return {}
+
     with open(DATA_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
 def save_reaction_data(data):
     os.makedirs("data", exist_ok=True)
+
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4)
 
@@ -36,8 +38,9 @@ async def send_embed(
     member: discord.Member | None = None,
     embed_name: str | None = None
 ):
+
     try:
-        # Nếu là interaction mà không truyền member
+
         if member is None and isinstance(destination, discord.Interaction):
             member = destination.user
 
@@ -46,16 +49,12 @@ async def send_embed(
         # APPLY VARIABLES
         embed_copy = apply_variables(embed_copy, guild, member)
 
-        # FIX COLOR STRING
+        # FIX COLOR
         if "color" in embed_copy:
             color = embed_copy["color"]
             if isinstance(color, str):
                 color = color.replace("#", "").replace("0x", "")
                 embed_copy["color"] = int(color, 16)
-
-        # =========================
-        # BUILD EMBED
-        # =========================
 
         embed = discord.Embed(
             title=embed_copy.get("title"),
@@ -103,53 +102,64 @@ async def send_embed(
         print("Embed build error:", e)
         return False
 
+
     try:
+
         # =========================
         # SEND MESSAGE
         # =========================
 
         if isinstance(destination, discord.Interaction):
+
             if destination.response.is_done():
                 message = await destination.followup.send(embed=embed)
             else:
                 await destination.response.send_message(embed=embed)
                 message = await destination.original_response()
+
         else:
             message = await destination.send(embed=embed)
 
+
         # =========================
-        # REACTION ROLE RESTORE (FIXED)
+        # REACTION ROLE RESTORE
         # =========================
 
         if embed_name:
+
             data = load_reaction_data()
 
-            # 🔥 LẤY ĐÚNG KEY GỐC
             key = f"{guild.id}::embed::{embed_name}"
+
             old_config = data.get(key)
 
             if old_config and "groups" in old_config:
 
-                # 🔥 ADD FULL EMOJI
-                for group in old_config.get("groups", []):
+                config = copy.deepcopy(old_config)
+
+                # ADD REACTIONS
+                for group in config.get("groups", []):
+
                     for emoji in group.get("emojis", []):
+
                         try:
                             await message.add_reaction(emoji)
                         except Exception as e:
                             print("Reaction add error:", e)
 
-                # 🔥 CHUYỂN CONFIG SANG MESSAGE.ID
-                data[str(message.id)] = old_config
-                data[str(message.id)]["guild_id"] = guild.id
-                data[str(message.id)]["embed_name"] = embed_name
+                # SAVE NEW CONFIG WITH MESSAGE ID
+                config["guild_id"] = guild.id
+                config["embed_name"] = embed_name
 
-                # 🔥 XOÁ KEY CŨ
+                data[str(message.id)] = config
+
                 if key in data:
                     del data[key]
 
                 save_reaction_data(data)
 
         return True
+
 
     except Exception as e:
         print("Embed send error:", e)
