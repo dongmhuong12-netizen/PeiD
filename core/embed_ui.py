@@ -266,7 +266,10 @@ class EmbedUIView(discord.ui.View):
 
         key = f"{guild_id}::{name}"
 
-        ACTIVE_EMBED_VIEWS[key] = [self]
+        if key not in ACTIVE_EMBED_VIEWS:
+            ACTIVE_EMBED_VIEWS[key] = []
+
+        ACTIVE_EMBED_VIEWS[key].append(self)
 
     def build_embed(self):
         data = self.data
