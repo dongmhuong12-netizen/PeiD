@@ -11,13 +11,13 @@ class EmbedSystem:
         if not name.isalnum():
             return False, "INVALID_NAME"
 
-        if load_embed(name):
+        if load_embed(guild_id, name):
             return False, "EXISTS"
 
         # Optional: nếu muốn giới hạn 15 embed thì phải đếm từ JSON
         # Hiện tại bạn chưa có get_all per guild nên bỏ LIMIT hoặc tự bổ sung
 
-        save_embed(name, {
+        save_embed(guild_id, name, {
             "title": None,
             "description": None,
             "color": 0x2F3136,
