@@ -38,7 +38,7 @@ async def send_wellcome(guild: discord.Guild, member: discord.Member):
 
         # SAU ĐÓ MỚI GỬI EMBED
         if embed_name:
-            embed_data = load_embed(embed_name)
+            embed_data = load_embed(guild.id, embed_name)
             if embed_data:
                 await send_embed(
                     channel,
