@@ -100,6 +100,8 @@ class EmbedGroup(app_commands.Group):
         message = await interaction.original_response()
         view.message = message
 
+        ACTIVE_EMBED_VIEWS.setdefault(name, []).append(view)
+
     @app_commands.command(name="edit", description="Edit existing embed")
     @app_commands.autocomplete(name=embed_name_autocomplete)
     async def edit(self, interaction: discord.Interaction, name: str):
@@ -136,6 +138,8 @@ class EmbedGroup(app_commands.Group):
         message = await interaction.original_response()
         view.message = message
 
+        ACTIVE_EMBED_VIEWS.setdefault(name, []).append(view)
+    
     @app_commands.command(name="delete", description="Delete embed")
     @app_commands.autocomplete(name=embed_name_autocomplete)
     async def delete(self, interaction: discord.Interaction, name: str):
