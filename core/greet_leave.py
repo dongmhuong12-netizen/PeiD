@@ -38,7 +38,7 @@ async def send_config_message(guild: discord.Guild, member: discord.Member, sect
 
         # 🔥 GỬI EMBED SAU
         if embed_name:
-            embed_data = load_embed(embed_name)
+            embed_data = load_embed(guild.id, embed_name)
             if embed_data:
                 await send_embed(
                     channel,
