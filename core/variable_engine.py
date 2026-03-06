@@ -23,7 +23,7 @@ def build_variables(
     variables.update({
         "{server}": guild.name,
         "{server_id}": str(guild.id),
-        "{member_count}": str(guild.member_count),
+        "{member_count}": str(guild.member_count or 0),
         "{boost_count}": str(guild.premium_subscription_count),
         "{boost_level}": str(guild.premium_tier),
         "{role_count}": str(len(guild.roles)),
