@@ -10,7 +10,6 @@ TOKEN = os.getenv("TOKEN")
 # =========================
 intents = discord.Intents.default()
 intents.members = True
-intents.reactions = True
 intents.guilds = True
 intents.message_content = True
 
