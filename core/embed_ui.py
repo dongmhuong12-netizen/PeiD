@@ -219,7 +219,7 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
 
             key = f"{guild_id}::embed::{self.view.name}"
 
-            new_group = {
+                        new_group = {
                 "mode": mode,
                 "emojis": parsed_emojis,
                 "roles": parsed_roles
@@ -232,7 +232,10 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
                     "groups": []
                 }
 
-            data[key]["groups"].append(new_group)
+            # tránh trùng reaction group
+            if new_group not in data[key]["groups"]:
+                data[key]["groups"].append(new_group)
+
             save_reaction_data(data)
 
             await interaction.response.send_message(
