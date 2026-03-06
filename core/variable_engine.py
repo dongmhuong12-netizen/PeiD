@@ -30,7 +30,7 @@ def build_variables(
         "{channel_count}": str(len(guild.channels)),
         "{online_count}": str(sum(
             1 for m in guild.members
-            if m.status != discord.Status.offline
+            if m.status is not discord.Status.offline
         )),
     })
 
