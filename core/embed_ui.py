@@ -261,10 +261,12 @@ class EmbedUIView(discord.ui.View):
         self.data = data
         self.message = None
 
-        if name not in ACTIVE_EMBED_VIEWS:
-            ACTIVE_EMBED_VIEWS[name] = []
+        key = f"{data.get('guild_id','0')}::{name}"
 
-        ACTIVE_EMBED_VIEWS[name].append(self)
+        if key not in ACTIVE_EMBED_VIEWS:
+            ACTIVE_EMBED_VIEWS[key] = []
+
+        ACTIVE_EMBED_VIEWS[key].append(self)
 
     def build_embed(self):
         data = self.data
@@ -334,8 +336,10 @@ class EmbedUIView(discord.ui.View):
             )
             return
 
-        if name in ACTIVE_EMBED_VIEWS:
-            for view in ACTIVE_EMBED_VIEWS[name]:
+        key = f"{guild_id}::{name}"
+
+        if key in ACTIVE_EMBED_VIEWS:
+            for view in ACTIVE_EMBED_VIEWS[key]:
                 try:
                     if view.message:
                         await view.message.delete()
@@ -343,7 +347,7 @@ class EmbedUIView(discord.ui.View):
                     pass
                 view.stop()
 
-            ACTIVE_EMBED_VIEWS[name] = []
+            ACTIVE_EMBED_VIEWS[key] = []
 
         delete_embed(guild_id, name)
 
