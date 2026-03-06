@@ -73,7 +73,7 @@ class EmbedGroup(app_commands.Group):
             "color": 0x5865F2
         }
 
-        view = EmbedUIView(name, embed_data)
+        view = EmbedUIView(interaction.guild.id, name, embed_data)
         embed = view.build_embed()
 
         await interaction.response.send_message(
@@ -124,7 +124,7 @@ class EmbedGroup(app_commands.Group):
 
             ACTIVE_EMBED_VIEWS[name] = []
 
-        view = EmbedUIView(name, data)
+        view = EmbedUIView(interaction.guild.id, name, data)
         embed = view.build_embed()
 
         await interaction.response.send_message(
