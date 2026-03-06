@@ -24,21 +24,30 @@ async def send_wellcome(guild: discord.Guild, member: discord.Member):
         return False
 
     channel = guild.get_channel(channel_id)
+
     if not channel:
         return False
 
-    try:
-        sent_anything = False
+    permissions = channel.permissions_for(guild.me)
 
-        # GỬI MESSAGE TRƯỚC
+    if not permissions.send_messages:
+        return False
+
+    sent_anything = False
+
+    try:
+
+        # TEXT
         if message_text:
             message_text = apply_variables(message_text, guild, member)
             await channel.send(content=message_text)
             sent_anything = True
 
-        # SAU ĐÓ MỚI GỬI EMBED
-        if embed_name:
+        # EMBED
+        if embed_name and permissions.embed_links:
+
             embed_data = load_embed(guild.id, embed_name)
+
             if embed_data:
                 await send_embed(
                     channel,
@@ -50,7 +59,10 @@ async def send_wellcome(guild: discord.Guild, member: discord.Member):
 
         return sent_anything
 
-    except Exception:
+    except discord.Forbidden:
+        return False
+
+    except discord.HTTPException:
         return False
 
 
@@ -59,6 +71,7 @@ async def send_wellcome(guild: discord.Guild, member: discord.Member):
 # ======================
 
 class WellcomeGroup(app_commands.Group):
+
     def __init__(self):
         super().__init__(
             name="wellcome",
@@ -91,7 +104,9 @@ class WellcomeGroup(app_commands.Group):
     @app_commands.default_permissions(manage_guild=True)
     async def embed(self, interaction: discord.Interaction, name: str):
 
-        if not load_embed(name):
+        embed_data = load_embed(interaction.guild.id, name)
+
+        if not embed_data:
             await interaction.response.send_message(
                 f"Embed `{name}` không tồn tại.",
                 ephemeral=True
@@ -116,7 +131,7 @@ class WellcomeGroup(app_commands.Group):
         )
 
         await interaction.followup.send(
-            "Test Wellcome thành công, hãy kiểm tra tại kênh được chỉ định embed." if success else "Lỗi. Không thể Test Wellcome vì thiếu cấu hình. Hãy đảm bảo rằng Test sau khi có đủ kênh thông báo, text + embed.",
+            "Test Wellcome thành công." if success else "Thiếu cấu hình Wellcome.",
             ephemeral=True
         )
 
@@ -126,9 +141,11 @@ class WellcomeGroup(app_commands.Group):
 # ======================
 
 class WellcomeListener(commands.Cog):
+
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
+
         await send_wellcome(member.guild, member)
