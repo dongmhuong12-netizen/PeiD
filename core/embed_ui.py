@@ -255,13 +255,13 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
 
 class EmbedUIView(discord.ui.View):
 
-    def __init__(self, name: str, data: dict):
+    def __init__(self, guild_id: int, name: str, data: dict):
         super().__init__(timeout=None)
         self.name = name
         self.data = data
         self.message = None
 
-        key = f"{data.get('guild_id','0')}::{name}"
+        key = f"{guild_id}::{name}"
 
         if key not in ACTIVE_EMBED_VIEWS:
             ACTIVE_EMBED_VIEWS[key] = []
