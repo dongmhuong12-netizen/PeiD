@@ -210,7 +210,7 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
                     # unicode emoji
                     parsed_emojis.append(str(emoji_obj))
 
-            # =========================
+            # =========================           
             # SAVE DATA
             # =========================
 
