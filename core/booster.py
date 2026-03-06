@@ -181,6 +181,9 @@ class BoosterListener(commands.Cog):
 
         bot_member = guild.me
 
+        if not bot_member:
+            return
+
         if role.position >= bot_member.top_role.position:
             return
 
@@ -195,7 +198,8 @@ class BoosterListener(commands.Cog):
         except discord.Forbidden:
             pass
 
-        await send_config_message(guild, member, "booster")
+        if boosted:
+            await send_config_message(guild, member, "booster")
 
     # ======================
     # BOOST SYNC LOOP
@@ -219,6 +223,9 @@ class BoosterListener(commands.Cog):
 
             bot_member = guild.me
 
+            if not bot_member:
+                continue
+
             if role.position >= bot_member.top_role.position:
                 continue
 
@@ -239,7 +246,7 @@ class BoosterListener(commands.Cog):
                     except discord.Forbidden:
                         pass
 
-                    await asyncio.sleep(0.2)
+                    await asyncio.sleep(0.3)
 
             except discord.HTTPException:
                 continue
