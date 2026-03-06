@@ -24,21 +24,30 @@ async def send_config_message(guild: discord.Guild, member: discord.Member, sect
         return False
 
     channel = guild.get_channel(channel_id)
+
     if not channel:
         return False
 
-    try:
-        sent_anything = False
+    permissions = channel.permissions_for(guild.me)
 
-        # 🔥 GỬI TEXT TRƯỚC
+    if not permissions.send_messages:
+        return False
+
+    sent_anything = False
+
+    try:
+
+        # TEXT
         if message_text:
             message_text = apply_variables(message_text, guild, member)
             await channel.send(content=message_text)
             sent_anything = True
 
-        # 🔥 GỬI EMBED SAU
-        if embed_name:
+        # EMBED
+        if embed_name and permissions.embed_links:
+
             embed_data = load_embed(guild.id, embed_name)
+
             if embed_data:
                 await send_embed(
                     channel,
@@ -50,7 +59,10 @@ async def send_config_message(guild: discord.Guild, member: discord.Member, sect
 
         return sent_anything
 
-    except Exception:
+    except discord.Forbidden:
+        return False
+
+    except discord.HTTPException:
         return False
 
 
@@ -59,6 +71,7 @@ async def send_config_message(guild: discord.Guild, member: discord.Member, sect
 # ======================
 
 class GreetGroup(app_commands.Group):
+
     def __init__(self):
         super().__init__(
             name="greet",
@@ -91,7 +104,9 @@ class GreetGroup(app_commands.Group):
     @app_commands.default_permissions(manage_guild=True)
     async def embed(self, interaction: discord.Interaction, name: str):
 
-        if not load_embed(name):
+        embed_data = load_embed(interaction.guild.id, name)
+
+        if not embed_data:
             await interaction.response.send_message(
                 f"Embed `{name}` không tồn tại.",
                 ephemeral=True
@@ -116,10 +131,16 @@ class GreetGroup(app_commands.Group):
             "greet"
         )
 
-        await interaction.followup.send(
-            "Test Greet thành công, hãy kiểm tra tại kênh được chỉ định embed." if success else "Lỗi. Không thể Test Greet vì thiếu cấu hình. Hãy đảm bảo rằng Test sau khi có đủ kênh thông báo, text + embed.",
-            ephemeral=True
-        )
+        if success:
+            await interaction.followup.send(
+                "Test Greet thành công.",
+                ephemeral=True
+            )
+        else:
+            await interaction.followup.send(
+                "Thiếu cấu hình greet.",
+                ephemeral=True
+            )
 
 
 # ======================
@@ -127,6 +148,7 @@ class GreetGroup(app_commands.Group):
 # ======================
 
 class LeaveGroup(app_commands.Group):
+
     def __init__(self):
         super().__init__(
             name="leave",
@@ -159,7 +181,9 @@ class LeaveGroup(app_commands.Group):
     @app_commands.default_permissions(manage_guild=True)
     async def embed(self, interaction: discord.Interaction, name: str):
 
-        if not load_embed(name):
+        embed_data = load_embed(interaction.guild.id, name)
+
+        if not embed_data:
             await interaction.response.send_message(
                 f"Embed `{name}` không tồn tại.",
                 ephemeral=True
@@ -184,10 +208,16 @@ class LeaveGroup(app_commands.Group):
             "leave"
         )
 
-        await interaction.followup.send(
-            "Text Leave thành công, hãy kiểm tra tại kênh được chỉ định embed." if success else "Lỗi. Không thể Test Leave vì thiếu cấu hình. Hãy đảm bảo rằng Test sau khi có đủ kênh thông báo, text + embed.",
-            ephemeral=True
-        )
+        if success:
+            await interaction.followup.send(
+                "Test Leave thành công.",
+                ephemeral=True
+            )
+        else:
+            await interaction.followup.send(
+                "Thiếu cấu hình leave.",
+                ephemeral=True
+            )
 
 
 # ======================
@@ -195,6 +225,7 @@ class LeaveGroup(app_commands.Group):
 # ======================
 
 class GreetLeaveListener(commands.Cog):
+
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
@@ -205,3 +236,7 @@ class GreetLeaveListener(commands.Cog):
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):
         await send_config_message(member.guild, member, "leave")
+
+
+async def setup(bot):
+    await bot.add_cog(GreetLeaveListener(bot))
