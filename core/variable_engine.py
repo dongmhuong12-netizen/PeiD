@@ -28,10 +28,10 @@ def build_variables(
         "{boost_level}": str(guild.premium_tier),
         "{role_count}": str(len(guild.roles)),
         "{channel_count}": str(len(guild.channels)),
-        "{online_count}": str(len([
-            m for m in guild.members
+        "{online_count}": str(sum(
+            1 for m in guild.members
             if m.status != discord.Status.offline
-        ])),
+        )),
     })
 
     return variables
