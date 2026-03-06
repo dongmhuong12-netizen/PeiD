@@ -219,7 +219,7 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
 
             key = f"{guild_id}::embed::{self.view.name}"
 
-                        new_group = {
+            new_group = {
                 "mode": mode,
                 "emojis": parsed_emojis,
                 "roles": parsed_roles
