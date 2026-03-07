@@ -156,26 +156,36 @@ class ReactionRole(commands.Cog):
             message = self.message_cache.get(payload.message_id)
 
             if not message:
+
                 channel = guild.get_channel(payload.channel_id)
-                if channel:
-                    try:
-                        message = await channel.fetch_message(payload.message_id)
-                        self.message_cache[payload.message_id] = message
-                    except:
-                        message = None
+
+                if not channel:
+                    return
+
+                try:
+                    message = await channel.fetch_message(payload.message_id)
+                    self.message_cache[payload.message_id] = message
+                except:
+                    message = None
+
 
             if message:
 
                 for old_emoji in data["group_emojis"]:
 
-                    if old_emoji == emoji:
+                    if str(old_emoji) == emoji:
                         continue
 
-                    reaction = discord.utils.get(message.reactions, emoji=old_emoji)
+                    reaction_obj = None
 
-                    if reaction:
+                    for r in message.reactions:
+                        if str(r.emoji) == str(old_emoji):
+                            reaction_obj = r
+                            break
+
+                    if reaction_obj:
                         try:
-                            await reaction.remove(member)
+                            await reaction_obj.remove(member)
                         except:
                             pass
 
