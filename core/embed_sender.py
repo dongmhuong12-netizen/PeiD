@@ -203,7 +203,7 @@ async def send_embed(
                 config["guild_id"] = guild.id
                 config["embed_name"] = embed_name
 
-                data[str(message.id)] = config
+                data[f"{guild.id}::msg::{message.id}"] = config
 
                 if key in data:
                     del data[key]
