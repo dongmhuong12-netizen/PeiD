@@ -3,6 +3,8 @@ from discord.ext import commands
 import asyncio
 import os
 
+os.makedirs("data", exist_ok=True)
+
 TOKEN = os.getenv("TOKEN")
 
 if not TOKEN:
