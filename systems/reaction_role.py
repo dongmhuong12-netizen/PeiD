@@ -180,7 +180,7 @@ class ReactionRole(commands.Cog):
 
             await member.add_roles(*roles_to_add)
 
-            return
+            break
 
 
     # =========================
