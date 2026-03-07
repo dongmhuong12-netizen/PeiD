@@ -45,19 +45,9 @@ def build_variables(
 
     members = guild.members
 
-    bot_count = 0
-    human_count = 0
-    online_count = 0
-
-    for m in members:
-
-        if m.bot:
-            bot_count += 1
-        else:
-            human_count += 1
-
-        if m.status != discord.Status.offline:
-            online_count += 1
+    bot_count = sum(1 for m in members if m.bot)
+    human_count = sum(1 for m in members if not m.bot)
+    online_count = sum(1 for m in members if m.status != discord.Status.offline)
 
     variables.update({
 
