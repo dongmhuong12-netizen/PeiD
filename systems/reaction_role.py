@@ -7,10 +7,6 @@ import asyncio
 DATA_FILE = "data/reaction_roles.json"
 
 
-# =========================
-# LOAD DATA
-# =========================
-
 def load_data():
     if not os.path.exists(DATA_FILE):
         return {}
@@ -21,10 +17,6 @@ def load_data():
     except:
         return {}
 
-
-# =========================
-# SAVE DATA (THÊM)
-# =========================
 
 def save_data(data):
     with open(DATA_FILE, "w", encoding="utf-8") as f:
@@ -39,34 +31,39 @@ class ReactionRole(commands.Cog):
         self.lock = asyncio.Lock()
 
 
-    # =========================
-    # BOT READY
-    # =========================
-
     @commands.Cog.listener()
     async def on_ready(self):
-
         await self.reload_data()
-
         print("ReactionRole data loaded")
 
-
-    # =========================
-    # RELOAD DATA
-    # =========================
 
     async def reload_data(self):
         async with self.lock:
             self.data = load_data()
 
 
-    # =========================
-    # SAVE WRAPPER (THÊM)
-    # =========================
-
     async def save(self):
         async with self.lock:
             save_data(self.data)
+
+
+    # =========================
+    # FIND CONFIG (FIX)
+    # =========================
+
+    def find_config(self, guild_id):
+
+        for key, value in self.data.items():
+
+            if isinstance(value, dict):
+
+                if value.get("guild_id") == guild_id:
+                    return value
+
+                if value.get("g") == guild_id:
+                    return value
+
+        return None
 
 
     # =========================
@@ -85,14 +82,14 @@ class ReactionRole(commands.Cog):
         config = self.data.get(str(payload.message_id))
 
         if not config:
+            config = self.find_config(payload.guild_id)
+
+        if not config:
             return
 
         guild = self.bot.get_guild(payload.guild_id)
 
         if not guild:
-            return
-
-        if int(config.get("guild_id")) != guild.id:
             return
 
         member = guild.get_member(payload.user_id)
@@ -132,10 +129,6 @@ class ReactionRole(commands.Cog):
                 return
 
 
-            # =========================
-            # SINGLE MODE
-            # =========================
-
             if str(group.get("mode", "")).lower() == "single":
 
                 group_roles = []
@@ -160,7 +153,6 @@ class ReactionRole(commands.Cog):
                     await member.remove_roles(*roles_to_remove)
 
 
-                # REMOVE OLD EMOJI
                 channel = guild.get_channel(payload.channel_id)
 
                 if channel:
@@ -199,14 +191,14 @@ class ReactionRole(commands.Cog):
         config = self.data.get(str(payload.message_id))
 
         if not config:
+            config = self.find_config(payload.guild_id)
+
+        if not config:
             return
 
         guild = self.bot.get_guild(payload.guild_id)
 
         if not guild:
-            return
-
-        if int(config.get("guild_id")) != guild.id:
             return
 
         member = guild.get_member(payload.user_id)
