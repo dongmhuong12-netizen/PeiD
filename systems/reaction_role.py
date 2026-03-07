@@ -2,22 +2,41 @@ import discord
 from discord.ext import commands
 import json
 import os
+import asyncio
 
 DATA_FILE = "data/reaction_roles.json"
 
+
+# =========================
+# LOAD DATA
+# =========================
 
 def load_data():
     if not os.path.exists(DATA_FILE):
         return {}
 
-    with open(DATA_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+    try:
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except:
+        return {}
 
 
 class ReactionRole(commands.Cog):
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        self.data = load_data()
+        self.lock = asyncio.Lock()
+
+
+    # =========================
+    # RELOAD DATA
+    # =========================
+
+    async def reload_data(self):
+        async with self.lock:
+            self.data = load_data()
 
 
     # =========================
@@ -33,9 +52,7 @@ class ReactionRole(commands.Cog):
         if not payload.guild_id:
             return
 
-        data = load_data()
-
-        config = data.get(str(payload.message_id))
+        config = self.data.get(str(payload.message_id))
 
         if not config:
             return
@@ -84,7 +101,11 @@ class ReactionRole(commands.Cog):
             if not roles_to_add:
                 return
 
+
+            # =========================
             # SINGLE MODE
+            # =========================
+
             if str(group.get("mode", "")).lower() == "single":
 
                 group_roles = []
@@ -108,7 +129,8 @@ class ReactionRole(commands.Cog):
                 if roles_to_remove:
                     await member.remove_roles(*roles_to_remove)
 
-                # remove old emoji
+
+                # REMOVE OLD EMOJI
                 channel = guild.get_channel(payload.channel_id)
 
                 if channel:
@@ -128,6 +150,7 @@ class ReactionRole(commands.Cog):
                     except:
                         pass
 
+
             await member.add_roles(*roles_to_add)
 
             return
@@ -143,9 +166,7 @@ class ReactionRole(commands.Cog):
         if not payload.guild_id:
             return
 
-        data = load_data()
-
-        config = data.get(str(payload.message_id))
+        config = self.data.get(str(payload.message_id))
 
         if not config:
             return
