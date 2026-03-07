@@ -88,7 +88,7 @@ class ReactionRole(commands.Cog):
         if member.bot:
             return
 
-        emoji_str = str(payload.emoji)
+        emoji_str = payload.emoji.name
 
         for group in config.get("groups", []):
 
@@ -191,7 +191,7 @@ class ReactionRole(commands.Cog):
         if config.get("guild_id") != guild.id:
             return
 
-        member = guild.get_member(payload.user_id)
+        member = payload.member or guild.get_member(payload.user_id)
 
         if not member:
             try:
