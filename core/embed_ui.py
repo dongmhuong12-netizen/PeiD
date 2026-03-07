@@ -224,8 +224,8 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
 
             if key not in data:
                 data[key] = {
-                    "guild_id": guild_id,
-                    "embed_name": self.view.name,
+                    "g": guild_id,
+                    "e": self.view.name,
                     "groups": []
                 }
 
