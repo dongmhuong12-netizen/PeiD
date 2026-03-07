@@ -74,7 +74,7 @@ class ReactionRole(commands.Cog):
         if not guild:
             return
 
-        if config.get("guild_id") != guild.id:
+        if int(config.get("guild_id")) != guild.id:
             return
 
         member = guild.get_member(payload.user_id)
