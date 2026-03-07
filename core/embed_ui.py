@@ -214,7 +214,8 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
             guild_id = guild.id
             data = load_reaction_data()
 
-            key = f"{guild_id}::embed::{self.view.name}"
+            message_id = str(self.view.message.id)
+            key = message_id
 
             new_group = {
                 "mode": mode,
@@ -224,8 +225,8 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
 
             if key not in data:
                 data[key] = {
-                    "g": guild_id,
-                    "e": self.view.name,
+                    "guild_id": guild_id,
+                    "message_id": message_id,
                     "groups": []
                 }
 
