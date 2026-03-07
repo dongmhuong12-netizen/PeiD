@@ -18,6 +18,8 @@ if not TOKEN:
 intents = discord.Intents.default()
 intents.members = True
 intents.guilds = True
+intents.reactions = True
+intents.message_content = True
 
 
 bot = commands.AutoShardedBot(
