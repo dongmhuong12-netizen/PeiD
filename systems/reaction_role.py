@@ -31,6 +31,18 @@ class ReactionRole(commands.Cog):
 
 
     # =========================
+    # BOT READY
+    # =========================
+
+    @commands.Cog.listener()
+    async def on_ready(self):
+
+        await self.reload_data()
+
+        print("ReactionRole data loaded")
+
+
+    # =========================
     # RELOAD DATA
     # =========================
 
