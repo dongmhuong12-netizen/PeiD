@@ -104,7 +104,11 @@ class ReactionRole(commands.Cog):
         msg_id = str(payload.message_id)
 
         if msg_id not in self.emoji_map:
-            return
+            self.data = load_data()
+            self.build_cache()
+
+            if msg_id not in self.emoji_map:
+                return
 
         emoji = str(payload.emoji)
 
