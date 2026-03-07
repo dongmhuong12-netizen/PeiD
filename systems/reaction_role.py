@@ -2,32 +2,20 @@ import discord
 from discord.ext import commands
 import json
 import os
-import asyncio
 
 DATA_FILE = "data/reaction_roles.json"
 
 
 def load_data():
-
     os.makedirs("data", exist_ok=True)
 
     if not os.path.exists(DATA_FILE):
         with open(DATA_FILE, "w", encoding="utf-8") as f:
             json.dump({}, f)
-
         return {}
 
-    try:
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-
-    except:
-        return {}
-
-
-def save_data(data):
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=4)
+    with open(DATA_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
 
 
 class ReactionRole(commands.Cog):
@@ -35,47 +23,58 @@ class ReactionRole(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.data = load_data()
-        self.lock = asyncio.Lock()
+
+        # cache
+        self.emoji_map = {}
+        self.group_roles = {}
+        self.message_cache = {}
 
 
     @commands.Cog.listener()
     async def on_ready(self):
-        await self.reload_data()
-        print("ReactionRole data loaded")
-
-
-    async def reload_data(self):
-        async with self.lock:
-            self.data = load_data()
-
-
-    async def save(self):
-        async with self.lock:
-            save_data(self.data)
-
-
-    def find_config(self, guild_id):
-
-        for key, value in self.data.items():
-
-            if isinstance(value, dict):
-
-                if value.get("guild_id") == guild_id:
-                    return value
-
-                if value.get("g") == guild_id:
-                    return value
-
-        return None
+        self.data = load_data()
+        self.build_cache()
+        print("ReactionRole optimized system loaded")
 
 
     # =========================
-    # ADD REACTIONS TO MESSAGE
+    # BUILD CACHE
+    # =========================
+
+    def build_cache(self):
+
+        self.emoji_map.clear()
+        self.group_roles.clear()
+
+        for msg_id, config in self.data.items():
+
+            self.emoji_map[msg_id] = {}
+            self.group_roles[msg_id] = []
+
+            for group in config.get("groups", []):
+
+                roles_in_group = []
+
+                for emoji, role_data in zip(group["emojis"], group["roles"]):
+
+                    role_ids = role_data if isinstance(role_data, list) else [role_data]
+
+                    self.emoji_map[msg_id][emoji] = {
+                        "roles": role_ids,
+                        "mode": group.get("mode", "multi"),
+                        "group_emojis": group["emojis"]
+                    }
+
+                    roles_in_group.extend(role_ids)
+
+                self.group_roles[msg_id].extend(roles_in_group)
+
+
+    # =========================
+    # ADD REACTIONS
     # =========================
 
     async def attach_reactions(self, message: discord.Message):
-
-        await self.reload_data()
 
         config = self.data.get(str(message.id))
 
@@ -83,13 +82,13 @@ class ReactionRole(commands.Cog):
             return
 
         for group in config.get("groups", []):
-
             for emoji in group.get("emojis", []):
-
                 try:
                     await message.add_reaction(emoji)
                 except:
                     pass
+
+        self.message_cache[message.id] = message
 
 
     # =========================
@@ -99,123 +98,85 @@ class ReactionRole(commands.Cog):
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
 
-        await self.reload_data()
-
         if payload.user_id == self.bot.user.id:
             return
 
-        if not payload.guild_id:
+        msg_id = str(payload.message_id)
+
+        if msg_id not in self.emoji_map:
             return
 
-        config = self.data.get(str(payload.message_id))
+        emoji = str(payload.emoji)
 
-        if not config:
-            config = self.find_config(payload.guild_id)
-
-        if not config:
+        if emoji not in self.emoji_map[msg_id]:
             return
 
         guild = self.bot.get_guild(payload.guild_id)
-
         if not guild:
             return
 
         member = guild.get_member(payload.user_id)
-
-        if not member:
-            try:
-                member = await guild.fetch_member(payload.user_id)
-            except:
-                return
-
-        if member.bot:
+        if not member or member.bot:
             return
 
-        emoji_str = str(payload.emoji)
+        data = self.emoji_map[msg_id][emoji]
 
-        for group in config.get("groups", []):
+        roles_to_add = []
 
-            if emoji_str not in group.get("emojis", []):
-                continue
+        for rid in data["roles"]:
+            role = guild.get_role(int(rid))
+            if role:
+                roles_to_add.append(role)
 
-            index = group["emojis"].index(emoji_str)
+        if not roles_to_add:
+            return
 
-            role_data = group["roles"][index]
 
-            role_ids = role_data if isinstance(role_data, list) else [role_data]
+        # =================
+        # SINGLE MODE
+        # =================
 
-            roles_to_add = []
+        if data["mode"] == "single":
 
-            for rid in role_ids:
+            roles_to_remove = []
 
+            for rid in self.group_roles[msg_id]:
                 role = guild.get_role(int(rid))
+                if role and role not in roles_to_add and role in member.roles:
+                    roles_to_remove.append(role)
 
-                if role:
-                    roles_to_add.append(role)
-
-            if not roles_to_add:
-                return
-
-
-            # =========================
-            # SINGLE MODE
-            # =========================
-
-            if str(group.get("mode", "")).lower() == "single":
-
-                group_roles = []
-
-                for r_data in group["roles"]:
-
-                    ids = r_data if isinstance(r_data, list) else [r_data]
-
-                    for rid in ids:
-
-                        role = guild.get_role(int(rid))
-
-                        if role:
-                            group_roles.append(role)
-
-                roles_to_remove = [
-                    r for r in group_roles
-                    if r not in roles_to_add and r in member.roles
-                ]
-
-                if roles_to_remove:
-                    await member.remove_roles(*roles_to_remove)
+            if roles_to_remove:
+                await member.remove_roles(*roles_to_remove)
 
 
-                # ===== remove emoji cũ của user =====
+            message = self.message_cache.get(payload.message_id)
 
+            if not message:
                 channel = guild.get_channel(payload.channel_id)
-
                 if channel:
-
                     try:
-
                         message = await channel.fetch_message(payload.message_id)
-
-                        for old_emoji in group.get("emojis", []):
-
-                            if old_emoji == emoji_str:
-                                continue
-
-                            reaction = discord.utils.get(message.reactions, emoji=old_emoji)
-
-                            if reaction:
-
-                                try:
-                                    await reaction.remove(member)
-                                except:
-                                    pass
-
+                        self.message_cache[payload.message_id] = message
                     except:
-                        pass
+                        message = None
+
+            if message:
+
+                for old_emoji in data["group_emojis"]:
+
+                    if old_emoji == emoji:
+                        continue
+
+                    reaction = discord.utils.get(message.reactions, emoji=old_emoji)
+
+                    if reaction:
+                        try:
+                            await reaction.remove(member)
+                        except:
+                            pass
 
 
-            await member.add_roles(*roles_to_add)
-
-            break
+        await member.add_roles(*roles_to_add)
 
 
     # =========================
@@ -225,61 +186,35 @@ class ReactionRole(commands.Cog):
     @commands.Cog.listener()
     async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent):
 
-        await self.reload_data()
+        msg_id = str(payload.message_id)
 
-        if not payload.guild_id:
+        if msg_id not in self.emoji_map:
             return
 
-        config = self.data.get(str(payload.message_id))
+        emoji = str(payload.emoji)
 
-        if not config:
-            config = self.find_config(payload.guild_id)
-
-        if not config:
+        if emoji not in self.emoji_map[msg_id]:
             return
 
         guild = self.bot.get_guild(payload.guild_id)
-
         if not guild:
             return
 
         member = guild.get_member(payload.user_id)
-
-        if not member:
-            try:
-                member = await guild.fetch_member(payload.user_id)
-            except:
-                return
-
-        if member.bot:
+        if not member or member.bot:
             return
 
-        emoji_str = str(payload.emoji)
+        data = self.emoji_map[msg_id][emoji]
 
-        for group in config.get("groups", []):
+        roles_to_remove = []
 
-            if emoji_str not in group.get("emojis", []):
-                continue
+        for rid in data["roles"]:
+            role = guild.get_role(int(rid))
+            if role:
+                roles_to_remove.append(role)
 
-            index = group["emojis"].index(emoji_str)
-
-            role_data = group["roles"][index]
-
-            role_ids = role_data if isinstance(role_data, list) else [role_data]
-
-            roles_to_remove = []
-
-            for rid in role_ids:
-
-                role = guild.get_role(int(rid))
-
-                if role:
-                    roles_to_remove.append(role)
-
-            if roles_to_remove:
-                await member.remove_roles(*roles_to_remove)
-
-            return
+        if roles_to_remove:
+            await member.remove_roles(*roles_to_remove)
 
 
 async def setup(bot: commands.Bot):
