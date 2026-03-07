@@ -23,7 +23,7 @@ def load_reaction_data():
     try:
         with open(DATA_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
-    except:
+    except Exception:
         return {}
 
 
@@ -73,8 +73,11 @@ async def send_embed(
         color = embed_copy.get("color")
 
         if isinstance(color, str):
-            color = color.replace("#", "").replace("0x", "")
-            embed_copy["color"] = int(color, 16)
+            try:
+                color = color.replace("#", "").replace("0x", "")
+                embed_copy["color"] = int(color, 16)
+            except:
+                embed_copy["color"] = 0x2F3136
 
         embed = discord.Embed(
             title=embed_copy.get("title"),
