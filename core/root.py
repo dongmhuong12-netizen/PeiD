@@ -52,8 +52,10 @@ class EmbedGroup(app_commands.Group):
             )
             return
 
-        if name in ACTIVE_EMBED_VIEWS:
-            for view in ACTIVE_EMBED_VIEWS[name]:
+        key = f"{interaction.guild.id}:{name}"
+
+        if key in ACTIVE_EMBED_VIEWS:
+            for view in ACTIVE_EMBED_VIEWS[key]:
                 try:
                     if view.message:
                         await view.message.delete()
@@ -61,7 +63,7 @@ class EmbedGroup(app_commands.Group):
                     pass
                 view.stop()
 
-            ACTIVE_EMBED_VIEWS[name] = []
+            ACTIVE_EMBED_VIEWS[key] = []
 
         embed_data = {
             "title": "Embed Mới",
@@ -96,7 +98,7 @@ class EmbedGroup(app_commands.Group):
         message = await interaction.original_response()
         view.message = message
 
-        ACTIVE_EMBED_VIEWS.setdefault(name, []).append(view)
+        ACTIVE_EMBED_VIEWS.setdefault(key, []).append(view)
 
     @app_commands.command(name="edit", description="Edit existing embed")
     @app_commands.autocomplete(name=embed_name_autocomplete)
@@ -111,8 +113,10 @@ class EmbedGroup(app_commands.Group):
             )
             return
 
-        if name in ACTIVE_EMBED_VIEWS:
-            for view in ACTIVE_EMBED_VIEWS[name]:
+        key = f"{interaction.guild.id}:{name}"
+
+        if key in ACTIVE_EMBED_VIEWS:
+            for view in ACTIVE_EMBED_VIEWS[key]:
                 try:
                     if view.message:
                         await view.message.delete()
@@ -120,7 +124,7 @@ class EmbedGroup(app_commands.Group):
                     pass
                 view.stop()
 
-            ACTIVE_EMBED_VIEWS[name] = []
+            ACTIVE_EMBED_VIEWS[key] = []
 
         view = EmbedUIView(interaction.guild.id, name, data)
         embed = view.build_embed()
@@ -134,7 +138,7 @@ class EmbedGroup(app_commands.Group):
         message = await interaction.original_response()
         view.message = message
 
-        ACTIVE_EMBED_VIEWS.setdefault(name, []).append(view)
+        ACTIVE_EMBED_VIEWS.setdefault(key, []).append(view)
     
     @app_commands.command(name="delete", description="Delete embed")
     @app_commands.autocomplete(name=embed_name_autocomplete)
@@ -149,8 +153,10 @@ class EmbedGroup(app_commands.Group):
             )
             return
 
-        if name in ACTIVE_EMBED_VIEWS:
-            for view in ACTIVE_EMBED_VIEWS[name]:
+        key = f"{interaction.guild.id}:{name}"
+
+        if key in ACTIVE_EMBED_VIEWS:
+            for view in ACTIVE_EMBED_VIEWS[key]:
                 try:
                     if view.message:
                         await view.message.delete()
@@ -158,7 +164,7 @@ class EmbedGroup(app_commands.Group):
                     pass
                 view.stop()
 
-            ACTIVE_EMBED_VIEWS[name] = []
+            ACTIVE_EMBED_VIEWS[key] = []
 
         delete_embed(interaction.guild.id, name)
 
