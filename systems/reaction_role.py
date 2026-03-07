@@ -70,13 +70,36 @@ class ReactionRole(commands.Cog):
 
 
     # =========================
+    # ADD REACTIONS TO MESSAGE
+    # =========================
+
+    async def attach_reactions(self, message: discord.Message):
+
+        await self.reload_data()
+
+        config = self.data.get(str(message.id))
+
+        if not config:
+            return
+
+        for group in config.get("groups", []):
+
+            for emoji in group.get("emojis", []):
+
+                try:
+                    await message.add_reaction(emoji)
+                except:
+                    pass
+
+
+    # =========================
     # REACTION ADD
     # =========================
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
 
-        await self.reload_data()   # FIX
+        await self.reload_data()
 
         if payload.user_id == self.bot.user.id:
             return
@@ -190,7 +213,7 @@ class ReactionRole(commands.Cog):
     @commands.Cog.listener()
     async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent):
 
-        await self.reload_data()   # FIX
+        await self.reload_data()
 
         if not payload.guild_id:
             return
