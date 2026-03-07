@@ -18,6 +18,11 @@ def load_data():
         return json.load(f)
 
 
+def save_data(data):
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4)
+
+
 class ReactionRole(commands.Cog):
 
     def __init__(self, bot: commands.Bot):
@@ -47,6 +52,9 @@ class ReactionRole(commands.Cog):
         self.group_roles.clear()
 
         for msg_id, config in self.data.items():
+
+            if not msg_id.isdigit():
+                continue
 
             self.emoji_map[msg_id] = {}
             self.group_roles[msg_id] = []
@@ -166,28 +174,32 @@ class ReactionRole(commands.Cog):
                     message = await channel.fetch_message(payload.message_id)
                     self.message_cache[payload.message_id] = message
                 except:
-                    message = None
+
+                    # MESSAGE KHÔNG CÒN → XOÁ CONFIG
+                    if msg_id in self.data:
+                        del self.data[msg_id]
+                        save_data(self.data)
+
+                    return
 
 
-            if message:
+            for old_emoji in data["group_emojis"]:
 
-                for old_emoji in data["group_emojis"]:
+                if str(old_emoji) == emoji:
+                    continue
 
-                    if str(old_emoji) == emoji:
-                        continue
+                reaction_obj = None
 
-                    reaction_obj = None
+                for r in message.reactions:
+                    if str(r.emoji) == str(old_emoji):
+                        reaction_obj = r
+                        break
 
-                    for r in message.reactions:
-                        if str(r.emoji) == str(old_emoji):
-                            reaction_obj = r
-                            break
-
-                    if reaction_obj:
-                        try:
-                            await reaction_obj.remove(member)
-                        except:
-                            pass
+                if reaction_obj:
+                    try:
+                        await reaction_obj.remove(member)
+                    except:
+                        pass
 
 
         await member.add_roles(*roles_to_add)
@@ -203,7 +215,11 @@ class ReactionRole(commands.Cog):
         msg_id = str(payload.message_id)
 
         if msg_id not in self.emoji_map:
-            return
+            self.data = load_data()
+            self.build_cache()
+
+            if msg_id not in self.emoji_map:
+                return
 
         emoji = str(payload.emoji)
 
