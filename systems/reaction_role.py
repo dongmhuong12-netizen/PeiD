@@ -54,10 +54,6 @@ class ReactionRole(commands.Cog):
             save_data(self.data)
 
 
-    # =========================
-    # FIND CONFIG (FIX)
-    # =========================
-
     def find_config(self, guild_id):
 
         for key, value in self.data.items():
@@ -79,6 +75,8 @@ class ReactionRole(commands.Cog):
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
+
+        await self.reload_data()   # FIX
 
         if payload.user_id == self.bot.user.id:
             return
@@ -191,6 +189,8 @@ class ReactionRole(commands.Cog):
 
     @commands.Cog.listener()
     async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent):
+
+        await self.reload_data()   # FIX
 
         if not payload.guild_id:
             return
