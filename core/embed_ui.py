@@ -212,10 +212,10 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
                     parsed_emojis.append(str(emoji_obj))
 
             guild_id = guild.id
+            embed_name = self.view.name
             data = load_reaction_data()
 
-            message_id = str(self.view.message.id)
-            key = message_id
+            key = f"{guild_id}::embed::{embed_name}"
 
             new_group = {
                 "mode": mode,
@@ -226,7 +226,7 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
             if key not in data:
                 data[key] = {
                     "guild_id": guild_id,
-                    "message_id": message_id,
+                    "embed_name": embed_name,
                     "groups": []
                 }
 
