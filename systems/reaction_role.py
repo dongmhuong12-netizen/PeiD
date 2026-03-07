@@ -22,6 +22,15 @@ def load_data():
         return {}
 
 
+# =========================
+# SAVE DATA (THÊM)
+# =========================
+
+def save_data(data):
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4)
+
+
 class ReactionRole(commands.Cog):
 
     def __init__(self, bot: commands.Bot):
@@ -49,6 +58,15 @@ class ReactionRole(commands.Cog):
     async def reload_data(self):
         async with self.lock:
             self.data = load_data()
+
+
+    # =========================
+    # SAVE WRAPPER (THÊM)
+    # =========================
+
+    async def save(self):
+        async with self.lock:
+            save_data(self.data)
 
 
     # =========================
@@ -188,7 +206,6 @@ class ReactionRole(commands.Cog):
         if not guild:
             return
 
-        # FIX 1
         if int(config.get("guild_id")) != guild.id:
             return
 
@@ -203,7 +220,6 @@ class ReactionRole(commands.Cog):
         if member.bot:
             return
 
-        # FIX 2
         emoji_str = str(payload.emoji)
 
         for group in config.get("groups", []):
