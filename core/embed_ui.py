@@ -236,11 +236,7 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
             save_reaction_data(data)
 
 # ADD REACTIONS TO MESSAGE
-            for emoji in parsed_emojis:
-                try:
-                    await self.view.message.add_reaction(emoji)
-                except:
-                    pass
+        
 
             await interaction.response.send_message(
                 "Reaction role lưu thành công.",
