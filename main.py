@@ -16,11 +16,10 @@ if not TOKEN:
 intents = discord.Intents.default()
 intents.members = True
 intents.guilds = True
-intents.message_content = True
 
 
-bot = commands.Bot(
-    command_prefix="!",
+bot = commands.AutoShardedBot(
+    command_prefix=commands.when_mentioned,
     intents=intents
 )
 
@@ -55,12 +54,6 @@ async def on_ready():
 
     print(f"Logged in as {bot.user} ({bot.user.id})")
     print("Bot ready")
-
-    try:
-        synced = await bot.tree.sync()
-        print(f"Slash commands synced: {len(synced)}")
-    except Exception as e:
-        print(f"Command sync error: {e}")
 
 
 # =========================
