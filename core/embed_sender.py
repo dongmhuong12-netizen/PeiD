@@ -205,8 +205,8 @@ async def send_embed(
 
                 data[f"{guild.id}::msg::{message.id}"] = config
 
-                if key in data:
-                    del data[key]
+                # ❗ KHÔNG XÓA CONFIG GỐC
+                # del data[key]  ← bỏ dòng này
 
                 save_reaction_data(data)
 
