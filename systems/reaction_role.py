@@ -157,6 +157,10 @@ class ReactionRole(commands.Cog):
                 return
 
 
+            # =========================
+            # SINGLE MODE
+            # =========================
+
             if str(group.get("mode", "")).lower() == "single":
 
                 group_roles = []
@@ -181,21 +185,29 @@ class ReactionRole(commands.Cog):
                     await member.remove_roles(*roles_to_remove)
 
 
+                # ===== remove emoji cũ của user =====
+
                 channel = guild.get_channel(payload.channel_id)
 
                 if channel:
 
                     try:
+
                         message = await channel.fetch_message(payload.message_id)
 
-                        for reaction in message.reactions:
+                        for old_emoji in group.get("emojis", []):
 
-                            if str(reaction.emoji) != emoji_str:
+                            if old_emoji == emoji_str:
+                                continue
 
-                                async for user in reaction.users():
+                            reaction = discord.utils.get(message.reactions, emoji=old_emoji)
 
-                                    if user.id == member.id:
-                                        await reaction.remove(member)
+                            if reaction:
+
+                                try:
+                                    await reaction.remove(member)
+                                except:
+                                    pass
 
                     except:
                         pass
