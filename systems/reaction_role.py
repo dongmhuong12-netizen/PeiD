@@ -8,12 +8,19 @@ DATA_FILE = "data/reaction_roles.json"
 
 
 def load_data():
+
+    os.makedirs("data", exist_ok=True)
+
     if not os.path.exists(DATA_FILE):
+        with open(DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump({}, f)
+
         return {}
 
     try:
         with open(DATA_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
+
     except:
         return {}
 
