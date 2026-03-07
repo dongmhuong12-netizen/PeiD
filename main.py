@@ -55,7 +55,7 @@ async def on_ready():
     await bot.tree.sync()
 
     print(f"Logged in as {bot.user} ({bot.user.id})")
-    print("Slash commands synced")
+    print("Slash synced")
     print("Bot ready")
 
 
