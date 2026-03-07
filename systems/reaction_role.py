@@ -88,7 +88,7 @@ class ReactionRole(commands.Cog):
         if member.bot:
             return
 
-        emoji_str = payload.emoji.name
+        emoji_str = str(payload.emoji)
 
         for group in config.get("groups", []):
 
@@ -204,7 +204,7 @@ class ReactionRole(commands.Cog):
             return
 
         # FIX 2
-        emoji_str = payload.emoji.name
+        emoji_str = str(payload.emoji)
 
         for group in config.get("groups", []):
 
