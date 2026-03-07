@@ -52,7 +52,10 @@ async def load_extensions():
 @bot.event
 async def on_ready():
 
+    await bot.tree.sync()
+
     print(f"Logged in as {bot.user} ({bot.user.id})")
+    print("Slash commands synced")
     print("Bot ready")
 
 
