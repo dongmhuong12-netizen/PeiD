@@ -43,6 +43,22 @@ def build_variables(
     # SERVER VARIABLES
     # =========================
 
+    members = guild.members
+
+    bot_count = 0
+    human_count = 0
+    online_count = 0
+
+    for m in members:
+
+        if m.bot:
+            bot_count += 1
+        else:
+            human_count += 1
+
+        if m.status != discord.Status.offline:
+            online_count += 1
+
     variables.update({
 
         "{server}": guild.name,
@@ -59,8 +75,9 @@ def build_variables(
 
         "{member_count}": str(guild.member_count or 0),
 
-        "{bot_count}": str(sum(1 for m in guild.members if m.bot)),
-        "{human_count}": str(sum(1 for m in guild.members if not m.bot)),
+        "{bot_count}": str(bot_count),
+        "{human_count}": str(human_count),
+        "{online_count}": str(online_count),
 
         "{boost_count}": str(guild.premium_subscription_count or 0),
         "{boost_level}": str(guild.premium_tier),
@@ -75,23 +92,21 @@ def build_variables(
         "{emoji_count}": str(len(guild.emojis)),
         "{sticker_count}": str(len(guild.stickers)),
 
-        "{online_count}": str(sum(
-            1 for m in guild.members
-            if m.status != discord.Status.offline
-        )),
-
     })
 
     # =========================
     # TIME VARIABLES
     # =========================
 
+    now = discord.utils.utcnow()
+    unix = str(int(time.time()))
+
     variables.update({
 
-        "{timestamp}": str(int(time.time())),
-        "{unix}": str(int(time.time())),
-        "{date}": discord.utils.utcnow().strftime("%d/%m/%Y"),
-        "{time}": discord.utils.utcnow().strftime("%H:%M:%S"),
+        "{timestamp}": unix,
+        "{unix}": unix,
+        "{date}": now.strftime("%d/%m/%Y"),
+        "{time}": now.strftime("%H:%M:%S"),
 
     })
 
@@ -111,7 +126,8 @@ def apply_variables(
         if isinstance(value, str):
 
             for key, val in variables.items():
-                value = value.replace(key, val)
+                if key in value:
+                    value = value.replace(key, val)
 
             return value
 
