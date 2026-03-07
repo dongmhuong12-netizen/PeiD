@@ -201,7 +201,7 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
                     )
                     return
 
-                parsed_roles.append(str(role_obj.id))
+                parsed_roles.append([str(role_obj.id)])
 
             for e in raw_emojis:
                 emoji_obj = parse_emoji(e)
