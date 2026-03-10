@@ -235,6 +235,8 @@ class BoosterListener(commands.Cog):
                     if member.bot:
                         continue
 
+                    member = guild.get_member(member.id) or member
+                    
                     try:
 
                         if member.premium_since and role not in member.roles:
