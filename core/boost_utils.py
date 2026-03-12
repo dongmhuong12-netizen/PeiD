@@ -7,10 +7,12 @@ from datetime import datetime, timezone
 # ==============================
 
 def get_boost_days(member: discord.Member) -> int:
+
     if not member.premium_since:
         return 0
 
     now = datetime.now(timezone.utc)
+
     return (now - member.premium_since).days
 
 
@@ -28,8 +30,17 @@ def calculate_level_role(member: discord.Member, booster_role, levels: list):
     target_role = booster_role
 
     for lvl in levels:
-        if boost_days >= lvl["days"]:
-            role = member.guild.get_role(lvl["role"])
+
+        role_id = lvl.get("role")
+        days = lvl.get("days")
+
+        if role_id is None or days is None:
+            continue
+
+        if boost_days >= days:
+
+            role = member.guild.get_role(role_id)
+
             if role:
                 target_role = role
 
@@ -45,11 +56,19 @@ def get_booster_roles(guild: discord.Guild, booster_role_id: int, levels: list):
     roles = []
 
     booster_role = guild.get_role(booster_role_id)
+
     if booster_role:
         roles.append(booster_role)
 
     for lvl in levels:
-        role = guild.get_role(lvl["role"])
+
+        role_id = lvl.get("role")
+
+        if not role_id:
+            continue
+
+        role = guild.get_role(role_id)
+
         if role:
             roles.append(role)
 
@@ -62,18 +81,25 @@ def get_booster_roles(guild: discord.Guild, booster_role_id: int, levels: list):
 
 def cleanup_deleted_roles(guild: discord.Guild, levels: list):
 
-    cleaned = []
-    removed = False
+    changed = False
 
     for lvl in levels:
-        role = guild.get_role(lvl["role"])
 
-        if role:
-            cleaned.append(lvl)
-        else:
-            removed = True
+        role_id = lvl.get("role")
 
-    return cleaned, removed
+        if not role_id:
+            continue
+
+        role = guild.get_role(role_id)
+
+        if not role:
+
+            lvl["role"] = None
+            lvl["days"] = None
+
+            changed = True
+
+    return levels, changed
 
 
 # ==============================
@@ -82,10 +108,8 @@ def cleanup_deleted_roles(guild: discord.Guild, levels: list):
 
 def validate_levels(levels: list, booster_role_id: int):
 
-    if len(levels) > 100:
-        return False, "Level vượt quá giới hạn 100."
-
     role_set = set()
+
     prev_days = 0
 
     for lvl in levels:
@@ -93,8 +117,12 @@ def validate_levels(levels: list, booster_role_id: int):
         role_id = lvl.get("role")
         days = lvl.get("days")
 
+        # slot trống → bỏ qua
+        if role_id is None and days is None:
+            continue
+
         if role_id is None or days is None:
-            return False, "Level thiếu role hoặc days."
+            return False, "Level phải có cả role và days."
 
         if role_id == booster_role_id:
             return False, "Role level không được trùng booster role."
@@ -122,6 +150,7 @@ def move_level_up(levels: list, index: int):
         return levels
 
     levels[index - 1], levels[index] = levels[index], levels[index - 1]
+
     return levels
 
 
@@ -131,6 +160,7 @@ def move_level_down(levels: list, index: int):
         return levels
 
     levels[index + 1], levels[index] = levels[index], levels[index + 1]
+
     return levels
 
 
@@ -141,6 +171,7 @@ def move_level_down(levels: list, index: int):
 def get_member_booster_role(member: discord.Member, booster_roles: list):
 
     for role in booster_roles:
+
         if role in member.roles:
             return role
 
