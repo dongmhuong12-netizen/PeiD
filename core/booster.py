@@ -7,6 +7,9 @@ from core.greet_storage import get_section, update_guild_config
 from core.embed_storage import load_embed
 from core.greet_leave import send_config_message
 
+# NEW
+from core.booster_engine import assign_correct_level
+
 
 # ======================
 # BOOSTER GROUP
@@ -201,11 +204,20 @@ class BoosterListener(commands.Cog):
         if boosted:
             await send_config_message(guild, member, "booster")
 
+        # ======================
+        # NEW: BOOST LEVEL LOGIC
+        # ======================
+
+        try:
+            await assign_correct_level(member)
+        except Exception:
+            pass
+
     # ======================
     # BOOST SYNC LOOP
     # ======================
 
-    @tasks.loop(minutes=10)
+    @tasks.loop(minutes=30)
     async def booster_sync(self):
 
         for guild in self.bot.guilds:
@@ -229,29 +241,28 @@ class BoosterListener(commands.Cog):
             if role.position >= bot_member.top_role.position:
                 continue
 
-            try:
-                async for member in guild.fetch_members(limit=None):
+            boosters = guild.premium_subscribers
 
-                    if member.bot:
-                        continue
+            for member in boosters:
 
-                    member = guild.get_member(member.id) or member
-                    
-                    try:
+                if member.bot:
+                    continue
 
-                        if member.premium_since and role not in member.roles:
-                            await member.add_roles(role, reason="Booster Sync")
+                try:
 
-                        elif not member.premium_since and role in member.roles:
-                            await member.remove_roles(role, reason="Booster Sync")
+                    if role not in member.roles:
+                        await member.add_roles(role, reason="Booster Sync")
 
-                    except discord.Forbidden:
-                        pass
+                except discord.Forbidden:
+                    pass
 
-                    await asyncio.sleep(0.3)
+                # NEW: sync booster level
+                try:
+                    await assign_correct_level(member)
+                except Exception:
+                    pass
 
-            except discord.HTTPException:
-                continue
+                await asyncio.sleep(0.2)
 
     @booster_sync.before_loop
     async def before_booster_sync(self):
