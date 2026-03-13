@@ -209,6 +209,7 @@ class BoosterListener(commands.Cog):
     def __init__(self, bot: commands.Bot):
 
         self.bot = bot
+        self._startup_done = False
         self.booster_sync.start()
 
     def cog_unload(self):
@@ -228,7 +229,7 @@ class BoosterListener(commands.Cog):
         if not before.premium_since and after.premium_since:
             await self.handle_boost(after, True)
 
-        if before.premium_since and not after.premium_since:
+        elif before.premium_since and not after.premium_since:
             await self.handle_boost(after, False)
 
     async def handle_boost(self, member: discord.Member, boosted: bool):
@@ -243,7 +244,6 @@ class BoosterListener(commands.Cog):
             return
 
         bot_member = guild.me
-
         if not bot_member:
             return
 
@@ -254,20 +254,14 @@ class BoosterListener(commands.Cog):
 
             if boosted and role not in member.roles:
 
-                await member.add_roles(
-                    role,
-                    reason="Server Boost"
-                )
+                await member.add_roles(role, reason="Server Boost")
 
             elif not boosted and role in member.roles:
 
-                await member.remove_roles(
-                    role,
-                    reason="Boost Ended"
-                )
+                await member.remove_roles(role, reason="Boost Ended")
 
         except discord.Forbidden:
-            pass
+            return
 
         if boosted:
 
@@ -277,11 +271,12 @@ class BoosterListener(commands.Cog):
                 "booster"
             )
 
-        try:
-            await assign_correct_level(member)
+        if member.premium_since:
 
-        except Exception:
-            pass
+            try:
+                await assign_correct_level(member)
+            except Exception:
+                pass
 
     # ======================
     # BOOST SYNC LOOP
@@ -304,7 +299,6 @@ class BoosterListener(commands.Cog):
                 continue
 
             bot_member = guild.me
-
             if not bot_member:
                 continue
 
@@ -312,6 +306,9 @@ class BoosterListener(commands.Cog):
                 continue
 
             boosters = guild.premium_subscribers
+
+            if not boosters:
+                continue
 
             for member in boosters:
 
@@ -330,11 +327,12 @@ class BoosterListener(commands.Cog):
                 except discord.Forbidden:
                     pass
 
-                try:
-                    await assign_correct_level(member)
+                if member.premium_since:
 
-                except Exception:
-                    pass
+                    try:
+                        await assign_correct_level(member)
+                    except Exception:
+                        pass
 
                 await asyncio.sleep(0.2)
 
@@ -350,15 +348,25 @@ class BoosterListener(commands.Cog):
     @commands.Cog.listener()
     async def on_ready(self):
 
+        if self._startup_done:
+            return
+
+        self._startup_done = True
+
         for guild in self.bot.guilds:
 
             boosters = guild.premium_subscribers
 
+            if not boosters:
+                continue
+
             for member in boosters:
+
+                if member.bot:
+                    continue
 
                 try:
                     await assign_correct_level(member)
-
                 except Exception:
                     pass
 
