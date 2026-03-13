@@ -14,7 +14,14 @@ def calculate_boost_days(member: discord.Member):
         return 0
 
     now = datetime.now(timezone.utc)
-    return (now - member.premium_since).days
+
+    days = (now - member.premium_since).days
+
+    # tránh bug cache discord
+    if days < 0:
+        return 0
+
+    return days
 
 
 # ==============================
@@ -28,7 +35,6 @@ def get_member_level(boost_days: int, levels: dict):
 
     current_level = 1
 
-    # sort level theo số ngày
     sorted_levels = sorted(
         levels.items(),
         key=lambda x: x[1].get("days", 0)
@@ -115,6 +121,9 @@ async def clear_level_roles(member: discord.Member, config: dict):
 
     bot_member = member.guild.me
 
+    if not bot_member:
+        return
+
     roles_to_remove = [
         role for role in booster_roles
         if role in member.roles
@@ -178,7 +187,6 @@ async def assign_correct_level(member: discord.Member):
 
         return level
 
-    # remove role cũ
     roles_to_remove = [
         r for r in booster_roles
         if r in member.roles
@@ -188,7 +196,6 @@ async def assign_correct_level(member: discord.Member):
     if roles_to_remove:
         await member.remove_roles(*roles_to_remove, reason="Booster level update")
 
-    # add role mới
     await member.add_roles(target_role, reason="Booster level update")
 
     return level
