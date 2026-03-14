@@ -8,6 +8,8 @@ from core.embed_storage import load_embed
 from core.greet_leave import send_config_message
 
 from core.booster_engine import assign_correct_level
+from core.booster_storage import load_booster_levels
+from core.booster_level_ui import BoosterLevelView
 
 
 # ======================
@@ -145,6 +147,58 @@ class BoosterGroup(app_commands.Group):
             ephemeral=True
         )
 
+    # ======================
+    # BOOSTER LEVEL EDITOR
+    # ======================
+
+    @app_commands.command(
+        name="level",
+        description="Mở bảng chỉnh Booster Level"
+    )
+    @app_commands.default_permissions(manage_guild=True)
+    async def level(self, interaction: discord.Interaction):
+
+        guild = interaction.guild
+
+        config = get_section(guild.id, "booster")
+        booster_role = config.get("role")
+
+        if not booster_role:
+
+            await interaction.response.send_message(
+                "Server chưa thiết lập booster role. "
+                "Hãy dùng lệnh `/p booster role` trước.",
+                ephemeral=True
+            )
+            return
+
+        levels = load_booster_levels(guild.id)
+
+        if not levels:
+
+            levels = [
+                {
+                    "role": booster_role,
+                    "days": 0
+                }
+            ]
+
+        view = BoosterLevelView(
+            guild_id=guild.id,
+            levels=[lvl.copy() for lvl in levels]
+        )
+
+        embed = view.build_embed()
+
+        await interaction.response.send_message(
+            embed=embed,
+            view=view,
+            ephemeral=True
+        )
+
+        message = await interaction.original_response()
+        view.message = message
+
     @app_commands.command(
         name="test",
         description="Kiểm tra hệ thống booster"
@@ -216,10 +270,6 @@ class BoosterListener(commands.Cog):
 
         self.booster_sync.cancel()
 
-    # ======================
-    # MEMBER UPDATE
-    # ======================
-
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member):
 
@@ -277,10 +327,6 @@ class BoosterListener(commands.Cog):
                 await assign_correct_level(member)
             except Exception:
                 pass
-
-    # ======================
-    # BOOST SYNC LOOP
-    # ======================
 
     @tasks.loop(minutes=30)
     async def booster_sync(self):
@@ -340,10 +386,6 @@ class BoosterListener(commands.Cog):
     async def before_booster_sync(self):
 
         await self.bot.wait_until_ready()
-
-    # ======================
-    # STARTUP RESYNC
-    # ======================
 
     @commands.Cog.listener()
     async def on_ready(self):
