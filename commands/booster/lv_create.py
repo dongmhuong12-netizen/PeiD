@@ -3,10 +3,8 @@ from discord import app_commands
 from discord.ext import commands
 
 from core.booster_level_ui import BoosterLevelView
-from core.booster_storage import (
-    load_booster_levels,
-    load_booster_config
-)
+from core.booster_storage import load_booster_levels
+from core.greet_storage import get_section
 
 
 class BoosterLevelCreate(commands.Cog):
@@ -31,9 +29,9 @@ class BoosterLevelCreate(commands.Cog):
             return
 
         # load booster config
-        config = load_booster_config(guild.id)
+        config = get_section(guild.id, "booster")
 
-        if not config or not config.get("booster_role"):
+        if not config or not config.get("role"):
 
             await interaction.response.send_message(
                 "Server chưa thiết lập booster role. "
@@ -42,7 +40,7 @@ class BoosterLevelCreate(commands.Cog):
             )
             return
 
-        booster_role = config["booster_role"]
+        booster_role = config["role"]
 
         # load level config
         levels = load_booster_levels(guild.id)
