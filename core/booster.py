@@ -8,7 +8,7 @@ from core.embed_storage import load_embed
 from core.greet_leave import send_config_message
 
 from core.booster_engine import assign_correct_level
-from core.booster_storage import load_booster_levels
+from core.booster_storage import get_levels
 from core.booster_level_ui import BoosterLevelView
 
 
@@ -172,7 +172,7 @@ class BoosterGroup(app_commands.Group):
             )
             return
 
-        levels = load_booster_levels(guild.id)
+        levels = await get_levels(guild.id)
 
         if not levels:
 
