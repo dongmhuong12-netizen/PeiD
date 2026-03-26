@@ -48,6 +48,31 @@ def _save(data):
 
 
 # ==============================
+# NORMALIZE LEVELS
+# ==============================
+
+def _normalize_levels(levels: list):
+
+    normalized = []
+
+    for i, lvl in enumerate(levels):
+
+        role = lvl.get("role")
+        days = lvl.get("days")
+
+        if role is None or days is None:
+            continue
+
+        normalized.append({
+            "level": i + 1,
+            "role": role,
+            "days": days
+        })
+
+    return normalized
+
+
+# ==============================
 # GET CONFIG
 # ==============================
 
@@ -66,30 +91,39 @@ async def get_guild_config(guild_id: int):
                 "levels": []
             }
 
-        # migrate old dict -> list (AUTO FIX)
-        if isinstance(config.get("levels"), dict):
+        levels = config.get("levels")
 
-            levels_dict = config.get("levels", {})
+        # =========================
+        # MIGRATE DICT → LIST
+        # =========================
+        if isinstance(levels, dict):
 
-            levels_list = []
+            new_levels = []
 
             for lvl, value in sorted(
-                levels_dict.items(),
+                levels.items(),
                 key=lambda x: int(x[0])
             ):
-                levels_list.append({
+                new_levels.append({
                     "role": value.get("role"),
                     "days": value.get("days")
                 })
 
-            config["levels"] = levels_list
+            config["levels"] = _normalize_levels(new_levels)
 
             data[str(guild_id)] = config
             _save(data)
 
-        # ensure list
-        if "levels" not in config or not isinstance(config["levels"], list):
+        # =========================
+        # ENSURE LIST
+        # =========================
+        if not isinstance(config.get("levels"), list):
             config["levels"] = []
+
+        # =========================
+        # ENSURE LEVEL FIELD
+        # =========================
+        config["levels"] = _normalize_levels(config["levels"])
 
         return config
 
@@ -104,9 +138,9 @@ async def save_guild_config(guild_id: int, config: dict):
 
         data = _load()
 
-        # safety normalize
-        if "levels" not in config or not isinstance(config["levels"], list):
-            config["levels"] = []
+        levels = config.get("levels", [])
+
+        config["levels"] = _normalize_levels(levels)
 
         data[str(guild_id)] = config
 
@@ -145,22 +179,7 @@ async def save_levels(guild_id: int, levels: list):
 
     config = await get_guild_config(guild_id)
 
-    # remove empty levels
-    cleaned = []
-
-    for lvl in levels:
-        role = lvl.get("role")
-        days = lvl.get("days")
-
-        if role is None or days is None:
-            continue
-
-        cleaned.append({
-            "role": role,
-            "days": days
-        })
-
-    config["levels"] = cleaned
+    config["levels"] = _normalize_levels(levels)
 
     await save_guild_config(guild_id, config)
 
