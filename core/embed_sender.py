@@ -1,14 +1,16 @@
+# core/embed_sender.py
 import discord
 import copy
 import os
 import json
-import threading
+import asyncio
 from typing import Union
 from core.variable_engine import apply_variables
 
 DATA_FILE = "data/reaction_roles.json"
 
-file_lock = threading.Lock()
+# FIX: dùng async lock
+file_lock = asyncio.Lock()
 
 
 # =========================
@@ -27,13 +29,13 @@ def load_reaction_data():
         return {}
 
 
-def save_reaction_data(data):
+async def save_reaction_data(data):
 
     os.makedirs("data", exist_ok=True)
 
     temp_file = DATA_FILE + ".tmp"
 
-    with file_lock:
+    async with file_lock:
 
         with open(temp_file, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=4)
@@ -53,6 +55,12 @@ async def send_embed(
     embed_name: str | None = None
 ):
 
+    # =========================
+    # VALIDATE INPUT
+    # =========================
+    if not embed_data or not isinstance(embed_data, dict):
+        return False
+
     try:
 
         if member is None and isinstance(destination, discord.Interaction):
@@ -60,16 +68,10 @@ async def send_embed(
 
         embed_copy = copy.deepcopy(embed_data)
 
-        # =========================
         # APPLY VARIABLES
-        # =========================
-
         embed_copy = apply_variables(embed_copy, guild, member)
 
-        # =========================
         # COLOR FIX
-        # =========================
-
         color = embed_copy.get("color")
 
         if isinstance(color, str):
@@ -85,62 +87,33 @@ async def send_embed(
             color=embed_copy.get("color", 0x2F3136)
         )
 
-        # =========================
         # IMAGE
-        # =========================
-
         image = embed_copy.get("image")
-
         if image:
-            if isinstance(image, dict):
-                embed.set_image(url=image.get("url"))
-            else:
-                embed.set_image(url=image)
+            embed.set_image(url=image.get("url") if isinstance(image, dict) else image)
 
-        # =========================
         # THUMBNAIL
-        # =========================
-
         thumbnail = embed_copy.get("thumbnail")
-
         if thumbnail:
-            if isinstance(thumbnail, dict):
-                embed.set_thumbnail(url=thumbnail.get("url"))
-            else:
-                embed.set_thumbnail(url=thumbnail)
+            embed.set_thumbnail(url=thumbnail.get("url") if isinstance(thumbnail, dict) else thumbnail)
 
-        # =========================
         # FOOTER
-        # =========================
-
         footer = embed_copy.get("footer")
-
         if isinstance(footer, dict):
             embed.set_footer(text=footer.get("text"))
 
-        # =========================
         # AUTHOR
-        # =========================
-
         author = embed_copy.get("author")
-
         if isinstance(author, dict):
             embed.set_author(name=author.get("name"))
 
-        # =========================
         # FIELDS
-        # =========================
-
         fields = embed_copy.get("fields")
-
         if fields:
             for field in fields:
-
                 name = field.get("name")
                 value = field.get("value")
-
                 if name and value:
-
                     embed.add_field(
                         name=name,
                         value=value,
@@ -150,7 +123,6 @@ async def send_embed(
     except Exception as e:
         print("Embed build error:", e)
         return False
-
 
     try:
 
@@ -162,14 +134,17 @@ async def send_embed(
 
             if destination.response.is_done():
                 message = await destination.followup.send(embed=embed)
-
             else:
                 await destination.response.send_message(embed=embed)
                 message = await destination.original_response()
 
         else:
-            message = await destination.send(embed=embed)
+            # FIX: check permission
+            perms = destination.permissions_for(guild.me)
+            if not perms.send_messages:
+                return False
 
+            message = await destination.send(embed=embed)
 
         # =========================
         # REACTION ROLE RESTORE
@@ -187,31 +162,25 @@ async def send_embed(
 
                 config = copy.deepcopy(old_config)
 
-                # ADD REACTIONS
                 for group in config.get("groups", []):
 
                     emojis = group.get("emojis", [])
 
                     for emoji in emojis:
-
                         try:
                             await message.add_reaction(emoji)
+                            await asyncio.sleep(0.2)  # FIX rate limit
                         except:
                             pass
 
-                # SAVE NEW CONFIG WITH MESSAGE ID
                 config["guild_id"] = guild.id
                 config["embed_name"] = embed_name
 
                 data[str(message.id)] = config
 
-                # ❗ KHÔNG XÓA CONFIG GỐC
-                # del data[key]  ← bỏ dòng này
-
-                save_reaction_data(data)
+                await save_reaction_data(data)
 
         return True
-
 
     except Exception as e:
         print("Embed send error:", e)
