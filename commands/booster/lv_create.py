@@ -1,4 +1,4 @@
-# commands/booster/lv_create.py
+ # commands/booster/lv_create.py
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -71,13 +71,13 @@ class BoosterLevelCreate(commands.Cog):
             ]
 
         # =========================
-        # OPEN UI (FIXED)
+        # OPEN UI (FIX ctx)
         # =========================
         await interaction.response.defer(ephemeral=True)
 
         await open_booster_level_ui(
             self.bot,
-            interaction.followup,
+            interaction,  # ✅ FIX: truyền interaction thay vì followup
             guild_id=guild.id,
             levels=[lvl.copy() for lvl in levels],
             booster_role=booster_role
