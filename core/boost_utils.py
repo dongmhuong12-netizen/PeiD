@@ -13,7 +13,12 @@ def get_boost_days(member: discord.Member) -> int:
 
     now = datetime.now(timezone.utc)
 
-    return (now - member.premium_since).days
+    days = (now - member.premium_since).days
+
+    if days < 0:
+        return 0
+
+    return days
 
 
 # ==============================
@@ -82,6 +87,7 @@ def get_booster_roles(guild: discord.Guild, booster_role_id: int, levels: list):
 def cleanup_deleted_roles(guild: discord.Guild, levels: list):
 
     changed = False
+    new_levels = []
 
     for lvl in levels:
 
@@ -92,14 +98,14 @@ def cleanup_deleted_roles(guild: discord.Guild, levels: list):
 
         role = guild.get_role(role_id)
 
+        # FIX: role bị xoá → remove level
         if not role:
-
-            lvl["role"] = None
-            lvl["days"] = None
-
             changed = True
+            continue
 
-    return levels, changed
+        new_levels.append(lvl)
+
+    return new_levels, changed
 
 
 # ==============================
@@ -109,20 +115,23 @@ def cleanup_deleted_roles(guild: discord.Guild, levels: list):
 def validate_levels(levels: list, booster_role_id: int):
 
     role_set = set()
+    prev_days = -1
 
-    prev_days = 0
-
-    for lvl in levels:
+    for i, lvl in enumerate(levels):
 
         role_id = lvl.get("role")
         days = lvl.get("days")
 
-        # slot trống → bỏ qua
-        if role_id is None and days is None:
-            continue
-
         if role_id is None or days is None:
             return False, "Level phải có cả role và days."
+
+        # FIX: level 1
+        if i == 0:
+            if days != 0:
+                return False, "Level 1 phải = 0 ngày."
+        else:
+            if days <= prev_days:
+                return False, "Days phải tăng dần theo level."
 
         if role_id == booster_role_id:
             return False, "Role level không được trùng booster role."
@@ -131,10 +140,6 @@ def validate_levels(levels: list, booster_role_id: int):
             return False, "Role level bị trùng."
 
         role_set.add(role_id)
-
-        if days <= prev_days:
-            return False, "Days phải tăng dần theo level."
-
         prev_days = days
 
     return True, None
