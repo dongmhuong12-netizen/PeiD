@@ -1,8 +1,9 @@
+# commands/booster/lv_create.py
 import discord
 from discord import app_commands
 from discord.ext import commands
 
-from core.booster_level_ui import BoosterLevelView
+from core.booster_level_ui import open_booster_level_ui
 from core.booster_storage import (
     get_levels,
     get_guild_config
@@ -30,11 +31,22 @@ class BoosterLevelCreate(commands.Cog):
             )
             return
 
-        # load booster config
+        # =========================
+        # CHECK PERMISSION
+        # =========================
+        if not interaction.user.guild_permissions.manage_guild:
+            await interaction.response.send_message(
+                "Bạn cần quyền Manage Server để dùng lệnh này.",
+                ephemeral=True
+            )
+            return
+
+        # =========================
+        # LOAD CONFIG
+        # =========================
         config = await get_guild_config(guild.id)
 
         if not config or not config.get("booster_role"):
-
             await interaction.response.send_message(
                 "Server chưa thiết lập booster role. "
                 "Hãy dùng lệnh `/p booster role` trước.",
@@ -44,12 +56,13 @@ class BoosterLevelCreate(commands.Cog):
 
         booster_role = config["booster_role"]
 
-        # load level config
+        # =========================
+        # LOAD LEVELS
+        # =========================
         levels = await get_levels(guild.id)
 
-        # nếu chưa có level config → tạo level 1 từ booster role
+        # nếu chưa có → tạo level 1
         if not levels:
-
             levels = [
                 {
                     "role": booster_role,
@@ -57,21 +70,18 @@ class BoosterLevelCreate(commands.Cog):
                 }
             ]
 
-        view = BoosterLevelView(
+        # =========================
+        # OPEN UI (FIXED)
+        # =========================
+        await interaction.response.defer(ephemeral=True)
+
+        await open_booster_level_ui(
+            self.bot,
+            interaction.followup,
             guild_id=guild.id,
-            levels=[lvl.copy() for lvl in levels]
+            levels=[lvl.copy() for lvl in levels],
+            booster_role=booster_role
         )
-
-        embed = view.build_embed()
-
-        await interaction.response.send_message(
-            embed=embed,
-            view=view,
-            ephemeral=True
-        )
-
-        message = await interaction.original_response()
-        view.message = message
 
 
 async def setup(bot: commands.Bot):
