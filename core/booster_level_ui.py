@@ -343,6 +343,18 @@ async def open_booster_level_ui(bot, ctx, guild_id: int, levels: list, booster_r
 
     view = BoosterLevelView(guild_id, levels, booster_role)
 
-    msg = await ctx.send(embed=view.build_embed(), view=view)
+    # =========================
+    # FIX: hỗ trợ interaction + ctx
+    # =========================
+    if isinstance(ctx, discord.Interaction):
+        msg = await ctx.followup.send(
+            embed=view.build_embed(),
+            view=view
+        )
+    else:
+        msg = await ctx.send(
+            embed=view.build_embed(),
+            view=view
+        )
 
     bot._booster_ui_messages[guild_id] = msg
