@@ -13,13 +13,11 @@ async def sync_member(member: discord.Member):
     if member.bot:
         return
 
-    if not member.premium_since:
-        return
-
     try:
+        # FIX: luôn gọi engine (engine tự xử lý unboost)
         await assign_correct_level(member)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[Booster Sync Error] Member {member.id}: {e}")
 
 
 # ==============================
@@ -30,7 +28,8 @@ async def sync_guild(guild: discord.Guild):
 
     boosters = guild.premium_subscribers
 
-    if not boosters:
+    # FIX: vẫn tiếp tục nếu list rỗng (để đảm bảo loop ổn định)
+    if boosters is None:
         return
 
     for member in boosters:
@@ -52,7 +51,10 @@ async def sync_all_guilds(bot):
         if guild.unavailable:
             continue
 
-        await sync_guild(guild)
+        try:
+            await sync_guild(guild)
+        except Exception as e:
+            print(f"[Booster Sync Error] Guild {guild.id}: {e}")
 
         # nghỉ giữa các server
         await asyncio.sleep(2)
