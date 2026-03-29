@@ -15,7 +15,6 @@ def calculate_boost_days(member: discord.Member):
         return 0
 
     now = datetime.now(timezone.utc)
-
     days = (now - member.premium_since).days
 
     if days < 0:
@@ -37,23 +36,23 @@ async def clean_invalid_levels(guild: discord.Guild, config: dict):
     for lvl in levels:
 
         role_id = lvl.get("role")
+        days = lvl.get("days")
 
-        if not role_id:
+        if role_id is None or days is None:
             continue
 
         role = guild.get_role(role_id)
 
-        # role bị xoá → bỏ level này
+        # role bị xoá → remove level
         if not role:
             changed = True
             continue
 
         new_levels.append({
             "role": role_id,
-            "days": lvl.get("days")
+            "days": days
         })
 
-    # nếu có thay đổi → save lại (auto reorder qua storage)
     if changed:
         config["levels"] = new_levels
         await save_guild_config(guild.id, config)
@@ -92,18 +91,16 @@ def get_target_level(boost_days: int, levels: list):
 
 def get_role_for_level(guild: discord.Guild, config: dict, target_level: int):
 
+    # Level 1 → booster role
     if target_level == 1:
         role_id = config.get("booster_role")
         return guild.get_role(role_id) if role_id else None
 
-    levels = config.get("levels", [])
-
-    for lvl in levels:
+    for lvl in config.get("levels", []):
 
         if lvl.get("level") == target_level:
 
             role_id = lvl.get("role")
-
             if not role_id:
                 return None
 
@@ -120,6 +117,7 @@ def get_all_booster_roles(guild: discord.Guild, config: dict):
 
     roles = set()
 
+    # booster role
     booster_role_id = config.get("booster_role")
 
     if booster_role_id:
@@ -127,6 +125,7 @@ def get_all_booster_roles(guild: discord.Guild, config: dict):
         if role:
             roles.add(role)
 
+    # level roles
     for lvl in config.get("levels", []):
 
         role_id = lvl.get("role")
@@ -151,14 +150,12 @@ async def clear_level_roles(member: discord.Member, config: dict):
     booster_roles = get_all_booster_roles(member.guild, config)
 
     bot_member = member.guild.me
-
     if not bot_member:
         return
 
     roles_to_remove = [
         r for r in booster_roles
-        if r in member.roles
-        and r < bot_member.top_role
+        if r in member.roles and r < bot_member.top_role
     ]
 
     if roles_to_remove:
@@ -176,21 +173,31 @@ async def assign_correct_level(member: discord.Member):
     if not config:
         return None
 
-    # =========================
-    # CLEAN ROLE BỊ XOÁ
-    # =========================
-    config = await clean_invalid_levels(member.guild, config)
-
     bot_member = member.guild.me
-
     if not bot_member:
         return None
+
+    # =========================
+    # CHECK BOOSTER ROLE
+    # =========================
+    booster_role_id = config.get("booster_role")
+    booster_role = member.guild.get_role(booster_role_id) if booster_role_id else None
+
+    # booster role bị xoá → disable hệ
+    if booster_role_id and not booster_role:
+        config["booster_role"] = None
+        await save_guild_config(member.guild.id, config)
+        return None
+
+    # =========================
+    # CLEAN LEVEL ROLE BỊ XOÁ
+    # =========================
+    config = await clean_invalid_levels(member.guild, config)
 
     # =========================
     # KHÔNG BOOST → REMOVE ALL
     # =========================
     if not member.premium_since:
-
         await clear_level_roles(member, config)
         return None
 
@@ -205,6 +212,7 @@ async def assign_correct_level(member: discord.Member):
     if not target_role:
         return target_level
 
+    # bot không đủ quyền
     if target_role >= bot_member.top_role:
         return target_level
 
@@ -223,10 +231,7 @@ async def assign_correct_level(member: discord.Member):
         ]
 
         if wrong_roles:
-            await member.remove_roles(
-                *wrong_roles,
-                reason="Booster correction"
-            )
+            await member.remove_roles(*wrong_roles, reason="Booster correction")
 
         return target_level
 
@@ -235,22 +240,15 @@ async def assign_correct_level(member: discord.Member):
     # =========================
     roles_to_remove = [
         r for r in booster_roles
-        if r in member.roles
-        and r < bot_member.top_role
+        if r in member.roles and r < bot_member.top_role
     ]
 
     if roles_to_remove:
-        await member.remove_roles(
-            *roles_to_remove,
-            reason="Booster update"
-        )
+        await member.remove_roles(*roles_to_remove, reason="Booster update")
 
     # =========================
     # ADD ROLE ĐÚNG
     # =========================
-    await member.add_roles(
-        target_role,
-        reason="Booster level update"
-    )
+    await member.add_roles(target_role, reason="Booster level update")
 
     return target_level
