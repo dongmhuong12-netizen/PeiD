@@ -1,0 +1,41 @@
+# File: render.yaml
+services:
+  # -----------------------------
+  # 1. Bot chính (main.py) – load toàn bộ hệ core, init các service
+  - name: Pei-bot
+    type: worker
+    env: python
+    startCommand: python main.py
+    runtime: python-3.14
+
+  # -----------------------------
+  # 2. Hệ Embed (embed_ui, embed_sender)
+  - name: Pei-embed
+    type: worker
+    env: python
+    startCommand: python core/embed_ui.py
+    runtime: python-3.14
+
+  # -----------------------------
+  # 3. Hệ Greet/Leave (greet_leave, greet_storage)
+  - name: Pei-greet
+    type: worker
+    env: python
+    startCommand: python core/greet_leave.py
+    runtime: python-3.14
+
+  # -----------------------------
+  # 4. Booster Level System (booster, booster_engine, booster_sync…)
+  - name: Pei-booster-lv
+    type: worker
+    env: python
+    startCommand: python core/booster.py
+    runtime: python-3.14
+
+  # -----------------------------
+  # 5. Reaction Role System (reaction_role)
+  - name: Pei-reaction-role
+    type: worker
+    env: python
+    startCommand: python systems/reaction_role.py
+    runtime: python-3.14
