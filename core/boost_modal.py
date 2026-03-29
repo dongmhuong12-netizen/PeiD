@@ -1,3 +1,4 @@
+# core/boost_modal.py
 import discord
 
 
@@ -38,6 +39,18 @@ class RoleInputModal(discord.ui.Modal, title="Set Level Role"):
         if not role:
             await interaction.response.send_message(
                 "Không tìm thấy role trong server.",
+                ephemeral=True
+            )
+            return
+
+        # =========================
+        # FIX: CHECK ROLE HIERARCHY
+        # =========================
+        bot_member = interaction.guild.me
+
+        if not bot_member or role >= bot_member.top_role:
+            await interaction.response.send_message(
+                "Role cao hơn bot, không thể sử dụng.",
                 ephemeral=True
             )
             return
