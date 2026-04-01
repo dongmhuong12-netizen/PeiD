@@ -2,8 +2,7 @@ import discord
 from discord.ext import commands
 import asyncio
 import os
-import threading
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from aiohttp import web
 
 os.makedirs("data", exist_ok=True)
 
@@ -14,25 +13,25 @@ if not TOKEN:
 
 
 # =========================
-# KEEP ALIVE FOR RENDER WEB SERVICE
+# WEB SERVER FOR RENDER
 # =========================
 
-class HealthHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.send_header("Content-type", "text/plain")
-        self.end_headers()
-        self.wfile.write(b"Bot is running")
-
-    def log_message(self, format, *args):
-        return
+async def health(request):
+    return web.Response(text="Bot is running")
 
 
-def run_web_server():
+async def start_web_server():
+    app = web.Application()
+    app.router.add_get("/", health)
+
+    runner = web.AppRunner(app)
+    await runner.setup()
+
     port = int(os.getenv("PORT", 10000))
-    server = HTTPServer(("0.0.0.0", port), HealthHandler)
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+
     print(f"Web server running on port {port}")
-    server.serve_forever()
 
 
 # =========================
@@ -90,8 +89,7 @@ async def on_ready():
 # =========================
 
 async def main():
-    web_thread = threading.Thread(target=run_web_server, daemon=True)
-    web_thread.start()
+    await start_web_server()
 
     async with bot:
         await load_extensions()
