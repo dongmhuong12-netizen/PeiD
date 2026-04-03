@@ -6,7 +6,6 @@ import shutil
 import copy
 
 DATA_FILE = "data/booster_levels.json"
-
 _lock = asyncio.Lock()
 
 
@@ -41,7 +40,6 @@ def _save(data):
         dir=directory,
         encoding="utf8"
     ) as tmp:
-
         json.dump(data, tmp, indent=2)
         temp_name = tmp.name
 
@@ -53,19 +51,12 @@ def _save(data):
 # ==============================
 
 def _normalize_levels(levels: list):
-
     normalized = []
 
-    for i, lvl in enumerate(levels):
-
-        role = lvl.get("role")
-        days = lvl.get("days")
-
-        # ❗ KHÔNG xoá level rỗng nữa
+    for lvl in levels:
         normalized.append({
-            "level": i + 1,
-            "role": role,
-            "days": days
+            "role": lvl.get("role"),
+            "days": lvl.get("days")
         })
 
     return normalized
@@ -76,11 +67,8 @@ def _normalize_levels(levels: list):
 # ==============================
 
 async def get_guild_config(guild_id: int):
-
     async with _lock:
-
         data = _load()
-
         config = data.get(str(guild_id))
 
         if not config:
@@ -90,19 +78,14 @@ async def get_guild_config(guild_id: int):
                 "levels": []
             }
 
-        # copy để tránh mutate global data
         config = copy.deepcopy(config)
-
         levels = config.get("levels")
 
-        # =========================
-        # MIGRATE DICT → LIST
-        # =========================
+        # migrate old dict format
         if isinstance(levels, dict):
-
             new_levels = []
 
-            for lvl, value in sorted(
+            for _, value in sorted(
                 levels.items(),
                 key=lambda x: int(x[0])
             ):
@@ -112,13 +95,9 @@ async def get_guild_config(guild_id: int):
                 })
 
             config["levels"] = _normalize_levels(new_levels)
-
             data[str(guild_id)] = config
             _save(data)
 
-        # =========================
-        # ENSURE STRUCTURE
-        # =========================
         if "booster_role" not in config:
             config["booster_role"] = None
 
@@ -128,9 +107,7 @@ async def get_guild_config(guild_id: int):
         if not isinstance(config.get("levels"), list):
             config["levels"] = []
 
-        # normalize lại level
         config["levels"] = _normalize_levels(config["levels"])
-
         return config
 
 
@@ -139,20 +116,14 @@ async def get_guild_config(guild_id: int):
 # ==============================
 
 async def save_guild_config(guild_id: int, config: dict):
-
     async with _lock:
-
         data = _load()
 
-        # copy tránh side-effect
         config = copy.deepcopy(config)
-
         levels = config.get("levels", [])
-
         config["levels"] = _normalize_levels(levels)
 
         data[str(guild_id)] = config
-
         _save(data)
 
 
@@ -161,11 +132,8 @@ async def save_guild_config(guild_id: int, config: dict):
 # ==============================
 
 async def set_booster_role(guild_id: int, role_id: int):
-
     config = await get_guild_config(guild_id)
-
     config["booster_role"] = role_id
-
     await save_guild_config(guild_id, config)
 
 
@@ -174,33 +142,25 @@ async def set_booster_role(guild_id: int, role_id: int):
 # ==============================
 
 async def get_levels(guild_id: int):
-
     config = await get_guild_config(guild_id)
-
     return config.get("levels", [])
 
 
 # ==============================
-# SAVE LEVELS (MAIN)
+# SAVE LEVELS
 # ==============================
 
 async def save_levels(guild_id: int, levels: list):
-
     config = await get_guild_config(guild_id)
-
-    config["levels"] = levels  # để save_config normalize
-
+    config["levels"] = _normalize_levels(levels)
     await save_guild_config(guild_id, config)
 
 
 # ==============================
-# CLEAR ALL LEVELS
+# CLEAR ALL
 # ==============================
 
 async def clear_levels(guild_id: int):
-
     config = await get_guild_config(guild_id)
-
     config["levels"] = []
-
     await save_guild_config(guild_id, config)
