@@ -44,7 +44,6 @@ intents.guilds = True
 intents.reactions = True
 intents.message_content = True
 
-
 bot = commands.AutoShardedBot(
     command_prefix=commands.when_mentioned,
     intents=intents
@@ -57,8 +56,8 @@ bot = commands.AutoShardedBot(
 
 EXTENSIONS = [
     "core.root",
+    "core.booster",
     "systems.reaction_role",
-    "commands.booster.lv_create",
 ]
 
 
@@ -77,7 +76,10 @@ async def load_extensions():
 
 @bot.event
 async def on_ready():
-    await bot.tree.sync()
+    try:
+        await bot.tree.sync()
+    except Exception as e:
+        print(f"Slash sync failed: {e}")
 
     print(f"Logged in as {bot.user} ({bot.user.id})")
     print("Slash synced")
