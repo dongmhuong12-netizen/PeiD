@@ -87,15 +87,25 @@ async def on_ready():
 
 
 # =========================
+# BOT RUNNER
+# =========================
+
+async def run_bot():
+    async with bot:
+        await load_extensions()
+        await bot.start(TOKEN)
+
+
+# =========================
 # MAIN
 # =========================
 
 async def main():
     await start_web_server()
 
-    async with bot:
-        await load_extensions()
-        await bot.start(TOKEN)
+    bot_task = asyncio.create_task(run_bot())
+
+    await bot_task
 
 
 if __name__ == "__main__":
