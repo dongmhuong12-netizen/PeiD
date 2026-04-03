@@ -193,18 +193,6 @@ class Root(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    @commands.Cog.listener()
-    async def on_ready(self):
-        # Chỉ sync lệnh 1 lần
-        if not hasattr(self.bot, "_root_synced"):
-            self.bot.tree.add_command(PGroup())
-            try:
-                await self.bot.tree.sync()
-                print("Slash commands /p synced ✅")
-            except Exception as e:
-                print(f"Slash sync failed: {e}")
-            self.bot._root_synced = True
-
 
 # =============================
 # SETUP
@@ -215,3 +203,7 @@ async def setup(bot: commands.Bot):
     await bot.add_cog(GreetLeaveListener(bot))
     await bot.add_cog(BoosterListener(bot))
     await bot.add_cog(WellcomeListener(bot))
+
+    # add /p group ngay khi load extension
+    if bot.tree.get_command("p") is None:
+        bot.tree.add_command(PGroup())
