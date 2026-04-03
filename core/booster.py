@@ -416,7 +416,9 @@ class BoosterListener(commands.Cog):
 
 
 async def setup(bot):
+    try:
+        bot.tree.add_command(BoosterGroup())
+    except Exception:
+        pass
 
-    # đăng ký group /boost
-    bot.tree.add_command(BoostGroup())
     await bot.add_cog(BoosterListener(bot))
