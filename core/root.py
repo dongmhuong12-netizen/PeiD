@@ -199,11 +199,10 @@ class Root(commands.Cog):
 # =============================
 
 async def setup(bot: commands.Bot):
+    if bot.tree.get_command("p") is None:
+        bot.tree.add_command(PGroup())
+
     await bot.add_cog(Root(bot))
     await bot.add_cog(GreetLeaveListener(bot))
     await bot.add_cog(BoosterListener(bot))
     await bot.add_cog(WellcomeListener(bot))
-
-    # add /p group ngay khi load extension
-    if bot.tree.get_command("p") is None:
-        bot.tree.add_command(PGroup())
