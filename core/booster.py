@@ -160,7 +160,7 @@ class BoosterGroup(app_commands.Group):
 
         guild = interaction.guild
 
-        config = get_section(guild.id, "booster")
+        config = get_section(guild.id, "booster") or {}
         booster_role = config.get("role")
 
         if not booster_role:
@@ -185,6 +185,7 @@ class BoosterGroup(app_commands.Group):
 
         view = BoosterLevelView(
             guild_id=guild.id,
+            booster_role=booster_role,
             levels=[lvl.copy() for lvl in levels]
         )
 
@@ -211,7 +212,7 @@ class BoosterGroup(app_commands.Group):
         guild = interaction.guild
         bot_member = guild.me
 
-        config = get_section(guild.id, "booster")
+        config = get_section(guild.id, "booster") or {}
 
         role_id = config.get("role")
         role = guild.get_role(role_id) if role_id else None
@@ -285,7 +286,7 @@ class BoosterListener(commands.Cog):
     async def handle_boost(self, member: discord.Member, boosted: bool):
 
         guild = member.guild
-        config = get_section(guild.id, "booster")
+        config = get_section(guild.id, "booster") or {}
 
         role_id = config.get("role")
         role = guild.get_role(role_id) if role_id else None
@@ -336,7 +337,7 @@ class BoosterListener(commands.Cog):
             if guild.unavailable:
                 continue
 
-            config = get_section(guild.id, "booster")
+            config = get_section(guild.id, "booster") or {}
 
             role_id = config.get("role")
             role = guild.get_role(role_id) if role_id else None
