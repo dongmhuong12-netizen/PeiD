@@ -18,19 +18,14 @@ from core.wellcome import WellcomeGroup, WellcomeListener
 # AUTOCOMPLETE
 # =============================
 
-async def embed_name_autocomplete(
-    interaction: discord.Interaction,
-    current: str
-):
+async def embed_name_autocomplete(interaction: discord.Interaction, current: str):
     guild_id = interaction.guild.id if interaction.guild else None
     names = get_all_embed_names(guild_id)
-
     return [
         app_commands.Choice(name=name, value=name)
         for name in names
         if current.lower() in name.lower()
     ][:25]
-
 
 # =============================
 # EMBED SUBGROUP
@@ -46,13 +41,12 @@ class EmbedGroup(app_commands.Group):
         if existing:
             await interaction.response.send_message(
                 f"Đã có embed tồn tại với tên `{name}`. "
-                f"Nếu tạo embed mà không tìm thấy, thử tìm embed đó bằng cách dùng lệnh **/p embed edit**.",
+                f"Nếu tạo embed mà không tìm thấy, thử dùng lệnh **/p embed edit**.",
                 ephemeral=True
             )
             return
 
         key = f"{interaction.guild.id}:{name}"
-
         if key in ACTIVE_EMBED_VIEWS:
             for view in ACTIVE_EMBED_VIEWS[key]:
                 try:
@@ -61,7 +55,6 @@ class EmbedGroup(app_commands.Group):
                 except:
                     pass
                 view.stop()
-
             ACTIVE_EMBED_VIEWS[key] = []
 
         embed_data = {
@@ -96,14 +89,12 @@ class EmbedGroup(app_commands.Group):
 
         message = await interaction.original_response()
         view.message = message
-
         ACTIVE_EMBED_VIEWS.setdefault(key, []).append(view)
 
     @app_commands.command(name="edit", description="Edit existing embed")
     @app_commands.autocomplete(name=embed_name_autocomplete)
     async def edit(self, interaction: discord.Interaction, name: str):
         data = load_embed(interaction.guild.id, name)
-
         if not data:
             await interaction.response.send_message(
                 f"Embed tên `{name}` không tồn tại, không tìm thấy.",
@@ -112,7 +103,6 @@ class EmbedGroup(app_commands.Group):
             return
 
         key = f"{interaction.guild.id}:{name}"
-
         if key in ACTIVE_EMBED_VIEWS:
             for view in ACTIVE_EMBED_VIEWS[key]:
                 try:
@@ -121,7 +111,6 @@ class EmbedGroup(app_commands.Group):
                 except:
                     pass
                 view.stop()
-
             ACTIVE_EMBED_VIEWS[key] = []
 
         view = EmbedUIView(interaction.guild.id, name, data)
@@ -135,14 +124,12 @@ class EmbedGroup(app_commands.Group):
 
         message = await interaction.original_response()
         view.message = message
-
         ACTIVE_EMBED_VIEWS.setdefault(key, []).append(view)
-    
+
     @app_commands.command(name="delete", description="Delete embed")
     @app_commands.autocomplete(name=embed_name_autocomplete)
     async def delete(self, interaction: discord.Interaction, name: str):
         data = load_embed(interaction.guild.id, name)
-
         if not data:
             await interaction.response.send_message(
                 f"Embed tên `{name}` không tồn tại, không thể dùng lệnh.",
@@ -151,7 +138,6 @@ class EmbedGroup(app_commands.Group):
             return
 
         key = f"{interaction.guild.id}:{name}"
-
         if key in ACTIVE_EMBED_VIEWS:
             for view in ACTIVE_EMBED_VIEWS[key]:
                 try:
@@ -160,13 +146,11 @@ class EmbedGroup(app_commands.Group):
                 except:
                     pass
                 view.stop()
-
             ACTIVE_EMBED_VIEWS[key] = []
 
         delete_embed(interaction.guild.id, name)
-
         await interaction.response.send_message(
-            f"Embed `{name}` đã được xoá vĩnh viễn, có thể tạo embed mới bằng tên của embed này.",
+            f"Embed `{name}` đã được xoá vĩnh viễn.",
             ephemeral=True
         )
 
@@ -174,7 +158,6 @@ class EmbedGroup(app_commands.Group):
     @app_commands.autocomplete(name=embed_name_autocomplete)
     async def show(self, interaction: discord.Interaction, name: str):
         data = load_embed(interaction.guild.id, name)
-
         if not data:
             await interaction.response.send_message(
                 f"Embed tên `{name}` không tồn tại, không thể show.",
@@ -182,19 +165,11 @@ class EmbedGroup(app_commands.Group):
             )
             return
 
-        await send_embed(
-            interaction.channel,
-            data,
-            interaction.guild,
-            interaction.user,
-            embed_name=name
-        )
-
+        await send_embed(interaction.channel, data, interaction.guild, interaction.user, embed_name=name)
         await interaction.response.send_message(
             f"Embed `{name}` show thành công.",
             ephemeral=True
         )
-
 
 # =============================
 # MAIN /p GROUP
@@ -208,8 +183,6 @@ class PGroup(app_commands.Group):
         self.add_command(LeaveGroup())
         self.add_command(BoostGroup())
         self.add_command(WellcomeGroup())
-        
-
 
 # =============================
 # COG
@@ -219,19 +192,23 @@ class Root(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
+    @commands.Cog.listener()
+    async def on_ready(self):
+        # Add main /p group if not exists
+        if self.bot.tree.get_command("p") is None:
+            self.bot.tree.add_command(PGroup())
+            try:
+                await self.bot.tree.sync()
+                print("Slash commands /p synced ✅")
+            except Exception as e:
+                print(f"Sync failed: {e}")
+
+# =============================
+# SETUP
+# =============================
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Root(bot))
     await bot.add_cog(GreetLeaveListener(bot))
     await bot.add_cog(BoosterListener(bot))
     await bot.add_cog(WellcomeListener(bot))
-
-    if bot.tree.get_command("p") is None:
-        bot.tree.add_command(PGroup())
-
-    # ✅ Thêm sync tree để slash commands hiện
-    try:
-        await bot.tree.sync()
-        print("Slash commands synced")
-    except Exception as e:
-        print(f"Sync failed: {e}")
