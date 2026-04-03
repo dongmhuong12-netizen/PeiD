@@ -11,7 +11,7 @@ from core.embed_storage import (
 from core.embed_sender import send_embed
 
 from core.greet_leave import GreetGroup, LeaveGroup, GreetLeaveListener
-from core.booster import BoosterGroup, BoosterListener
+from core.booster import BoostGroup, BoosterListener
 from core.wellcome import WellcomeGroup, WellcomeListener
 
 # =============================
@@ -210,7 +210,7 @@ class PGroup(app_commands.Group):
         self.add_command(EmbedGroup())
         self.add_command(GreetGroup())
         self.add_command(LeaveGroup())
-        self.add_command(BoosterGroup())
+        self.add_command(BoostGroup())
         self.add_command(WellcomeGroup())
         
 
