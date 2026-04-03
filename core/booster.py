@@ -38,8 +38,12 @@ class BoostGroup(app_commands.Group):
         )
 
         embed = view.build_embed()
-        message = await interaction.followup.send(embed=embed, view=view, ephemeral=True)
-        view.message = message  # gắn view vào message ngay
+        await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+        try:
+            msg = await interaction.original_response()
+            view.message = msg
+        except Exception:
+            pass
 
     @app_commands.command(name="lv_channel", description="Đặt kênh thông báo level boost")
     @app_commands.default_permissions(manage_guild=True)
@@ -49,7 +53,6 @@ class BoostGroup(app_commands.Group):
         channel = interaction.guild.get_channel(int(channel_id))
         if not isinstance(channel, discord.TextChannel):
             return await interaction.response.send_message("Không tìm thấy text channel.", ephemeral=True)
-
         update_guild_config(interaction.guild.id, "booster_level", "channel", channel.id)
         await interaction.response.send_message(f"Đặt kênh level boost thành công: {channel.mention}", ephemeral=True)
 
