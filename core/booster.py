@@ -13,22 +13,27 @@ from core.booster_level_ui import BoosterLevelView
 
 
 # ======================
-# BOOSTER LEVEL SUBGROUP
+# BOOST GROUP
 # ======================
 
-class BoostLevelGroup(app_commands.Group):
+class BoostGroup(app_commands.Group):
+
     def __init__(self):
         super().__init__(
-            name="lv",
-            description="Booster level system"
+            name="boost",
+            description="Hệ thống xử lý khi thành viên Boost server"
         )
 
+    # ======================
+    # BOOSTER LEVEL (FLAT)
+    # ======================
+
     @app_commands.command(
-        name="create",
+        name="lv_create",
         description="Mở bảng chỉnh Booster Level"
     )
     @app_commands.default_permissions(manage_guild=True)
-    async def create(self, interaction: discord.Interaction):
+    async def lv_create(self, interaction: discord.Interaction):
         guild = interaction.guild
 
         config = get_section(guild.id, "booster") or {}
@@ -69,11 +74,11 @@ class BoostLevelGroup(app_commands.Group):
         view.message = message
 
     @app_commands.command(
-        name="channel",
+        name="lv_channel",
         description="Đặt kênh thông báo level boost"
     )
     @app_commands.default_permissions(manage_guild=True)
-    async def channel(self, interaction: discord.Interaction, channel_id: str):
+    async def lv_channel(self, interaction: discord.Interaction, channel_id: str):
         if not channel_id.isdigit():
             await interaction.response.send_message(
                 "ID kênh không hợp lệ.",
@@ -103,11 +108,11 @@ class BoostLevelGroup(app_commands.Group):
         )
 
     @app_commands.command(
-        name="message",
+        name="lv_message",
         description="Đặt nội dung level boost"
     )
     @app_commands.default_permissions(manage_guild=True)
-    async def message(self, interaction: discord.Interaction, text: str):
+    async def lv_message(self, interaction: discord.Interaction, text: str):
         update_guild_config(
             interaction.guild.id,
             "booster_level",
@@ -121,11 +126,11 @@ class BoostLevelGroup(app_commands.Group):
         )
 
     @app_commands.command(
-        name="embed",
+        name="lv_embed",
         description="Gán embed cho level boost"
     )
     @app_commands.default_permissions(manage_guild=True)
-    async def embed(self, interaction: discord.Interaction, name: str):
+    async def lv_embed(self, interaction: discord.Interaction, name: str):
         if not load_embed(interaction.guild.id, name):
             await interaction.response.send_message(
                 f"Embed `{name}` không tồn tại.",
@@ -146,11 +151,11 @@ class BoostLevelGroup(app_commands.Group):
         )
 
     @app_commands.command(
-        name="test",
+        name="lv_test",
         description="Test booster level theo số ngày"
     )
     @app_commands.default_permissions(manage_guild=True)
-    async def test(self, interaction: discord.Interaction, days: int):
+    async def lv_test(self, interaction: discord.Interaction, days: int):
         await interaction.response.defer(ephemeral=True)
 
         member = interaction.user
@@ -165,19 +170,9 @@ class BoostLevelGroup(app_commands.Group):
             ephemeral=True
         )
 
-
-# ======================
-# BOOST GROUP
-# ======================
-
-class BoostGroup(app_commands.Group):
-
-    def __init__(self):
-        super().__init__(
-            name="boost",
-            description="Hệ thống xử lý khi thành viên Boost server"
-        )
-        self.add_command(BoostLevelGroup())
+    # ======================
+    # BOOST SYSTEM
+    # ======================
 
     @app_commands.command(
         name="channel",
