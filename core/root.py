@@ -1,18 +1,16 @@
+# core/root.py
 import discord
 from discord.ext import commands
 from discord import app_commands
 
 from core.embed_ui import EmbedUIView, ACTIVE_EMBED_VIEWS
-from core.embed_storage import (
-    load_embed,
-    delete_embed,
-    get_all_embed_names
-)
+from core.embed_storage import load_embed, delete_embed, get_all_embed_names
 from core.embed_sender import send_embed
 
 from core.greet_leave import GreetGroup, LeaveGroup, GreetLeaveListener
 from core.booster import BoostGroup, BoosterListener
 from core.wellcome import WellcomeGroup, WellcomeListener
+
 
 # =============================
 # AUTOCOMPLETE
@@ -26,6 +24,7 @@ async def embed_name_autocomplete(interaction: discord.Interaction, current: str
         for name in names
         if current.lower() in name.lower()
     ][:25]
+
 
 # =============================
 # EMBED SUBGROUP
@@ -171,8 +170,9 @@ class EmbedGroup(app_commands.Group):
             ephemeral=True
         )
 
+
 # =============================
-# MAIN /p GROUP
+# MAIN /P GROUP
 # =============================
 
 class PGroup(app_commands.Group):
@@ -181,11 +181,12 @@ class PGroup(app_commands.Group):
         self.add_command(EmbedGroup())
         self.add_command(GreetGroup())
         self.add_command(LeaveGroup())
-        self.add_command(BoostGroup())
+        self.add_command(BoostGroup())  # 🔹 đảm bảo /p boost hiển thị
         self.add_command(WellcomeGroup())
 
+
 # =============================
-# COG
+# ROOT COG
 # =============================
 
 class Root(commands.Cog):
@@ -194,14 +195,16 @@ class Root(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        # Add main /p group if not exists
-        if self.bot.tree.get_command("p") is None:
+        # Chỉ sync lệnh 1 lần
+        if not hasattr(self.bot, "_root_synced"):
             self.bot.tree.add_command(PGroup())
             try:
                 await self.bot.tree.sync()
                 print("Slash commands /p synced ✅")
             except Exception as e:
-                print(f"Sync failed: {e}")
+                print(f"Slash sync failed: {e}")
+            self.bot._root_synced = True
+
 
 # =============================
 # SETUP
