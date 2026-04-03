@@ -416,9 +416,4 @@ class BoosterListener(commands.Cog):
 
 
 async def setup(bot):
-    try:
-        bot.tree.add_command(BoosterGroup())
-    except Exception:
-        pass
-
     await bot.add_cog(BoosterListener(bot))
