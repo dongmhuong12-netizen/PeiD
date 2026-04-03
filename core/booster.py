@@ -34,10 +34,9 @@ class BoostGroup(app_commands.Group):
     )
     @app_commands.default_permissions(manage_guild=True)
     async def lv_create(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)  # defer ngay
+        await interaction.response.defer(ephemeral=True)
 
         guild = interaction.guild
-
         config = get_section(guild.id, "booster") or {}
         booster_role = config.get("role")
 
@@ -49,14 +48,8 @@ class BoostGroup(app_commands.Group):
             return
 
         levels = await get_levels(guild.id)
-
         if not levels:
-            levels = [
-                {
-                    "role": booster_role,
-                    "days": 0
-                }
-            ]
+            levels = [{"role": booster_role, "days": 0}]
 
         view = BoosterLevelView(
             guild_id=guild.id,
@@ -65,279 +58,130 @@ class BoostGroup(app_commands.Group):
         )
 
         embed = view.build_embed()
-
-        await interaction.edit_original_response(
-            embed=embed,
-            view=view
-        )
-
+        await interaction.edit_original_response(embed=embed, view=view)
         message = await interaction.original_response()
         view.message = message
 
-    @app_commands.command(
-        name="lv_channel",
-        description="Đặt kênh thông báo level boost"
-    )
+    @app_commands.command(name="lv_channel", description="Đặt kênh thông báo level boost")
     @app_commands.default_permissions(manage_guild=True)
     async def lv_channel(self, interaction: discord.Interaction, channel_id: str):
         if not channel_id.isdigit():
-            await interaction.response.send_message(
-                "ID kênh không hợp lệ.",
-                ephemeral=True
-            )
+            await interaction.response.send_message("ID kênh không hợp lệ.", ephemeral=True)
             return
 
         channel = interaction.guild.get_channel(int(channel_id))
-
         if not isinstance(channel, discord.TextChannel):
-            await interaction.response.send_message(
-                "Không tìm thấy text channel.",
-                ephemeral=True
-            )
+            await interaction.response.send_message("Không tìm thấy text channel.", ephemeral=True)
             return
 
-        update_guild_config(
-            interaction.guild.id,
-            "booster_level",
-            "channel",
-            channel.id
-        )
+        update_guild_config(interaction.guild.id, "booster_level", "channel", channel.id)
+        await interaction.response.send_message(f"Đặt kênh level boost thành công: {channel.mention}", ephemeral=True)
 
-        await interaction.response.send_message(
-            f"Đặt kênh level boost thành công: {channel.mention}",
-            ephemeral=True
-        )
-
-    @app_commands.command(
-        name="lv_message",
-        description="Đặt nội dung level boost"
-    )
+    @app_commands.command(name="lv_message", description="Đặt nội dung level boost")
     @app_commands.default_permissions(manage_guild=True)
     async def lv_message(self, interaction: discord.Interaction, text: str):
-        update_guild_config(
-            interaction.guild.id,
-            "booster_level",
-            "message",
-            text
-        )
+        update_guild_config(interaction.guild.id, "booster_level", "message", text)
+        await interaction.response.send_message("Đặt message booster level thành công.", ephemeral=True)
 
-        await interaction.response.send_message(
-            "Đặt message booster level thành công.",
-            ephemeral=True
-        )
-
-    @app_commands.command(
-        name="lv_embed",
-        description="Gán embed cho level boost"
-    )
+    @app_commands.command(name="lv_embed", description="Gán embed cho level boost")
     @app_commands.default_permissions(manage_guild=True)
     async def lv_embed(self, interaction: discord.Interaction, name: str):
         if not load_embed(interaction.guild.id, name):
-            await interaction.response.send_message(
-                f"Embed `{name}` không tồn tại.",
-                ephemeral=True
-            )
+            await interaction.response.send_message(f"Embed `{name}` không tồn tại.", ephemeral=True)
             return
 
-        update_guild_config(
-            interaction.guild.id,
-            "booster_level",
-            "embed",
-            name
-        )
+        update_guild_config(interaction.guild.id, "booster_level", "embed", name)
+        await interaction.response.send_message(f"Đặt embed level boost thành công: `{name}`", ephemeral=True)
 
-        await interaction.response.send_message(
-            f"Đặt embed level boost thành công: `{name}`",
-            ephemeral=True
-        )
-
-    @app_commands.command(
-        name="lv_test",
-        description="Test booster level theo số ngày"
-    )
+    @app_commands.command(name="lv_test", description="Test booster level theo số ngày")
     @app_commands.default_permissions(manage_guild=True)
     async def lv_test(self, interaction: discord.Interaction, days: int):
-        await interaction.response.defer(ephemeral=True)  # defer để tránh timeout
-
+        await interaction.response.defer(ephemeral=True)
         member = interaction.user
-
         try:
             await assign_correct_level(member, boost_days=days)
         except TypeError:
             await assign_correct_level(member)
 
-        await interaction.followup.send(
-            f"Đã test booster level với {days} ngày.",
-            ephemeral=True
-        )
+        await interaction.followup.send(f"Đã test booster level với {days} ngày.", ephemeral=True)
 
     # ======================
     # BOOST SYSTEM
     # ======================
 
-    @app_commands.command(
-        name="channel",
-        description="Đặt kênh gửi thông báo khi có người boost"
-    )
+    @app_commands.command(name="channel", description="Đặt kênh gửi thông báo khi có người boost")
     @app_commands.default_permissions(manage_guild=True)
     async def channel(self, interaction: discord.Interaction, channel_id: str):
         if not channel_id.isdigit():
-            await interaction.response.send_message(
-                "ID kênh không hợp lệ.",
-                ephemeral=True
-            )
+            await interaction.response.send_message("ID kênh không hợp lệ.", ephemeral=True)
             return
 
         channel = interaction.guild.get_channel(int(channel_id))
-
         if not isinstance(channel, discord.TextChannel):
-            await interaction.response.send_message(
-                "Không tìm thấy text channel.",
-                ephemeral=True
-            )
+            await interaction.response.send_message("Không tìm thấy text channel.", ephemeral=True)
             return
 
-        update_guild_config(
-            interaction.guild.id,
-            "booster",
-            "channel",
-            channel.id
-        )
+        update_guild_config(interaction.guild.id, "booster", "channel", channel.id)
+        await interaction.response.send_message(f"Đặt kênh Boost thành công: {channel.mention}", ephemeral=True)
 
-        await interaction.response.send_message(
-            f"Đặt kênh Boost thành công: {channel.mention}",
-            ephemeral=True
-        )
-
-    @app_commands.command(
-        name="message",
-        description="Đặt nội dung tin nhắn khi có người boost"
-    )
+    @app_commands.command(name="message", description="Đặt nội dung tin nhắn khi có người boost")
     @app_commands.default_permissions(manage_guild=True)
     async def message(self, interaction: discord.Interaction, text: str):
-        update_guild_config(
-            interaction.guild.id,
-            "booster",
-            "message",
-            text
-        )
+        update_guild_config(interaction.guild.id, "booster", "message", text)
+        await interaction.response.send_message(f"Đặt nội dung Boost thành công: {text}", ephemeral=True)
 
-        await interaction.response.send_message(
-            f"Đặt nội dung Boost thành công: {text}",
-            ephemeral=True
-        )
-
-    @app_commands.command(
-        name="embed",
-        description="Gán embed đã tạo cho thông báo booster"
-    )
+    @app_commands.command(name="embed", description="Gán embed đã tạo cho thông báo booster")
     @app_commands.default_permissions(manage_guild=True)
     async def embed(self, interaction: discord.Interaction, name: str):
         if not load_embed(interaction.guild.id, name):
-            await interaction.response.send_message(
-                f"Embed `{name}` không tồn tại.",
-                ephemeral=True
-            )
+            await interaction.response.send_message(f"Embed `{name}` không tồn tại.", ephemeral=True)
             return
 
-        update_guild_config(
-            interaction.guild.id,
-            "booster",
-            "embed",
-            name
-        )
+        update_guild_config(interaction.guild.id, "booster", "embed", name)
+        await interaction.response.send_message(f"Đặt embed Boost thành công: `{name}`", ephemeral=True)
 
-        await interaction.response.send_message(
-            f"Đặt embed Boost thành công: `{name}`",
-            ephemeral=True
-        )
-
-    @app_commands.command(
-        name="role",
-        description="Đặt role sẽ được gán cho người boost"
-    )
+    @app_commands.command(name="role", description="Đặt role sẽ được gán cho người boost")
     @app_commands.default_permissions(manage_guild=True)
     async def role(self, interaction: discord.Interaction, role_input: str):
         guild = interaction.guild
-
-        if role_input.startswith("<@&") and role_input.endswith(">"):
-            role_id = role_input.replace("<@&", "").replace(">", "")
-        else:
-            role_id = role_input
+        role_id = role_input.replace("<@&", "").replace(">", "") if role_input.startswith("<@&") else role_input
 
         if not role_id.isdigit():
-            await interaction.response.send_message(
-                "ID Role không hợp lệ.",
-                ephemeral=True
-            )
+            await interaction.response.send_message("ID Role không hợp lệ.", ephemeral=True)
             return
 
         role = guild.get_role(int(role_id))
-
         if not role:
-            await interaction.response.send_message(
-                "Role không tồn tại.",
-                ephemeral=True
-            )
+            await interaction.response.send_message("Role không tồn tại.", ephemeral=True)
             return
 
-        update_guild_config(
-            guild.id,
-            "booster",
-            "role",
-            role.id
-        )
+        update_guild_config(guild.id, "booster", "role", role.id)
+        await interaction.response.send_message(f"Đặt role Boost thành công: {role.mention}", ephemeral=True)
 
-        await interaction.response.send_message(
-            f"Đặt role Boost thành công: {role.mention}",
-            ephemeral=True
-        )
-
-    @app_commands.command(
-        name="test",
-        description="Kiểm tra hệ thống booster"
-    )
+    @app_commands.command(name="test", description="Kiểm tra hệ thống booster")
     async def test(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
-
         member = interaction.user
         guild = interaction.guild
         bot_member = guild.me
 
         config = get_section(guild.id, "booster") or {}
-
         role_id = config.get("role")
         role = guild.get_role(role_id) if role_id else None
 
         if role:
             if role.position >= bot_member.top_role.position:
-                await interaction.followup.send(
-                    "Role bot thấp hơn role booster.",
-                    ephemeral=True
-                )
+                await interaction.followup.send("Role bot thấp hơn role booster.", ephemeral=True)
                 return
-
             try:
                 await member.add_roles(role, reason="Booster Test")
             except Exception as e:
-                await interaction.followup.send(
-                    f"Lỗi khi gán role: {e}",
-                    ephemeral=True
-                )
+                await interaction.followup.send(f"Lỗi khi gán role: {e}", ephemeral=True)
                 return
 
         success = await send_config_message(guild, member, "booster")
-
-        if success:
-            await interaction.followup.send(
-                "Test Boost thành công.",
-                ephemeral=True
-            )
-        else:
-            await interaction.followup.send(
-                "Thiếu cấu hình booster.",
-                ephemeral=True
-            )
+        msg = "Test Boost thành công." if success else "Thiếu cấu hình booster."
+        await interaction.followup.send(msg, ephemeral=True)
 
 
 # ======================
@@ -356,32 +200,21 @@ class BoosterListener(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member):
-
         if after.bot:
             return
 
         if not before.premium_since and after.premium_since:
             await self.handle_boost(after, True)
-
         elif before.premium_since and not after.premium_since:
             await self.handle_boost(after, False)
 
     async def handle_boost(self, member: discord.Member, boosted: bool):
-
         guild = member.guild
         config = get_section(guild.id, "booster") or {}
-
         role_id = config.get("role")
         role = guild.get_role(role_id) if role_id else None
 
-        if not role:
-            return
-
-        bot_member = guild.me
-        if not bot_member:
-            return
-
-        if role.position >= bot_member.top_role.position:
+        if not role or not guild.me or role.position >= guild.me.top_role.position:
             return
 
         try:
@@ -406,20 +239,16 @@ class BoosterListener(commands.Cog):
         for guild in self.bot.guilds:
             if guild.unavailable:
                 continue
-
             boosters = guild.premium_subscribers
             if not boosters:
                 continue
-
             for member in boosters:
                 if member.bot:
                     continue
-
                 try:
                     await assign_correct_level(member)
                 except Exception:
                     pass
-
                 await asyncio.sleep(0.2)
 
     @booster_sync.before_loop
@@ -430,23 +259,18 @@ class BoosterListener(commands.Cog):
     async def on_ready(self):
         if self._startup_done:
             return
-
         self._startup_done = True
-
         for guild in self.bot.guilds:
             boosters = guild.premium_subscribers
             if not boosters:
                 continue
-
             for member in boosters:
                 if member.bot:
                     continue
-
                 try:
                     await assign_correct_level(member)
                 except Exception:
                     pass
-
                 await asyncio.sleep(0.2)
 
 
