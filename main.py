@@ -7,7 +7,6 @@ from aiohttp import web
 os.makedirs("data", exist_ok=True)
 
 TOKEN = os.getenv("TOKEN")
-
 if not TOKEN:
     raise RuntimeError("TOKEN environment variable not found")
 
@@ -20,7 +19,7 @@ async def health(request):
     return web.Response(text="Bot is running")
 
 
-async def start_web_server():
+async def run_web_server():
     app = web.Application()
     app.router.add_get("/", health)
 
@@ -32,6 +31,10 @@ async def start_web_server():
     await site.start()
 
     print(f"Web server running on port {port}", flush=True)
+
+    # giữ web task sống
+    while True:
+        await asyncio.sleep(3600)
 
 
 # =========================
@@ -70,7 +73,7 @@ async def load_extensions():
 
 
 # =========================
-# READY EVENT
+# READY
 # =========================
 
 @bot.event
@@ -86,23 +89,16 @@ async def on_ready():
 
 
 # =========================
-# BOT RUNNER
-# =========================
-
-async def run_bot():
-    async with bot:
-        await load_extensions()
-        print("Starting bot login...", flush=True)
-        await bot.start(TOKEN)
-
-
-# =========================
 # MAIN
 # =========================
 
 async def main():
-    await start_web_server()
-    await run_bot()
+    await load_extensions()
+
+    await asyncio.gather(
+        run_web_server(),
+        bot.start(TOKEN)
+    )
 
 
 if __name__ == "__main__":
