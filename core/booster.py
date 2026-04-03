@@ -13,14 +13,14 @@ from core.booster_level_ui import BoosterLevelView
 
 
 # ======================
-# BOOSTER GROUP
+# BOOST GROUP
 # ======================
 
-class BoosterGroup(app_commands.Group):
+class BoostGroup(app_commands.Group):
 
     def __init__(self):
         super().__init__(
-            name="booster",
+            name="boost",
             description="Hệ thống xử lý khi thành viên Boost server"
         )
 
@@ -152,11 +152,11 @@ class BoosterGroup(app_commands.Group):
     # ======================
 
     @app_commands.command(
-        name="level",
+        name="create",
         description="Mở bảng chỉnh Booster Level"
     )
     @app_commands.default_permissions(manage_guild=True)
-    async def level(self, interaction: discord.Interaction):
+    async def create(self, interaction: discord.Interaction):
 
         guild = interaction.guild
 
@@ -175,7 +175,6 @@ class BoosterGroup(app_commands.Group):
         levels = await get_levels(guild.id)
 
         if not levels:
-
             levels = [
                 {
                     "role": booster_role,
@@ -418,4 +417,6 @@ class BoosterListener(commands.Cog):
 
 async def setup(bot):
 
+    # đăng ký group /boost
+    bot.tree.add_command(BoostGroup())
     await bot.add_cog(BoosterListener(bot))
