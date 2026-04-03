@@ -76,8 +76,8 @@ async def load_extensions():
 @bot.event
 async def on_ready():
     try:
-        await bot.tree.sync()
-        print("Slash synced")
+        synced = await bot.tree.sync()
+        print(f"Slash synced: {len(synced)} commands")
     except Exception as e:
         print(f"Slash sync failed: {e}")
 
@@ -101,7 +101,9 @@ async def run_bot():
 
 async def main():
     await start_web_server()
+
     bot_task = asyncio.create_task(run_bot())
+
     await bot_task
 
 
