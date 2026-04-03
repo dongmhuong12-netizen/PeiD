@@ -56,7 +56,6 @@ bot = commands.AutoShardedBot(
 
 EXTENSIONS = [
     "core.root",
-    "core.booster",
     "systems.reaction_role",
 ]
 
