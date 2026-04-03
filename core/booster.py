@@ -34,13 +34,15 @@ class BoostGroup(app_commands.Group):
     )
     @app_commands.default_permissions(manage_guild=True)
     async def lv_create(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)  # defer ngay
+
         guild = interaction.guild
 
         config = get_section(guild.id, "booster") or {}
         booster_role = config.get("role")
 
         if not booster_role:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 "Server chưa thiết lập booster role trước.",
                 ephemeral=True
             )
@@ -64,10 +66,9 @@ class BoostGroup(app_commands.Group):
 
         embed = view.build_embed()
 
-        await interaction.response.send_message(
+        await interaction.edit_original_response(
             embed=embed,
-            view=view,
-            ephemeral=True
+            view=view
         )
 
         message = await interaction.original_response()
@@ -156,7 +157,7 @@ class BoostGroup(app_commands.Group):
     )
     @app_commands.default_permissions(manage_guild=True)
     async def lv_test(self, interaction: discord.Interaction, days: int):
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer(ephemeral=True)  # defer để tránh timeout
 
         member = interaction.user
 
@@ -180,7 +181,6 @@ class BoostGroup(app_commands.Group):
     )
     @app_commands.default_permissions(manage_guild=True)
     async def channel(self, interaction: discord.Interaction, channel_id: str):
-
         if not channel_id.isdigit():
             await interaction.response.send_message(
                 "ID kênh không hợp lệ.",
@@ -215,7 +215,6 @@ class BoostGroup(app_commands.Group):
     )
     @app_commands.default_permissions(manage_guild=True)
     async def message(self, interaction: discord.Interaction, text: str):
-
         update_guild_config(
             interaction.guild.id,
             "booster",
@@ -234,7 +233,6 @@ class BoostGroup(app_commands.Group):
     )
     @app_commands.default_permissions(manage_guild=True)
     async def embed(self, interaction: discord.Interaction, name: str):
-
         if not load_embed(interaction.guild.id, name):
             await interaction.response.send_message(
                 f"Embed `{name}` không tồn tại.",
@@ -260,7 +258,6 @@ class BoostGroup(app_commands.Group):
     )
     @app_commands.default_permissions(manage_guild=True)
     async def role(self, interaction: discord.Interaction, role_input: str):
-
         guild = interaction.guild
 
         if role_input.startswith("<@&") and role_input.endswith(">"):
@@ -301,7 +298,6 @@ class BoostGroup(app_commands.Group):
         description="Kiểm tra hệ thống booster"
     )
     async def test(self, interaction: discord.Interaction):
-
         await interaction.response.defer(ephemeral=True)
 
         member = interaction.user
@@ -407,19 +403,15 @@ class BoosterListener(commands.Cog):
 
     @tasks.loop(minutes=30)
     async def booster_sync(self):
-
         for guild in self.bot.guilds:
-
             if guild.unavailable:
                 continue
 
             boosters = guild.premium_subscribers
-
             if not boosters:
                 continue
 
             for member in boosters:
-
                 if member.bot:
                     continue
 
@@ -436,7 +428,6 @@ class BoosterListener(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-
         if self._startup_done:
             return
 
@@ -444,12 +435,10 @@ class BoosterListener(commands.Cog):
 
         for guild in self.bot.guilds:
             boosters = guild.premium_subscribers
-
             if not boosters:
                 continue
 
             for member in boosters:
-
                 if member.bot:
                     continue
 
