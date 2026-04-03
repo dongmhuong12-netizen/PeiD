@@ -42,7 +42,6 @@ class EmbedGroup(app_commands.Group):
 
     @app_commands.command(name="create", description="Create a new embed UI")
     async def create(self, interaction: discord.Interaction, name: str):
-
         existing = load_embed(interaction.guild.id, name)
         if existing:
             await interaction.response.send_message(
@@ -103,7 +102,6 @@ class EmbedGroup(app_commands.Group):
     @app_commands.command(name="edit", description="Edit existing embed")
     @app_commands.autocomplete(name=embed_name_autocomplete)
     async def edit(self, interaction: discord.Interaction, name: str):
-
         data = load_embed(interaction.guild.id, name)
 
         if not data:
@@ -143,7 +141,6 @@ class EmbedGroup(app_commands.Group):
     @app_commands.command(name="delete", description="Delete embed")
     @app_commands.autocomplete(name=embed_name_autocomplete)
     async def delete(self, interaction: discord.Interaction, name: str):
-
         data = load_embed(interaction.guild.id, name)
 
         if not data:
@@ -176,7 +173,6 @@ class EmbedGroup(app_commands.Group):
     @app_commands.command(name="show", description="Send embed to channel")
     @app_commands.autocomplete(name=embed_name_autocomplete)
     async def show(self, interaction: discord.Interaction, name: str):
-
         data = load_embed(interaction.guild.id, name)
 
         if not data:
@@ -232,3 +228,10 @@ async def setup(bot: commands.Bot):
 
     if bot.tree.get_command("p") is None:
         bot.tree.add_command(PGroup())
+
+    # ✅ Thêm sync tree để slash commands hiện
+    try:
+        await bot.tree.sync()
+        print("Slash commands synced")
+    except Exception as e:
+        print(f"Sync failed: {e}")
