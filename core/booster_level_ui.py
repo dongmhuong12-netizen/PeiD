@@ -14,7 +14,6 @@ class LevelSelect(discord.ui.Select):
         start = parent_view.page * LEVELS_PER_PAGE
         end = min(start + LEVELS_PER_PAGE, MAX_LEVELS)
 
-        # luôn hiện đủ 10 level theo page
         for i in range(start, end):
             if i >= len(parent_view.levels):
                 level = {"role": None, "days": None}
@@ -46,6 +45,16 @@ class LevelSelect(discord.ui.Select):
         await self.parent_view.refresh(interaction)
 
 
+class PageIndicatorButton(discord.ui.Button):
+    def __init__(self, current: int, total: int):
+        super().__init__(
+            label=f"Page {current}/{total}",
+            style=discord.ButtonStyle.secondary,
+            disabled=True,
+            row=1
+        )
+
+
 class BoosterLevelView(discord.ui.View):
     def __init__(self, guild_id: int, levels: list, booster_role: int):
         super().__init__(timeout=None)
@@ -58,7 +67,6 @@ class BoosterLevelView(discord.ui.View):
 
         self.levels = [lvl.copy() for lvl in levels] if levels else []
 
-        # luôn đảm bảo level 1 tồn tại
         if not self.levels:
             self.levels.append({
                 "role": booster_role,
@@ -68,9 +76,7 @@ class BoosterLevelView(discord.ui.View):
             self.levels[0]["role"] = booster_role
             self.levels[0]["days"] = 0
 
-        # page đầu luôn đủ 10 level
         self.ensure_page_slots(0)
-
         self.update_components()
 
     def ensure_page_slots(self, page: int):
@@ -82,6 +88,9 @@ class BoosterLevelView(discord.ui.View):
                 "days": None
             })
 
+    def get_total_pages(self):
+        return max(1, (len(self.levels) - 1) // LEVELS_PER_PAGE + 1)
+
     def build_embed(self):
         embed = discord.Embed(
             title="Booster Level Editor",
@@ -91,7 +100,6 @@ class BoosterLevelView(discord.ui.View):
         start = self.page * LEVELS_PER_PAGE
         end = min(start + LEVELS_PER_PAGE, MAX_LEVELS)
 
-        # luôn render đủ 10 field/page
         for i in range(start, end):
             if i >= len(self.levels):
                 lvl = {"role": None, "days": None}
@@ -114,9 +122,9 @@ class BoosterLevelView(discord.ui.View):
                 inline=False
             )
 
-        total_pages = max(1, (MAX_LEVELS - 1) // LEVELS_PER_PAGE + 1)
-        embed.set_footer(text=f"Page {self.page + 1}/{total_pages}")
-
+        embed.set_footer(
+            text=f"Page {self.page + 1}/{self.get_total_pages()}"
+        )
         return embed
 
     def update_components(self):
@@ -124,9 +132,12 @@ class BoosterLevelView(discord.ui.View):
 
         self.add_item(LevelSelect(self))
 
+        total_pages = self.get_total_pages()
+
         self.add_item(self.prev_page)
-        self.add_item(self.next_page)
+        self.add_item(PageIndicatorButton(self.page + 1, total_pages))
         self.add_item(self.add_page)
+        self.add_item(self.next_page)
 
         self.add_item(self.edit_role)
         self.add_item(self.edit_days)
@@ -157,19 +168,14 @@ class BoosterLevelView(discord.ui.View):
 
     @discord.ui.button(label="<", style=discord.ButtonStyle.secondary, row=1)
     async def prev_page(self, interaction: discord.Interaction, button):
-        if self.page > 0:
-            self.page -= 1
+        if self.page == 0:
+            await interaction.response.send_message(
+                "Đã đến trang đầu tiên",
+                ephemeral=True
+            )
+            return
 
-        await interaction.response.defer()
-        await self.refresh(interaction)
-
-    @discord.ui.button(label=">", style=discord.ButtonStyle.secondary, row=1)
-    async def next_page(self, interaction: discord.Interaction, button):
-        max_page = (MAX_LEVELS - 1) // LEVELS_PER_PAGE
-
-        if self.page < max_page:
-            self.page += 1
-
+        self.page -= 1
         await interaction.response.defer()
         await self.refresh(interaction)
 
@@ -182,15 +188,25 @@ class BoosterLevelView(discord.ui.View):
             )
             return
 
-        next_page = self.page + 1
-
-        if next_page > (MAX_LEVELS - 1) // LEVELS_PER_PAGE:
-            await interaction.response.defer()
-            return
-
+        next_page = self.get_total_pages()
         self.ensure_page_slots(next_page)
         self.page = next_page
 
+        await interaction.response.defer()
+        await self.refresh(interaction)
+
+    @discord.ui.button(label=">", style=discord.ButtonStyle.secondary, row=1)
+    async def next_page(self, interaction: discord.Interaction, button):
+        total_pages = self.get_total_pages()
+
+        if self.page >= total_pages - 1:
+            await interaction.response.send_message(
+                "Đã đến trang cuối cùng",
+                ephemeral=True
+            )
+            return
+
+        self.page += 1
         await interaction.response.defer()
         await self.refresh(interaction)
 
@@ -319,7 +335,6 @@ class BoosterLevelView(discord.ui.View):
             role = lvl.get("role")
             days = lvl.get("days")
 
-            # bỏ slot trống chưa dùng
             if role is None and days is None:
                 continue
 
