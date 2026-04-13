@@ -1,3 +1,4 @@
+# core/booster_level_ui.py
 import discord
 from core.booster_storage import save_levels
 
@@ -11,40 +12,33 @@ class LevelSelect(discord.ui.Select):
         options = []
 
         start = parent_view.page * LEVELS_PER_PAGE
-        end = start + LEVELS_PER_PAGE
+        end = min(start + LEVELS_PER_PAGE, len(parent_view.levels))
 
         for i in range(start, end):
-            if i >= len(parent_view.levels):
-                break
-
             level = parent_view.levels[i]
 
-            role_text = (
-                f"<@&{level.get('role')}>"
-                if level.get("role")
-                else "chưa đặt"
-            )
-            days_text = (
-                str(level.get("days"))
-                if level.get("days") is not None
-                else "chưa đặt"
-            )
+            role = level.get("role")
+            days = level.get("days")
+
+            role_text = f"ID: {role}" if role else "chưa edit"
+            days_text = str(days) if days is not None else "chưa edit"
 
             options.append(
                 discord.SelectOption(
                     label=f"Level {i + 1}",
-                    description=f"{role_text} | {days_text}",
+                    description=f"{role_text} | Days: {days_text}",
                     value=str(i)
                 )
             )
 
         super().__init__(
-            placeholder="Chọn level",
+            placeholder="Chọn level để chỉnh",
             options=options
         )
 
     async def callback(self, interaction: discord.Interaction):
         self.parent_view.selected_level = int(self.values[0])
+        await interaction.response.defer()
         await self.parent_view.refresh(interaction)
 
 
@@ -53,12 +47,14 @@ class BoosterLevelView(discord.ui.View):
         super().__init__(timeout=None)
 
         self.guild_id = guild_id
-        self.levels = levels
         self.booster_role = booster_role
         self.page = 0
         self.selected_level = 0
         self.message = None
 
+        self.levels = levels[:] if levels else []
+
+        # luôn đảm bảo có level 1
         if not self.levels:
             self.levels.append({
                 "role": booster_role,
@@ -68,7 +64,19 @@ class BoosterLevelView(discord.ui.View):
             self.levels[0]["role"] = booster_role
             self.levels[0]["days"] = 0
 
+        # page 1 luôn đủ 10 level
+        self.ensure_page_slots(0)
+
         self.update_components()
+
+    def ensure_page_slots(self, page: int):
+        required = min((page + 1) * LEVELS_PER_PAGE, MAX_LEVELS)
+
+        while len(self.levels) < required:
+            self.levels.append({
+                "role": None,
+                "days": None
+            })
 
     def build_embed(self):
         embed = discord.Embed(
@@ -77,18 +85,23 @@ class BoosterLevelView(discord.ui.View):
         )
 
         start = self.page * LEVELS_PER_PAGE
-        end = start + LEVELS_PER_PAGE
+        end = min(start + LEVELS_PER_PAGE, len(self.levels))
 
         for i in range(start, end):
-            if i >= len(self.levels):
-                break
-
             lvl = self.levels[i]
+
             role = lvl.get("role")
             days = lvl.get("days")
 
-            role_text = f"<@&{role}>" if role else "chưa đặt"
-            days_text = str(days) if days is not None else "chưa đặt"
+            if role:
+                role_text = f"<@&{role}>"
+            else:
+                role_text = "chưa edit"
+
+            if i == 0:
+                days_text = "0"
+            else:
+                days_text = str(days) if days is not None else "chưa edit"
 
             embed.add_field(
                 name=f"Level {i + 1}",
@@ -101,12 +114,14 @@ class BoosterLevelView(discord.ui.View):
             (len(self.levels) - 1) // LEVELS_PER_PAGE + 1
         )
         embed.set_footer(text=f"Page {self.page + 1}/{total_pages}")
+
         return embed
 
     def update_components(self):
         self.clear_items()
 
         self.add_item(LevelSelect(self))
+
         self.add_item(self.prev_page)
         self.add_item(self.next_page)
         self.add_item(self.add_page)
@@ -122,60 +137,57 @@ class BoosterLevelView(discord.ui.View):
         self.add_item(self.cancel_btn)
 
     async def refresh(self, interaction: discord.Interaction = None):
+        self.ensure_page_slots(self.page)
+
         if self.selected_level >= len(self.levels):
-            self.selected_level = max(0, len(self.levels) - 1)
+            self.selected_level = len(self.levels) - 1
 
         self.update_components()
         embed = self.build_embed()
 
         target_message = self.message
-
         if interaction and getattr(interaction, "message", None):
             target_message = interaction.message
 
         if target_message:
-            try:
-                await target_message.edit(embed=embed, view=self)
-                self.message = target_message
-            except Exception:
-                pass
+            await target_message.edit(embed=embed, view=self)
+            self.message = target_message
 
-    @discord.ui.button(label="<", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="<", style=discord.ButtonStyle.secondary, row=1)
     async def prev_page(self, interaction: discord.Interaction, button):
         if self.page > 0:
             self.page -= 1
+
         await interaction.response.defer()
         await self.refresh(interaction)
 
-    @discord.ui.button(label=">", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label=">", style=discord.ButtonStyle.secondary, row=1)
     async def next_page(self, interaction: discord.Interaction, button):
         max_page = max(0, (len(self.levels) - 1) // LEVELS_PER_PAGE)
+
         if self.page < max_page:
             self.page += 1
+
         await interaction.response.defer()
         await self.refresh(interaction)
 
-    @discord.ui.button(label="+", style=discord.ButtonStyle.success)
+    @discord.ui.button(label="+", style=discord.ButtonStyle.success, row=1)
     async def add_page(self, interaction: discord.Interaction, button):
         if len(self.levels) >= MAX_LEVELS:
             await interaction.response.send_message(
-                "Đã đạt 100 level.",
+                "Đã đạt tối đa 100 level.",
                 ephemeral=True
             )
             return
 
-        for _ in range(LEVELS_PER_PAGE):
-            if len(self.levels) >= MAX_LEVELS:
-                break
-            self.levels.append({
-                "role": None,
-                "days": None
-            })
+        next_page = self.page + 1
+        self.ensure_page_slots(next_page)
+        self.page = next_page
 
         await interaction.response.defer()
         await self.refresh(interaction)
 
-    @discord.ui.button(label="Edit Role", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="Edit Role", style=discord.ButtonStyle.secondary, row=2)
     async def edit_role(self, interaction: discord.Interaction, button):
         index = self.selected_level
         parent = self
@@ -186,7 +198,7 @@ class BoosterLevelView(discord.ui.View):
             async def on_submit(modal_self, modal_interaction: discord.Interaction):
                 val = modal_self.role.value.strip()
 
-                if val.startswith("<@&"):
+                if val.startswith("<@&") and val.endswith(">"):
                     val = val[3:-1]
 
                 if not val.isdigit():
@@ -212,14 +224,14 @@ class BoosterLevelView(discord.ui.View):
 
         await interaction.response.send_modal(Modal())
 
-    @discord.ui.button(label="Edit Days", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="Edit Days", style=discord.ButtonStyle.secondary, row=2)
     async def edit_days(self, interaction: discord.Interaction, button):
         index = self.selected_level
         parent = self
 
         if index == 0:
             await interaction.response.send_message(
-                "Level 1 = 0 ngày",
+                "Level 1 luôn = 0 ngày",
                 ephemeral=True
             )
             return
@@ -228,22 +240,25 @@ class BoosterLevelView(discord.ui.View):
             days = discord.ui.TextInput(label="Days")
 
             async def on_submit(modal_self, modal_interaction: discord.Interaction):
-                if not modal_self.days.value.isdigit():
+                value = modal_self.days.value.strip()
+
+                if not value.isdigit():
                     await modal_interaction.response.send_message(
                         "Days không hợp lệ",
                         ephemeral=True
                     )
                     return
 
-                parent.levels[index]["days"] = int(modal_self.days.value)
+                parent.levels[index]["days"] = int(value)
                 await modal_interaction.response.defer()
                 await parent.refresh()
 
         await interaction.response.send_modal(Modal())
 
-    @discord.ui.button(label="↑", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="↑", style=discord.ButtonStyle.secondary, row=3)
     async def move_up(self, interaction: discord.Interaction, button):
         i = self.selected_level
+
         if i <= 1:
             await interaction.response.defer()
             return
@@ -254,7 +269,7 @@ class BoosterLevelView(discord.ui.View):
         await interaction.response.defer()
         await self.refresh(interaction)
 
-    @discord.ui.button(label="↓", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="↓", style=discord.ButtonStyle.secondary, row=3)
     async def move_down(self, interaction: discord.Interaction, button):
         i = self.selected_level
 
@@ -268,7 +283,7 @@ class BoosterLevelView(discord.ui.View):
         await interaction.response.defer()
         await self.refresh(interaction)
 
-    @discord.ui.button(label="Delete", style=discord.ButtonStyle.danger)
+    @discord.ui.button(label="Delete", style=discord.ButtonStyle.danger, row=3)
     async def delete_level(self, interaction: discord.Interaction, button):
         if self.selected_level == 0:
             await interaction.response.defer()
@@ -277,12 +292,12 @@ class BoosterLevelView(discord.ui.View):
         self.levels.pop(self.selected_level)
 
         if self.selected_level >= len(self.levels):
-            self.selected_level -= 1
+            self.selected_level = max(0, len(self.levels) - 1)
 
         await interaction.response.defer()
         await self.refresh(interaction)
 
-    @discord.ui.button(label="Save", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="Save", style=discord.ButtonStyle.primary, row=4)
     async def save_btn(self, interaction: discord.Interaction, button):
         prev_days = -1
         roles = set()
@@ -292,33 +307,51 @@ class BoosterLevelView(discord.ui.View):
             days = lvl.get("days")
 
             if role is None or days is None:
-                await interaction.response.send_message("Thiếu dữ liệu", ephemeral=True)
-                return
+                continue
 
             if role in roles:
-                await interaction.response.send_message("Role bị trùng", ephemeral=True)
+                await interaction.response.send_message(
+                    "Role bị trùng",
+                    ephemeral=True
+                )
                 return
 
             if role == self.booster_role and i != 0:
-                await interaction.response.send_message("Role trùng booster role", ephemeral=True)
+                await interaction.response.send_message(
+                    "Role trùng booster role",
+                    ephemeral=True
+                )
                 return
 
             roles.add(role)
 
             if i == 0 and days != 0:
-                await interaction.response.send_message("Level 1 phải = 0", ephemeral=True)
+                await interaction.response.send_message(
+                    "Level 1 phải = 0",
+                    ephemeral=True
+                )
                 return
 
             if days <= prev_days:
-                await interaction.response.send_message("Days phải tăng dần", ephemeral=True)
+                await interaction.response.send_message(
+                    "Days phải tăng dần",
+                    ephemeral=True
+                )
                 return
 
             prev_days = days
 
         await save_levels(interaction.guild.id, self.levels)
-        await interaction.response.send_message("Đã lưu", ephemeral=True)
 
-    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.danger)
+        await interaction.response.send_message(
+            "Đã lưu cấu hình booster level",
+            ephemeral=True
+        )
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.danger, row=4)
     async def cancel_btn(self, interaction: discord.Interaction, button):
-        await interaction.response.send_message("Đã huỷ", ephemeral=True)
+        await interaction.response.send_message(
+            "Đã huỷ",
+            ephemeral=True
+        )
         self.stop()
