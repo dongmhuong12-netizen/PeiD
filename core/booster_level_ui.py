@@ -395,10 +395,17 @@ class BoosterLevelView(discord.ui.View):
             ephemeral=True
         )
 
-    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.danger, row=4)
-    async def cancel_btn(self, interaction: discord.Interaction, button):
-        await interaction.response.send_message(
-            "Đã huỷ",
-            ephemeral=True
-        )
-        self.stop()
+        @discord.ui.button(label="Cancel", style=discord.ButtonStyle.danger, row=4)
+        async def cancel_btn(self, interaction: discord.Interaction, button):
+            try:
+                target_message = self.message or interaction.message
+                if target_message:
+                await target_message.edit(view=None)
+            except Exception:
+                pass
+
+            await interaction.response.send_message(
+                "Đã huỷ",
+                ephemeral=True
+            )
+            self.stop()
