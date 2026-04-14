@@ -1,4 +1,3 @@
-# core/booster_level_ui.py
 import discord
 from core.booster_storage import save_levels
 
@@ -101,10 +100,7 @@ class BoosterLevelView(discord.ui.View):
         end = min(start + LEVELS_PER_PAGE, MAX_LEVELS)
 
         for i in range(start, end):
-            if i >= len(self.levels):
-                lvl = {"role": None, "days": None}
-            else:
-                lvl = self.levels[i]
+            lvl = self.levels[i]
 
             role = lvl.get("role")
             days = lvl.get("days")
@@ -194,7 +190,6 @@ class BoosterLevelView(discord.ui.View):
             return
 
         self.ensure_page_slots(next_page)
-
         self.page = next_page
         self.selected_level = self.page * LEVELS_PER_PAGE
 
@@ -249,7 +244,6 @@ class BoosterLevelView(discord.ui.View):
                     )
                     return
 
-                parent.ensure_page_slots(index // LEVELS_PER_PAGE)
                 parent.levels[index]["role"] = role_id
 
                 await modal_interaction.response.defer()
@@ -282,7 +276,6 @@ class BoosterLevelView(discord.ui.View):
                     )
                     return
 
-                parent.ensure_page_slots(index // LEVELS_PER_PAGE)
                 parent.levels[index]["days"] = int(value)
 
                 await modal_interaction.response.defer()
@@ -327,8 +320,13 @@ class BoosterLevelView(discord.ui.View):
         if self.selected_level < len(self.levels):
             self.levels.pop(self.selected_level)
 
-        if self.selected_level >= len(self.levels):
-            self.selected_level = max(0, len(self.levels) - 1)
+        if self.page > 0 and self.page * LEVELS_PER_PAGE >= len(self.levels):
+            self.page -= 1
+
+        self.selected_level = min(
+            self.selected_level,
+            len(self.levels) - 1
+        )
 
         await interaction.response.defer()
         await self.refresh(interaction)
@@ -395,17 +393,17 @@ class BoosterLevelView(discord.ui.View):
             ephemeral=True
         )
 
-        @discord.ui.button(label="Cancel", style=discord.ButtonStyle.danger, row=4)
-        async def cancel_btn(self, interaction: discord.Interaction, button):
-            try:
-                target_message = self.message or interaction.message
-                if target_message:
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.danger, row=4)
+    async def cancel_btn(self, interaction: discord.Interaction, button):
+        try:
+            target_message = self.message or interaction.message
+            if target_message:
                 await target_message.edit(view=None)
-            except Exception:
-                pass
+        except Exception:
+            pass
 
-            await interaction.response.send_message(
-                "Đã huỷ",
-                ephemeral=True
-            )
-            self.stop()
+        await interaction.response.send_message(
+            "Đã huỷ",
+            ephemeral=True
+        )
+        self.stop()
