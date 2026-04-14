@@ -67,7 +67,6 @@ class BoosterLevelView(discord.ui.View):
 
         self.levels = [lvl.copy() for lvl in levels] if levels else []
 
-        # luôn đảm bảo level 1 tồn tại
         if not self.levels:
             self.levels.append({
                 "role": booster_role,
@@ -184,14 +183,16 @@ class BoosterLevelView(discord.ui.View):
 
     @discord.ui.button(label="+", style=discord.ButtonStyle.success, row=1)
     async def add_page(self, interaction: discord.Interaction, button):
-        if len(self.levels) >= MAX_LEVELS:
+        max_page = (MAX_LEVELS // LEVELS_PER_PAGE) - 1
+        next_page = self.page + 1
+
+        if next_page > max_page:
             await interaction.response.send_message(
                 "Đã đạt tối đa 100 level.",
                 ephemeral=True
             )
             return
 
-        next_page = self.get_total_pages()
         self.ensure_page_slots(next_page)
 
         self.page = next_page
