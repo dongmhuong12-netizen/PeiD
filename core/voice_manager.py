@@ -2,7 +2,7 @@ import discord
 import asyncio
 import time
 
-from core.voice_storage import set_voice, remove_voice
+from core.voice_storage import set_voice, remove_voice, get_voice
 
 
 class VoiceManager:
@@ -10,18 +10,13 @@ class VoiceManager:
         self.bot = bot
         self.locks = {}
         self.cooldowns = {}
+        self.sessions = {}  # RAM state
 
-    # =========================
-    # LOCK PER GUILD
-    # =========================
     def _lock(self, gid: int):
         if gid not in self.locks:
             self.locks[gid] = asyncio.Lock()
         return self.locks[gid]
 
-    # =========================
-    # COOLDOWN
-    # =========================
     def _cooldown(self, gid: int):
         now = time.time()
         if now - self.cooldowns.get(gid, 0) < 2:
@@ -30,7 +25,7 @@ class VoiceManager:
         return True
 
     # =========================
-    # CONNECT (STABLE CORE FIX)
+    # CONNECT
     # =========================
     async def connect(self, guild: discord.Guild, channel: discord.VoiceChannel):
         gid = guild.id
@@ -42,54 +37,34 @@ class VoiceManager:
             try:
                 vc = guild.voice_client
 
-                # =========================
-                # STEP 1: SAFE CLEAN STATE
-                # =========================
+                # already correct
+                if vc and vc.is_connected():
+                    if vc.channel.id == channel.id:
+                        self.sessions[gid] = channel.id
+                        return True
+                    await vc.move_to(channel)
+                    self.sessions[gid] = channel.id
+                    set_voice(gid, channel.id)
+                    return True
+
+                # clean stale
                 if vc:
                     try:
-                        if vc.is_connected():
-                            if vc.channel.id == channel.id:
-                                return True
-
-                            await vc.disconnect()
-                    except Exception:
+                        await vc.disconnect(force=True)
+                    except:
                         pass
 
-                    vc = None
-
-                # IMPORTANT: allow Discord gateway reset
                 await asyncio.sleep(2)
 
-                # =========================
-                # STEP 2: CONNECT RETRY LOOP
-                # =========================
-                for i in range(3):
-                    try:
-                        vc = await channel.connect(
-                            timeout=20,
-                            reconnect=True,
-                            self_deaf=True
-                        )
+                vc = await channel.connect(self_deaf=True)
 
-                        set_voice(gid, channel.id)
-                        return True
+                self.sessions[gid] = channel.id
+                set_voice(gid, channel.id)
 
-                    except discord.ClientException:
-                        # Edge case: already connected / stale session
-                        vc = guild.voice_client
-                        if vc and vc.is_connected():
-                            return True
-
-                        await asyncio.sleep(1)
-
-                    except Exception as e:
-                        print(f"[VOICE CONNECT RETRY {i+1}]", repr(e))
-                        await asyncio.sleep(2 + i)
-
-                return "CONNECT_FAILED"
+                return True
 
             except Exception as e:
-                print("[VOICE CONNECT FATAL]", repr(e))
+                print("[VOICE CONNECT ERROR]", repr(e))
                 return "CONNECT_FAILED"
 
     # =========================
@@ -103,12 +78,13 @@ class VoiceManager:
                 vc = guild.voice_client
 
                 if vc:
-                    try:
-                        await vc.disconnect()
-                    except Exception:
-                        pass
+                    await vc.disconnect(force=True)
 
-                remove_voice(gid)
+                self.sessions.pop(gid, None)
+
+                # 🔥 mark manual leave
+                set_voice(gid, None, manual=True)
+
                 return True
 
             except Exception as e:
@@ -116,19 +92,37 @@ class VoiceManager:
                 return "DISCONNECT_FAILED"
 
     # =========================
-    # ENSURE CONNECTED (WATCHDOG)
+    # ENSURE CONNECTED (ONLY SERVICE USE)
     # =========================
-    async def ensure_connected(self, guild: discord.Guild):
+    async def ensure(self, guild: discord.Guild):
         gid = guild.id
+
+        data = get_voice(gid)
+        if not data:
+            return
+
+        if data.get("manual_leave"):
+            return
+
+        channel_id = data.get("channel_id")
+        if not channel_id:
+            return
+
         vc = guild.voice_client
 
-        try:
-            if vc and vc.is_connected():
-                return
+        if vc and vc.is_connected():
+            return
 
-            data = self.bot.voice_manager_data if hasattr(self.bot, "voice_manager_data") else None
-            if not data:
-                return
+        channel = guild.get_channel(channel_id)
+        if not channel:
+            return
+
+        try:
+            await asyncio.sleep(1)
+            await channel.connect(self_deaf=True)
+            self.sessions[gid] = channel_id
+
+            print(f"[VOICE RECOVERED] {gid}")
 
         except Exception as e:
             print("[VOICE ENSURE ERROR]", repr(e))
