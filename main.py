@@ -5,7 +5,8 @@ import os
 from aiohttp import web
 
 from core.voice_manager import VoiceManager
-from systems.voice_recovery import VoiceRecovery
+from core.voice_service import VoiceService
+from core.voice_listener import VoiceListener
 
 os.makedirs("data", exist_ok=True)
 
@@ -14,10 +15,11 @@ if not TOKEN:
     raise RuntimeError("TOKEN environment variable not found")
 
 # =========================
-# WEB SERVER (KEEP ALIVE)
+# WEB SERVER
 # =========================
 async def health(request):
     return web.Response(text="Bot is running")
+
 
 async def run_web_server():
     app = web.Application()
@@ -33,71 +35,72 @@ async def run_web_server():
     while True:
         await asyncio.sleep(3600)
 
+
 # =========================
-# INTENTS
+# BOT
 # =========================
 intents = discord.Intents.default()
 intents.members = True
 intents.guilds = True
-intents.reactions = True
+intents.voice_states = True
 intents.message_content = True
-intents.voice_states = True  # 🔥 IMPORTANT
 
 bot = commands.AutoShardedBot(
     command_prefix=commands.when_mentioned,
     intents=intents
 )
 
+
+# =========================
+# ATTACH CORE
+# =========================
+bot.voice_manager = VoiceManager(bot)
+
+
 # =========================
 # EXTENSIONS
 # =========================
 EXTENSIONS = [
-    "core.root",
-    "systems.reaction_role",
-    "commands.voice_system"
+    "commands.voice_system",
+    "core.voice_listener"
 ]
+
 
 async def load_extensions():
     for ext in EXTENSIONS:
         try:
             await bot.load_extension(ext)
-            print(f"Loaded {ext}", flush=True)
+            print(f"Loaded {ext}")
         except Exception as e:
-            print(f"Failed {ext}: {repr(e)}", flush=True)
+            print(f"Failed {ext}: {repr(e)}")
+
 
 # =========================
 # READY
 # =========================
 @bot.event
 async def on_ready():
-    print(f"Logged in as {bot.user}", flush=True)
-
-    # 🔥 stabilize gateway
-    await asyncio.sleep(8)
+    print(f"Logged in as {bot.user}")
 
     try:
         await bot.tree.sync()
     except:
         pass
 
-    # 🔥 start recovery watchdog
-    bot.loop.create_task(VoiceRecovery(bot).start())
+    bot.loop.create_task(VoiceService(bot).start())
+
 
 # =========================
 # MAIN
 # =========================
 async def main():
-    # 🔥 stabilize boot
-    await asyncio.sleep(5)
-
-    bot.voice_manager = VoiceManager(bot)
-
     await load_extensions()
 
     await asyncio.gather(
         run_web_server(),
         bot.start(TOKEN)
     )
+
 
 if __name__ == "__main__":
     asyncio.run(main())
