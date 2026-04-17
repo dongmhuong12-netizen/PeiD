@@ -11,8 +11,8 @@ class VoiceListener(commands.Cog):
             return
 
         if before.channel and not after.channel:
-            guild = member.guild
-            await self.bot.voice_manager.ensure_connected(guild)
+            print("[VOICE DISCONNECTED]")
+            # ❌ KHÔNG reconnect ở đây nữa
 
 
 async def setup(bot):
