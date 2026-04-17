@@ -8,22 +8,18 @@ from core.voice_manager import VoiceManager
 from core.voice_service import VoiceService
 from core.voice_listener import VoiceListener
 
+
 os.makedirs("data", exist_ok=True)
 
 TOKEN = os.getenv("TOKEN")
 if not TOKEN:
     raise RuntimeError("TOKEN environment variable not found")
 
-# =========================
-# WEB SERVER
-# =========================
-async def health(request):
-    return web.Response(text="Bot is running")
 
-
+# WEB
 async def run_web_server():
     app = web.Application()
-    app.router.add_get("/", health)
+    app.router.add_get("/", lambda r: web.Response(text="OK"))
 
     runner = web.AppRunner(app)
     await runner.setup()
@@ -36,30 +32,18 @@ async def run_web_server():
         await asyncio.sleep(3600)
 
 
-# =========================
 # BOT
-# =========================
 intents = discord.Intents.default()
-intents.members = True
 intents.guilds = True
 intents.voice_states = True
-intents.message_content = True
 
 bot = commands.AutoShardedBot(
-    command_prefix=commands.when_mentioned,
+    command_prefix="!",
     intents=intents
 )
 
 
-# =========================
-# ATTACH CORE
-# =========================
-bot.voice_manager = VoiceManager(bot)
-
-
-# =========================
 # EXTENSIONS
-# =========================
 EXTENSIONS = [
     "commands.voice_system",
     "core.voice_listener"
@@ -68,32 +52,22 @@ EXTENSIONS = [
 
 async def load_extensions():
     for ext in EXTENSIONS:
-        try:
-            await bot.load_extension(ext)
-            print(f"Loaded {ext}")
-        except Exception as e:
-            print(f"Failed {ext}: {repr(e)}")
+        await bot.load_extension(ext)
 
 
-# =========================
-# READY
-# =========================
 @bot.event
 async def on_ready():
-    print(f"Logged in as {bot.user}")
+    print("BOT READY")
 
-    try:
-        await bot.tree.sync()
-    except:
-        pass
+    await bot.tree.sync()
 
     bot.loop.create_task(VoiceService(bot).start())
 
 
-# =========================
-# MAIN
-# =========================
 async def main():
+    # IMPORTANT ORDER FIX
+    bot.voice_manager = VoiceManager(bot)
+
     await load_extensions()
 
     await asyncio.gather(
