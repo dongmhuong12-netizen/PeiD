@@ -2,8 +2,6 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from core.voice_manager import VoiceManager
-
 
 class VoiceSystem(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -16,11 +14,10 @@ class VoiceSystem(commands.Cog):
     @app_commands.command(name="vjoin")
     async def vjoin(self, interaction: discord.Interaction):
         try:
+            await interaction.response.defer(ephemeral=True)
+
             if not interaction.user.voice or not interaction.user.voice.channel:
-                return await interaction.response.send_message(
-                    "Bạn chưa ở voice channel.",
-                    ephemeral=True
-                )
+                return await interaction.followup.send("Bạn chưa ở voice channel.")
 
             result = await self.manager.join(
                 interaction,
@@ -28,27 +25,16 @@ class VoiceSystem(commands.Cog):
             )
 
             if result is True:
-                await interaction.response.send_message("Đã vào voice.")
-                return
+                return await interaction.followup.send("Đã vào voice.")
 
             if result == "COOLDOWN":
-                await interaction.response.send_message(
-                    "Bạn đang thao tác quá nhanh, vui lòng chờ.",
-                    ephemeral=True
-                )
-                return
+                return await interaction.followup.send("Đang thao tác quá nhanh, thử lại sau.")
 
-            # không leak raw error nữa
-            await interaction.response.send_message(
-                "Không thể vào voice. Vui lòng thử lại.",
-                ephemeral=True
-            )
+            await interaction.followup.send(f"Không thể join voice: `{result}`")
 
-        except Exception:
-            await interaction.response.send_message(
-                "Có lỗi xảy ra khi xử lý lệnh voice.",
-                ephemeral=True
-            )
+        except Exception as e:
+            print("[VJOIN ERROR]:", repr(e))
+            await interaction.followup.send("Lỗi xử lý lệnh vjoin.")
 
     # =========================
     # LEAVE
@@ -56,21 +42,18 @@ class VoiceSystem(commands.Cog):
     @app_commands.command(name="vleave")
     async def vleave(self, interaction: discord.Interaction):
         try:
+            await interaction.response.defer(ephemeral=True)
+
             result = await self.manager.leave(interaction.guild)
 
             if result is True:
-                await interaction.response.send_message("Đã rời voice.")
-            else:
-                await interaction.response.send_message(
-                    "Không thể rời voice.",
-                    ephemeral=True
-                )
+                return await interaction.followup.send("Đã rời voice.")
 
-        except Exception:
-            await interaction.response.send_message(
-                "Có lỗi xảy ra khi rời voice.",
-                ephemeral=True
-            )
+            await interaction.followup.send(f"Lỗi leave voice: `{result}`")
+
+        except Exception as e:
+            print("[VLEAVE ERROR]:", repr(e))
+            await interaction.followup.send("Lỗi xử lý vleave.")
 
     # =========================
     # STATUS
@@ -81,23 +64,16 @@ class VoiceSystem(commands.Cog):
             vc = interaction.guild.voice_client
 
             if not vc or not vc.is_connected():
-                return await interaction.response.send_message(
-                    "Bot hiện không ở voice."
-                )
+                return await interaction.response.send_message("Bot không ở voice.")
 
             await interaction.response.send_message(
-                f"Đang ở: {vc.channel.name}"
+                f"Đang ở voice: {vc.channel.name}"
             )
 
-        except Exception:
-            await interaction.response.send_message(
-                "Không thể lấy trạng thái voice.",
-                ephemeral=True
-            )
+        except Exception as e:
+            print("[VSTATUS ERROR]:", repr(e))
+            await interaction.response.send_message("Không lấy được trạng thái.")
 
 
-# =========================
-# SETUP
-# =========================
 async def setup(bot: commands.Bot):
     await bot.add_cog(VoiceSystem(bot))
