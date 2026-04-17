@@ -10,7 +10,7 @@ class VoiceManager:
 
         self.locks = {}
         self.cooldowns = {}
-        self.sessions = {}  # guild_id -> session state
+        self.sessions = {}
 
     # =========================
     # LOCK
@@ -31,7 +31,7 @@ class VoiceManager:
         return True
 
     # =========================
-    # CONNECT
+    # CONNECT (FIXED CORE)
     # =========================
     async def connect(self, guild: discord.Guild, channel: discord.VoiceChannel):
         gid = guild.id
@@ -43,22 +43,52 @@ class VoiceManager:
             try:
                 vc = guild.voice_client
 
-                # already connected
-                if vc and vc.is_connected():
-                    if vc.channel.id == channel.id:
+                # 🔥 STEP 1: FORCE CLEAN STATE (IMPORTANT FIX)
+                if vc:
+                    try:
+                        if vc.is_connected():
+                            await vc.disconnect(force=True)
+                    except:
+                        pass
+
+                    vc = None
+
+                await asyncio.sleep(1)  # allow gateway reset
+
+                # 🔥 STEP 2: RETRY CONNECT (HARD MODE)
+                for i in range(3):
+                    try:
+                        vc = await channel.connect(
+                            timeout=20,
+                            reconnect=True,
+                            self_deaf=True
+                        )
+
+                        set_voice(gid, channel.id)
                         self._set_session(gid, channel.id, "CONNECTED")
+
                         return True
-                    await vc.move_to(channel)
-                else:
-                    await channel.connect(self_deaf=True)
 
-                set_voice(gid, channel.id)
-                self._set_session(gid, channel.id, "CONNECTED")
+                    except discord.ClientException as e:
+                        print(f"[VOICE CLIENT EXC {i+1}]", repr(e))
 
-                return True
+                        # already connected fallback
+                        vc = guild.voice_client
+                        if vc and vc.is_connected():
+                            await vc.move_to(channel)
+                            return True
+
+                        await asyncio.sleep(2)
+
+                    except Exception as e:
+                        print(f"[VOICE CONNECT FAIL {i+1}]", repr(e))
+                        await asyncio.sleep(2 + i)
+
+                self._set_session(gid, None, "FAILED", "CONNECT_FAILED")
+                return "CONNECT_FAILED"
 
             except Exception as e:
-                print("[VOICE CONNECT ERROR]", repr(e))
+                print("[VOICE CONNECT FATAL]", repr(e))
                 self._set_session(gid, None, "FAILED", str(e))
                 return "CONNECT_FAILED"
 
@@ -71,8 +101,12 @@ class VoiceManager:
         async with self._lock(gid):
             try:
                 vc = guild.voice_client
+
                 if vc:
-                    await vc.disconnect()
+                    try:
+                        await vc.disconnect(force=True)
+                    except:
+                        pass
 
                 remove_voice(gid)
                 self._set_session(gid, None, "DISCONNECTED")
@@ -84,7 +118,7 @@ class VoiceManager:
                 return "DISCONNECT_FAILED"
 
     # =========================
-    # ENSURE CONNECTED (WATCHDOG CORE)
+    # ENSURE CONNECTED
     # =========================
     async def ensure_connected(self, guild: discord.Guild):
         gid = guild.id
@@ -115,7 +149,7 @@ class VoiceManager:
             print("[VOICE ENSURE ERROR]", repr(e))
 
     # =========================
-    # SESSION UPDATE
+    # SESSION
     # =========================
     def _set_session(self, gid, channel_id, state, error=None):
         self.sessions[gid] = {
