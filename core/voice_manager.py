@@ -9,130 +9,81 @@ from core.voice_storage import set_voice, remove_voice, get_voice
 class VoiceManager:
     def __init__(self, bot):
         self.bot = bot
-        self.guild_locks = {}
+        self.locks = {}
         self.cooldown = {}
-        self.last_controller = {}
 
-    # =========================
-    # LOCK PER GUILD
-    # =========================
-    def _get_lock(self, guild_id: int):
-        if guild_id not in self.guild_locks:
-            self.guild_locks[guild_id] = asyncio.Lock()
-        return self.guild_locks[guild_id]
+    def _lock(self, gid):
+        if gid not in self.locks:
+            self.locks[gid] = asyncio.Lock()
+        return self.locks[gid]
 
-    # =========================
-    # COOLDOWN
-    # =========================
-    def _can_run(self, guild_id: int):
+    def _cooldown_ok(self, gid):
         now = time.time()
-        if now - self.cooldown.get(guild_id, 0) < 3:
+        if now - self.cooldown.get(gid, 0) < 2:
             return False
-        self.cooldown[guild_id] = now
+        self.cooldown[gid] = now
         return True
 
-    # =========================
-    # JOIN WITH RETRY
-    # =========================
-    async def join(self, interaction: discord.Interaction, channel: discord.VoiceChannel):
-        guild = interaction.guild
+    async def connect(self, guild: discord.Guild, channel: discord.VoiceChannel):
         gid = guild.id
 
-        if not self._can_run(gid):
+        if not self._cooldown_ok(gid):
             return "COOLDOWN"
 
-        async with self._get_lock(gid):
+        async with self._lock(gid):
             vc = guild.voice_client
 
-            # already in correct channel
             if vc and vc.is_connected() and vc.channel.id == channel.id:
                 return True
 
-            for attempt in range(2):  # retry nhẹ 2 lần
+            for i in range(3):
                 try:
                     if vc and vc.is_connected():
                         await vc.move_to(channel)
                     else:
-                        await channel.connect(self_deaf=True, self_mute=False)
+                        await channel.connect(self_deaf=True)
 
                     set_voice(gid, channel.id)
-                    self.last_controller[gid] = interaction.user.id
                     return True
 
                 except Exception as e:
-                    print(f"[VOICE JOIN ERROR ATTEMPT {attempt+1}]:", repr(e))
+                    print(f"[VOICE CONNECT FAIL {i+1}]", repr(e))
                     traceback.print_exc()
+                    await asyncio.sleep(1.5)
 
-                    await asyncio.sleep(1)
+            return "CONNECT_FAILED"
 
-            return "VOICE_CONNECT_FAILED"
-
-    # =========================
-    # LEAVE
-    # =========================
-    async def leave(self, guild: discord.Guild, manual=True):
+    async def disconnect(self, guild: discord.Guild):
         gid = guild.id
 
-        async with self._get_lock(gid):
-            try:
-                vc = guild.voice_client
+        async with self._lock(gid):
+            vc = guild.voice_client
 
+            try:
                 if vc and vc.is_connected():
                     await vc.disconnect()
-
-                data = get_voice(gid)
-                if data:
-                    data["manual_leave"] = manual
-                    data["enabled"] = False
 
                 remove_voice(gid)
                 return True
 
             except Exception as e:
-                print("[VOICE LEAVE ERROR]:", repr(e))
+                print("[VOICE DISCONNECT ERROR]", repr(e))
                 traceback.print_exc()
-                return "VOICE_LEAVE_FAILED"
+                return "DISCONNECT_FAILED"
 
-    # =========================
-    # RESTORE ONE
-    # =========================
-    async def restore_one(self, guild: discord.Guild, cfg: dict):
-        gid = guild.id
-
-        if not cfg.get("enabled", True):
+    async def ensure_connected(self, guild: discord.Guild):
+        data = get_voice(guild.id)
+        if not data or not data.get("channel_id"):
             return
 
-        if cfg.get("manual_leave"):
-            return
-
-        channel = guild.get_channel(cfg["channel_id"])
+        channel = guild.get_channel(data["channel_id"])
         if not channel:
-            remove_voice(gid)
+            remove_voice(guild.id)
             return
 
-        try:
-            vc = guild.voice_client
-
-            if not vc or not vc.is_connected():
-                await channel.connect(self_deaf=True, self_mute=False)
-
-        except Exception as e:
-            print("[VOICE RESTORE ERROR]:", repr(e))
-            traceback.print_exc()
-            cfg["last_error"] = str(e)
-            set_voice(gid, cfg["channel_id"])
-
-    # =========================
-    # RESTORE ALL
-    # =========================
-    async def restore_all(self):
-        from core.voice_storage import get_all
-
-        data = get_all()
-
-        for gid, cfg in data.items():
-            guild = self.bot.get_guild(int(gid))
-            if not guild:
-                continue
-
-            await self.restore_one(guild, cfg)
+        vc = guild.voice_client
+        if not vc or not vc.is_connected():
+            try:
+                await channel.connect(self_deaf=True)
+            except Exception as e:
+                print("[VOICE RESTORE FAIL]", repr(e))
