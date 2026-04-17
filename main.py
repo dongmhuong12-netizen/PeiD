@@ -4,9 +4,7 @@ import asyncio
 import os
 from aiohttp import web
 
-# ===== VOICE IMPORT =====
 from core.voice_manager import VoiceManager
-from core.voice_service import VoiceService
 from systems.voice_recovery import VoiceRecovery
 
 
@@ -16,9 +14,8 @@ TOKEN = os.getenv("TOKEN")
 if not TOKEN:
     raise RuntimeError("TOKEN environment variable not found")
 
-
 # =========================
-# WEB SERVER FOR RENDER
+# WEB SERVER
 # =========================
 
 async def health(request):
@@ -41,7 +38,6 @@ async def run_web_server():
     while True:
         await asyncio.sleep(3600)
 
-
 # =========================
 # INTENTS
 # =========================
@@ -52,42 +48,13 @@ intents.guilds = True
 intents.reactions = True
 intents.message_content = True
 
-
-# =========================
-# BOT CLASS (FIX IMPORTANT)
-# =========================
-
-class MyBot(commands.AutoShardedBot):
-    async def setup_hook(self):
-        # voice system init đúng lifecycle
-        self.voice_manager = VoiceManager(self)
-        self.loop.create_task(VoiceService(self).start())
-        self.loop.create_task(VoiceRecovery(self).start())
-
-        # load extensions
-        for ext in EXTENSIONS:
-            try:
-                await self.load_extension(ext)
-                print(f"Loaded {ext}", flush=True)
-            except Exception as e:
-                print(f"Failed to load {ext}: {e}", flush=True)
-
-        # sync slash sau khi system ready
-        try:
-            synced = await self.tree.sync()
-            print(f"Slash synced: {len(synced)}", flush=True)
-        except Exception as e:
-            print(f"Slash sync failed: {e}", flush=True)
-
-
-bot = MyBot(
+bot = commands.AutoShardedBot(
     command_prefix=commands.when_mentioned,
     intents=intents
 )
 
-
 # =========================
-# EXTENSIONS LIST
+# EXTENSIONS
 # =========================
 
 EXTENSIONS = [
@@ -96,6 +63,13 @@ EXTENSIONS = [
     "commands.voice_system"
 ]
 
+async def load_extensions():
+    for ext in EXTENSIONS:
+        try:
+            await bot.load_extension(ext)
+            print(f"Loaded {ext}", flush=True)
+        except Exception as e:
+            print(f"Failed to load {ext}: {e}", flush=True)
 
 # =========================
 # READY
@@ -106,17 +80,30 @@ async def on_ready():
     print(f"Logged in as {bot.user} ({bot.user.id})", flush=True)
     print("Bot ready", flush=True)
 
+    try:
+        await bot.tree.sync()
+        print("Slash synced", flush=True)
+    except Exception as e:
+        print(f"Slash sync failed: {e}", flush=True)
+
+    # 🔥 START SYSTEMS
+    bot.loop.create_task(VoiceRecovery(bot).start())
 
 # =========================
 # MAIN
 # =========================
 
 async def main():
+
+    # 🔥 IMPORTANT: attach BEFORE load extensions
+    bot.voice_manager = VoiceManager(bot)
+
+    await load_extensions()
+
     await asyncio.gather(
         run_web_server(),
         bot.start(TOKEN)
     )
-
 
 if __name__ == "__main__":
     asyncio.run(main())
