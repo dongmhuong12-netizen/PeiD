@@ -8,11 +8,14 @@ class VoiceSystem(commands.Cog):
         self.bot = bot
         self.manager = bot.voice_manager
 
+    # =========================
+    # JOIN
+    # =========================
     @app_commands.command(name="vjoin")
     async def vjoin(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
 
-        if not interaction.user.voice:
+        if not interaction.user.voice or not interaction.user.voice.channel:
             return await interaction.followup.send("Bạn chưa ở voice.")
 
         result = await self.manager.connect(
@@ -23,8 +26,14 @@ class VoiceSystem(commands.Cog):
         if result is True:
             return await interaction.followup.send("Đã vào voice.")
 
+        if result == "COOLDOWN":
+            return await interaction.followup.send("Đang thao tác quá nhanh.")
+
         return await interaction.followup.send(f"Lỗi voice: {result}")
 
+    # =========================
+    # LEAVE
+    # =========================
     @app_commands.command(name="vleave")
     async def vleave(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
@@ -36,11 +45,14 @@ class VoiceSystem(commands.Cog):
 
         return await interaction.followup.send(f"Lỗi: {result}")
 
+    # =========================
+    # STATUS
+    # =========================
     @app_commands.command(name="vstatus")
     async def vstatus(self, interaction: discord.Interaction):
         vc = interaction.guild.voice_client
 
-        if not vc:
+        if not vc or not vc.is_connected():
             return await interaction.response.send_message("Bot không ở voice.")
 
         await interaction.response.send_message(f"Đang ở: {vc.channel.name}")
