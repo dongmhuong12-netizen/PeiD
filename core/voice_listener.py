@@ -11,12 +11,10 @@ class VoiceListener(commands.Cog):
         if member.id != self.bot.user.id:
             return
 
-        # bot bị kick hoặc disconnect
         if before.channel and not after.channel:
-            print("[VOICE KICKED] auto recover")
+            print("[VOICE DISCONNECTED]")
+            await self.bot.voice_manager.ensure_connected(member.guild)
 
-            guild = member.guild
-            data = self.bot.voice_manager
 
-            # trigger restore next tick
-            await self.bot.voice_manager.ensure_connected(guild)
+async def setup(bot):
+    await bot.add_cog(VoiceListener(bot))
