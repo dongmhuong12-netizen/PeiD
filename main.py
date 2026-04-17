@@ -71,6 +71,9 @@ bot.voice_manager = VoiceManager(bot)
 EXTENSIONS = [
     "core.root",
     "systems.reaction_role",
+
+    # ===== VOICE SYSTEM =====
+    "commands.voice_system"
 ]
 
 
