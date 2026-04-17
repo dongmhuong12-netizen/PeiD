@@ -18,16 +18,21 @@ def _save(data):
         json.dump(data, f, indent=2)
 
 
-def set_voice(guild_id: int, channel_id: int):
+def set_voice(guild_id: int, channel_id: int | None, manual=False):
     data = _load()
-    data[str(guild_id)] = {
+
+    gid = str(guild_id)
+    old = data.get(gid, {})
+
+    data[gid] = {
         "channel_id": channel_id,
         "enabled": True,
-        "last_error": "",
+        "manual_leave": manual,
         "last_update": int(time.time()),
-        "last_reconnect": 0,
-        "manual_leave": False
+        "last_reconnect": old.get("last_reconnect", 0),
+        "last_error": old.get("last_error", "")
     }
+
     _save(data)
 
 
@@ -36,14 +41,6 @@ def remove_voice(guild_id: int):
     if str(guild_id) in data:
         del data[str(guild_id)]
     _save(data)
-
-
-def disable_voice(guild_id: int, reason="unknown"):
-    data = _load()
-    if str(guild_id) in data:
-        data[str(guild_id)]["enabled"] = False
-        data[str(guild_id)]["last_error"] = reason
-        _save(data)
 
 
 def get_voice(guild_id: int):
