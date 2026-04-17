@@ -1,4 +1,3 @@
-import discord
 from discord.ext import commands
 
 
@@ -12,8 +11,8 @@ class VoiceListener(commands.Cog):
             return
 
         if before.channel and not after.channel:
-            print("[VOICE DISCONNECTED]")
-            await self.bot.voice_manager.ensure_connected(member.guild)
+            guild = member.guild
+            await self.bot.voice_manager.ensure_connected(guild)
 
 
 async def setup(bot):
