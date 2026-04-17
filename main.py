@@ -11,12 +11,18 @@ os.makedirs("data", exist_ok=True)
 
 TOKEN = os.getenv("TOKEN")
 if not TOKEN:
-    raise RuntimeError("TOKEN not found")
+    raise RuntimeError("TOKEN environment variable not found")
 
+# =========================
+# WEB SERVER FOR RENDER
+# =========================
+
+async def health(request):
+    return web.Response(text="Bot is running")
 
 async def run_web_server():
     app = web.Application()
-    app.router.add_get("/", lambda r: web.Response(text="OK"))
+    app.router.add_get("/", health)
 
     runner = web.AppRunner(app)
     await runner.setup()
@@ -25,50 +31,73 @@ async def run_web_server():
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
 
+    print(f"Web server running on port {port}", flush=True)
+
     while True:
         await asyncio.sleep(3600)
 
+# =========================
+# INTENTS
+# =========================
 
 intents = discord.Intents.default()
+intents.members = True
 intents.guilds = True
-intents.voice_states = True
+intents.reactions = True
+intents.message_content = True
+intents.voice_states = True  # 🔥 ONLY ADD THIS
 
 bot = commands.AutoShardedBot(
-    command_prefix="!",
+    command_prefix=commands.when_mentioned,
     intents=intents
 )
 
+# =========================
+# EXTENSIONS
+# =========================
 
 EXTENSIONS = [
-    "commands.voice_system",
-    "core.voice_listener"
-]
+    "core.root",
+    "systems.reaction_role",
 
+    # 🔥 ADD VOICE ONLY
+    "commands.voice_system",
+    "core.voice_listener",
+]
 
 async def load_extensions():
     for ext in EXTENSIONS:
         try:
             await bot.load_extension(ext)
-            print(f"Loaded {ext}")
+            print(f"Loaded {ext}", flush=True)
         except Exception as e:
-            print(f"Failed {ext}: {e}")
+            print(f"Failed to load {ext}: {e}", flush=True)
 
+# =========================
+# READY
+# =========================
 
 @bot.event
 async def on_ready():
-    print("BOT READY")
-
-    await asyncio.sleep(8)
-
     try:
-        await bot.tree.sync()
-    except:
-        pass
+        synced = await bot.tree.sync()
+        print(f"Slash synced: {len(synced)}", flush=True)
+    except Exception as e:
+        print(f"Slash sync failed: {e}", flush=True)
 
+    print(f"Logged in as {bot.user} ({bot.user.id})", flush=True)
+    print("Bot ready", flush=True)
+
+    # 🔥 START VOICE SERVICE (ONLY ADD THIS)
     bot.loop.create_task(VoiceService(bot).start())
 
+# =========================
+# MAIN
+# =========================
 
 async def main():
+
+    # 🔥 ATTACH MANAGER (CRITICAL)
     bot.voice_manager = VoiceManager(bot)
 
     await load_extensions()
@@ -77,7 +106,6 @@ async def main():
         run_web_server(),
         bot.start(TOKEN)
     )
-
 
 if __name__ == "__main__":
     asyncio.run(main())
