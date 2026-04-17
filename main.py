@@ -87,21 +87,25 @@ async def load_extensions():
 
 
 # =========================
-# READY
+# READY (FIXED STABLE SYNC)
 # =========================
 
 @bot.event
 async def on_ready():
-    try:
-        synced = await bot.tree.sync()
-        print(f"Slash synced: {len(synced)}", flush=True)
-    except Exception as e:
-        print(f"Slash sync failed: {e}", flush=True)
-
     print(f"Logged in as {bot.user} ({bot.user.id})", flush=True)
     print("Bot ready", flush=True)
 
-    # ===== VOICE RECOVERY START (NEW) =====
+    try:
+        # đảm bảo bot tree đã sẵn sàng trước khi sync
+        await bot.wait_until_ready()
+
+        synced = await bot.tree.sync()
+        print(f"Slash synced: {len(synced)}", flush=True)
+
+    except Exception as e:
+        print(f"Slash sync failed: {e}", flush=True)
+
+    # ===== VOICE RECOVERY START =====
     bot.loop.create_task(VoiceRecovery(bot).start())
 
 
