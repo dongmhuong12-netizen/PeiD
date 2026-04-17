@@ -32,7 +32,7 @@ class VoiceManager:
         return self.guild_locks[guild_id]
 
     # =========================
-    # JOIN VOICE
+    # JOIN VOICE (FIX DEBUG VERSION)
     # =========================
     async def join(self, interaction: discord.Interaction, channel: discord.VoiceChannel):
         guild = interaction.guild
@@ -45,9 +45,9 @@ class VoiceManager:
             try:
                 vc = guild.voice_client
 
-                # already in correct channel
+                # already connected
                 if vc and vc.is_connected():
-                    if vc.channel.id == channel.id:
+                    if vc.channel and vc.channel.id == channel.id:
                         return True
                     await vc.move_to(channel)
                 else:
@@ -59,7 +59,9 @@ class VoiceManager:
                 return True
 
             except Exception as e:
-                return str(e)
+                # 🔥 IMPORTANT: show REAL error in Render log
+                print("VOICE JOIN ERROR:", repr(e), flush=True)
+                raise
 
     # =========================
     # LEAVE VOICE
@@ -83,6 +85,7 @@ class VoiceManager:
                 return True
 
             except Exception as e:
+                print("VOICE LEAVE ERROR:", repr(e), flush=True)
                 return str(e)
 
     # =========================
@@ -109,6 +112,7 @@ class VoiceManager:
                 await channel.connect(self_deaf=True, self_mute=False)
 
         except Exception as e:
+            print("VOICE RESTORE ERROR:", repr(e), flush=True)
             cfg["last_error"] = str(e)
             set_voice(gid, cfg["channel_id"])
 
