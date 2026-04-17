@@ -52,14 +52,42 @@ intents.guilds = True
 intents.reactions = True
 intents.message_content = True
 
-bot = commands.AutoShardedBot(
+
+# =========================
+# BOT CLASS (FIX IMPORTANT)
+# =========================
+
+class MyBot(commands.AutoShardedBot):
+    async def setup_hook(self):
+        # voice system init đúng lifecycle
+        self.voice_manager = VoiceManager(self)
+        self.loop.create_task(VoiceService(self).start())
+        self.loop.create_task(VoiceRecovery(self).start())
+
+        # load extensions
+        for ext in EXTENSIONS:
+            try:
+                await self.load_extension(ext)
+                print(f"Loaded {ext}", flush=True)
+            except Exception as e:
+                print(f"Failed to load {ext}: {e}", flush=True)
+
+        # sync slash sau khi system ready
+        try:
+            synced = await self.tree.sync()
+            print(f"Slash synced: {len(synced)}", flush=True)
+        except Exception as e:
+            print(f"Slash sync failed: {e}", flush=True)
+
+
+bot = MyBot(
     command_prefix=commands.when_mentioned,
     intents=intents
 )
 
 
 # =========================
-# EXTENSIONS
+# EXTENSIONS LIST
 # =========================
 
 EXTENSIONS = [
@@ -67,15 +95,6 @@ EXTENSIONS = [
     "systems.reaction_role",
     "commands.voice_system"
 ]
-
-
-async def load_extensions():
-    for ext in EXTENSIONS:
-        try:
-            await bot.load_extension(ext)
-            print(f"Loaded {ext}", flush=True)
-        except Exception as e:
-            print(f"Failed to load {ext}: {e}", flush=True)
 
 
 # =========================
@@ -87,26 +106,12 @@ async def on_ready():
     print(f"Logged in as {bot.user} ({bot.user.id})", flush=True)
     print("Bot ready", flush=True)
 
-    try:
-        await bot.wait_until_ready()
-        synced = await bot.tree.sync()
-        print(f"Slash synced: {len(synced)}", flush=True)
-    except Exception as e:
-        print(f"Slash sync failed: {e}", flush=True)
-
-    # ===== VOICE SYSTEM START =====
-    bot.voice_manager = VoiceManager(bot)
-    bot.loop.create_task(VoiceService(bot).start())
-    bot.loop.create_task(VoiceRecovery(bot).start())
-
 
 # =========================
 # MAIN
 # =========================
 
 async def main():
-    await load_extensions()
-
     await asyncio.gather(
         run_web_server(),
         bot.start(TOKEN)
