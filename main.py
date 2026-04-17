@@ -4,6 +4,11 @@ import asyncio
 import os
 from aiohttp import web
 
+# ===== VOICE IMPORT =====
+from core.voice_manager import VoiceManager
+from systems.voice_recovery import VoiceRecovery
+
+
 os.makedirs("data", exist_ok=True)
 
 TOKEN = os.getenv("TOKEN")
@@ -32,7 +37,6 @@ async def run_web_server():
 
     print(f"Web server running on port {port}", flush=True)
 
-    # giữ web task sống
     while True:
         await asyncio.sleep(3600)
 
@@ -51,6 +55,13 @@ bot = commands.AutoShardedBot(
     command_prefix=commands.when_mentioned,
     intents=intents
 )
+
+
+# =========================
+# VOICE ATTACH (NEW)
+# =========================
+
+bot.voice_manager = VoiceManager(bot)
 
 
 # =========================
@@ -86,6 +97,9 @@ async def on_ready():
 
     print(f"Logged in as {bot.user} ({bot.user.id})", flush=True)
     print("Bot ready", flush=True)
+
+    # ===== VOICE RECOVERY START (NEW) =====
+    bot.loop.create_task(VoiceRecovery(bot).start())
 
 
 # =========================
