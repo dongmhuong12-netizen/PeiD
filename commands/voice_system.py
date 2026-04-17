@@ -22,20 +22,27 @@ class VoiceSystem(commands.Cog):
         if result is True:
             return await interaction.followup.send("Đã vào voice.")
 
-        return await interaction.followup.send(f"Lỗi voice: {result}")
+        if result == "COOLDOWN":
+            return await interaction.followup.send("Đang thao tác quá nhanh.")
+
+        return await interaction.followup.send("Không thể kết nối voice.")
 
     @app_commands.command(name="vleave")
     async def vleave(self, interaction):
         await interaction.response.defer(ephemeral=True)
 
-        await self.manager.disconnect(interaction.guild)
-        return await interaction.followup.send("Đã rời voice.")
+        result = await self.manager.disconnect(interaction.guild)
+
+        if result is True:
+            return await interaction.followup.send("Đã rời voice.")
+
+        return await interaction.followup.send("Lỗi khi rời voice.")
 
     @app_commands.command(name="vstatus")
     async def vstatus(self, interaction):
         vc = interaction.guild.voice_client
 
-        if not vc:
+        if not vc or not vc.is_connected():
             return await interaction.response.send_message("Bot không ở voice.")
 
         await interaction.response.send_message(vc.channel.name)
