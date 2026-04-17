@@ -1,6 +1,7 @@
 import discord
 import asyncio
 import time
+
 from core.voice_storage import set_voice, remove_voice, get_voice
 
 
@@ -12,6 +13,9 @@ class VoiceManager:
         self.last_controller = {}
         self.cooldown = {}
 
+    # =========================
+    # COOLDOWN
+    # =========================
     def _can_run(self, guild_id: int):
         now = time.time()
         if now - self.cooldown.get(guild_id, 0) < 5:
@@ -19,11 +23,17 @@ class VoiceManager:
         self.cooldown[guild_id] = now
         return True
 
+    # =========================
+    # LOCK PER GUILD
+    # =========================
     def _get_lock(self, guild_id: int):
         if guild_id not in self.guild_locks:
             self.guild_locks[guild_id] = asyncio.Lock()
         return self.guild_locks[guild_id]
 
+    # =========================
+    # JOIN VOICE
+    # =========================
     async def join(self, interaction: discord.Interaction, channel: discord.VoiceChannel):
         guild = interaction.guild
         gid = guild.id
@@ -35,10 +45,13 @@ class VoiceManager:
             try:
                 vc = guild.voice_client
 
+                # already in correct channel
                 if vc and vc.is_connected():
+                    if vc.channel.id == channel.id:
+                        return True
                     await vc.move_to(channel)
                 else:
-                    await channel.connect()
+                    await channel.connect(self_deaf=True, self_mute=False)
 
                 set_voice(gid, channel.id)
                 self.last_controller[gid] = interaction.user.id
@@ -48,13 +61,17 @@ class VoiceManager:
             except Exception as e:
                 return str(e)
 
+    # =========================
+    # LEAVE VOICE
+    # =========================
     async def leave(self, guild: discord.Guild, manual=True):
         gid = guild.id
 
         async with self._get_lock(gid):
             try:
                 vc = guild.voice_client
-                if vc:
+
+                if vc and vc.is_connected():
                     await vc.disconnect()
 
                 data = get_voice(gid)
@@ -68,6 +85,9 @@ class VoiceManager:
             except Exception as e:
                 return str(e)
 
+    # =========================
+    # RESTORE SINGLE GUILD
+    # =========================
     async def restore_one(self, guild: discord.Guild, cfg: dict):
         gid = guild.id
 
@@ -86,12 +106,15 @@ class VoiceManager:
 
         try:
             if not vc or not vc.is_connected():
-                await channel.connect()
+                await channel.connect(self_deaf=True, self_mute=False)
 
         except Exception as e:
             cfg["last_error"] = str(e)
             set_voice(gid, cfg["channel_id"])
 
+    # =========================
+    # RESTORE ALL
+    # =========================
     async def restore_all(self):
         from core.voice_storage import get_all
 
