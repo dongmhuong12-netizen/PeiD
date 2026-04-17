@@ -1,4 +1,3 @@
-import discord
 from discord import app_commands
 from discord.ext import commands
 
@@ -8,14 +7,11 @@ class VoiceSystem(commands.Cog):
         self.bot = bot
         self.manager = bot.voice_manager
 
-    # =========================
-    # JOIN
-    # =========================
     @app_commands.command(name="vjoin")
-    async def vjoin(self, interaction: discord.Interaction):
+    async def vjoin(self, interaction):
         await interaction.response.defer(ephemeral=True)
 
-        if not interaction.user.voice or not interaction.user.voice.channel:
+        if not interaction.user.voice:
             return await interaction.followup.send("Bạn chưa ở voice.")
 
         result = await self.manager.connect(
@@ -26,36 +22,23 @@ class VoiceSystem(commands.Cog):
         if result is True:
             return await interaction.followup.send("Đã vào voice.")
 
-        if result == "COOLDOWN":
-            return await interaction.followup.send("Đang thao tác quá nhanh.")
-
         return await interaction.followup.send(f"Lỗi voice: {result}")
 
-    # =========================
-    # LEAVE
-    # =========================
     @app_commands.command(name="vleave")
-    async def vleave(self, interaction: discord.Interaction):
+    async def vleave(self, interaction):
         await interaction.response.defer(ephemeral=True)
 
-        result = await self.manager.disconnect(interaction.guild)
+        await self.manager.disconnect(interaction.guild)
+        return await interaction.followup.send("Đã rời voice.")
 
-        if result is True:
-            return await interaction.followup.send("Đã rời voice.")
-
-        return await interaction.followup.send(f"Lỗi: {result}")
-
-    # =========================
-    # STATUS
-    # =========================
     @app_commands.command(name="vstatus")
-    async def vstatus(self, interaction: discord.Interaction):
+    async def vstatus(self, interaction):
         vc = interaction.guild.voice_client
 
-        if not vc or not vc.is_connected():
+        if not vc:
             return await interaction.response.send_message("Bot không ở voice.")
 
-        await interaction.response.send_message(f"Đang ở: {vc.channel.name}")
+        await interaction.response.send_message(vc.channel.name)
 
 
 async def setup(bot):
