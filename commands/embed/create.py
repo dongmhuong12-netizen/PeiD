@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 from core.root import Root
 from core.embed_ui import EmbedUIView
+from core.embed_storage import load_embed  # <-- thêm dòng này
 
 
 class EmbedCreate(commands.Cog):
@@ -20,12 +21,18 @@ class EmbedCreate(commands.Cog):
         interaction: discord.Interaction,
         name: str
     ):
-        data = {
-            "title": None,
-            "description": None,
-            "color": 0x5865F2,
-            "image": None
-        }
+        # =========================
+        # FIX: load embed nếu đã tồn tại
+        # =========================
+        data = load_embed(interaction.guild.id, name)
+
+        if not data:
+            data = {
+                "title": None,
+                "description": None,
+                "color": 0x5865F2,
+                "image": None
+            }
 
         view = EmbedUIView(
             guild_id=interaction.guild.id,
