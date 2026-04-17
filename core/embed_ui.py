@@ -44,7 +44,12 @@ class EditTitleModal(discord.ui.Modal, title="Edit Title"):
     def __init__(self, view):
         super().__init__()
         self.view = view
-        self.input = discord.ui.TextInput(label="New Title", required=False)
+
+        self.input = discord.ui.TextInput(
+            label="New Title",
+            required=False,
+            default=self.view.data.get("title") or ""
+        )
         self.add_item(self.input)
 
     async def on_submit(self, interaction: discord.Interaction):
@@ -56,10 +61,12 @@ class EditDescriptionModal(discord.ui.Modal, title="Edit Description"):
     def __init__(self, view):
         super().__init__()
         self.view = view
+
         self.input = discord.ui.TextInput(
             label="New Description",
             style=discord.TextStyle.paragraph,
-            required=False
+            required=False,
+            default=self.view.data.get("description") or ""
         )
         self.add_item(self.input)
 
@@ -72,9 +79,11 @@ class EditColorModal(discord.ui.Modal, title="Edit Color (HEX)"):
     def __init__(self, view):
         super().__init__()
         self.view = view
+
         self.input = discord.ui.TextInput(
             label="Hex Color (vd: FF0000)",
-            required=True
+            required=True,
+            default=hex(self.view.data.get("color", 0x5865F2)).replace("0x", "").upper()
         )
         self.add_item(self.input)
 
@@ -93,7 +102,12 @@ class EditImageModal(discord.ui.Modal, title="Set Image URL"):
     def __init__(self, view):
         super().__init__()
         self.view = view
-        self.input = discord.ui.TextInput(label="Image URL", required=False)
+
+        self.input = discord.ui.TextInput(
+            label="Image URL",
+            required=False,
+            default=self.view.data.get("image") or ""
+        )
         self.add_item(self.input)
 
     async def on_submit(self, interaction: discord.Interaction):
@@ -235,13 +249,10 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
 
             save_reaction_data(data)
 
-# ADD REACTIONS TO MESSAGE
-        
-
             await interaction.response.send_message(
                 "Reaction role lưu thành công.",
                 ephemeral=True
-           )
+            )
 
         except Exception as e:
             print("ReactionRoleModal ERROR:", e)
@@ -273,7 +284,6 @@ class EmbedUIView(discord.ui.View):
 
         ACTIVE_EMBED_VIEWS[key].append(self)
 
-        # chống leak RAM
         if len(ACTIVE_EMBED_VIEWS[key]) > 25:
             ACTIVE_EMBED_VIEWS[key] = ACTIVE_EMBED_VIEWS[key][-25:]
 
@@ -358,13 +368,11 @@ class EmbedUIView(discord.ui.View):
         if key in ACTIVE_EMBED_VIEWS:
 
             for view in ACTIVE_EMBED_VIEWS[key]:
-
                 try:
                     if view.message:
                         await view.message.delete()
                 except:
                     pass
-
                 view.stop()
 
             ACTIVE_EMBED_VIEWS[key] = []
