@@ -9,11 +9,6 @@ ACTIVE_EMBED_VIEWS = {}
 # =========================
 
 async def load_reaction_data():
-    """
-    FIX:
-    - đảm bảo luôn fallback dict
-    - tránh None crash multi-server
-    """
     data = await State.get_reaction_data()
     return data or {}
 
@@ -101,7 +96,7 @@ class EditImageModal(discord.ui.Modal, title="Set Image URL"):
 
 
 # =========================
-# REACTION ROLE MODAL (STABLE MULTI-SERVER FIX)
+# REACTION ROLE MODAL
 # =========================
 
 class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
@@ -162,14 +157,12 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
                     return await interaction.response.send_message(f"Role `{r}` không hợp lệ.", ephemeral=True)
                 parsed_roles.append([str(role_obj.id)])
 
-            # FIX: giữ raw emoji để đồng bộ cache chính xác (no transform)
             parsed_emojis = raw_emojis
 
             guild_id = str(guild.id)
             embed_name = self.view.name
 
             data = await load_reaction_data()
-
             key = f"{guild_id}:{embed_name}"
 
             if key not in data:
@@ -185,28 +178,21 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
                 "roles": parsed_roles
             }
 
-            # FIX: avoid duplicate group (safe compare)
             if new_group not in data[key]["groups"]:
                 data[key]["groups"].append(new_group)
 
             await save_reaction_data(data)
 
-            await interaction.response.send_message(
-                "Reaction role lưu thành công.",
-                ephemeral=True
-            )
+            await interaction.response.send_message("Reaction role lưu thành công.", ephemeral=True)
 
         except Exception as e:
             print("ReactionRoleModal ERROR:", e)
             if not interaction.response.is_done():
-                await interaction.response.send_message(
-                    "Có lỗi xảy ra.",
-                    ephemeral=True
-                )
+                await interaction.response.send_message("Có lỗi xảy ra.", ephemeral=True)
 
 
 # =========================
-# EMBED VIEW (STABLE MULTI-SERVER PATCH)
+# EMBED VIEW
 # =========================
 
 class EmbedUIView(discord.ui.View):
@@ -226,7 +212,6 @@ class EmbedUIView(discord.ui.View):
 
         ACTIVE_EMBED_VIEWS[key].append(self)
 
-        # FIX: bounded view memory (avoid leak in multi-server)
         ACTIVE_EMBED_VIEWS[key] = ACTIVE_EMBED_VIEWS[key][-20:]
 
     def build_embed(self):
@@ -258,7 +243,7 @@ class EmbedUIView(discord.ui.View):
             await interaction.response.edit_message(embed=embed, view=self)
 
     # =========================
-    # BUTTONS (UNCHANGED UX)
+    # BUTTONS (UI ORIGINAL)
     # =========================
 
     @discord.ui.button(label="Edit Title", style=discord.ButtonStyle.secondary)
@@ -280,3 +265,42 @@ class EmbedUIView(discord.ui.View):
     @discord.ui.button(label="Reaction Roles", style=discord.ButtonStyle.secondary)
     async def reaction_roles(self, interaction, button):
         await interaction.response.send_modal(ReactionRoleModal(self))
+
+    # =========================
+    # SAVE / DELETE (RESTORED CORE LOGIC)
+    # =========================
+
+    @discord.ui.button(label="Save Embed", style=discord.ButtonStyle.success)
+    async def save_embed(self, interaction, button):
+        from core.embed_storage import save_embed
+
+        save_embed(interaction.guild.id, self.name, self.data)
+
+        await interaction.response.send_message(
+            "Embed đã được lưu thành công.",
+            ephemeral=True
+        )
+
+    @discord.ui.button(label="Delete Embed", style=discord.ButtonStyle.danger)
+    async def delete_embed(self, interaction, button):
+        from core.embed_storage import delete_embed
+
+        delete_embed(interaction.guild.id, self.name)
+
+        key = f"{self.guild_id}:{self.name}"
+
+        if key in ACTIVE_EMBED_VIEWS:
+            for v in ACTIVE_EMBED_VIEWS[key]:
+                try:
+                    if v.message:
+                        await v.message.delete()
+                except:
+                    pass
+                v.stop()
+
+            ACTIVE_EMBED_VIEWS[key] = []
+
+        await interaction.response.send_message(
+            f"Embed `{self.name}` đã được xoá.",
+            ephemeral=True
+        )
