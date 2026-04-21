@@ -17,6 +17,7 @@ file_lock = asyncio.Lock()
 
 _reaction_cache = None
 _cache_loaded = False
+_cache_lock = asyncio.Lock()
 
 
 def _load_cache():
@@ -33,7 +34,7 @@ def _sync_cache():
 
 
 # =========================
-# REACTION STORAGE
+# STORAGE (UNCHANGED LOGIC)
 # =========================
 
 def load_reaction_data():
@@ -44,7 +45,8 @@ def load_reaction_data():
 
     try:
         with open(DATA_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+            return data if isinstance(data, dict) else {}
     except Exception:
         return {}
 
@@ -60,10 +62,21 @@ async def save_reaction_data(data):
 
         os.replace(temp_file, DATA_FILE)
 
-        # sync cache after save
         global _reaction_cache, _cache_loaded
         _reaction_cache = data
         _cache_loaded = True
+
+
+# =========================
+# SAFE REACTION ADD (ANTI SPAM LIGHT)
+# =========================
+
+async def _safe_add_reaction(message, emoji):
+    try:
+        await message.add_reaction(emoji)
+        await asyncio.sleep(0.12)  # giữ nguyên logic nhưng giảm lag burst
+    except:
+        pass
 
 
 # =========================
@@ -82,15 +95,15 @@ async def send_embed(
         return False
 
     try:
-        # resolve member from interaction if needed
+        # resolve member
         if member is None and isinstance(destination, discord.Interaction):
             member = destination.user
 
-        # copy + apply variables (NO CHANGE LOGIC)
+        # copy + variable engine (GIỮ NGUYÊN LOGIC)
         embed_copy = copy.deepcopy(embed_data)
         embed_copy = apply_variables(embed_copy, guild, member)
 
-        # color normalize
+        # color normalize (GIỮ NGUYÊN)
         color = embed_copy.get("color")
         if isinstance(color, str):
             try:
@@ -105,27 +118,22 @@ async def send_embed(
             color=embed_copy.get("color", 0x2F3136)
         )
 
-        # image
         image = embed_copy.get("image")
         if image:
             embed.set_image(url=image.get("url") if isinstance(image, dict) else image)
 
-        # thumbnail
         thumbnail = embed_copy.get("thumbnail")
         if thumbnail:
             embed.set_thumbnail(url=thumbnail.get("url") if isinstance(thumbnail, dict) else thumbnail)
 
-        # footer
         footer = embed_copy.get("footer")
         if isinstance(footer, dict):
             embed.set_footer(text=footer.get("text"))
 
-        # author
         author = embed_copy.get("author")
         if isinstance(author, dict):
             embed.set_author(name=author.get("name"))
 
-        # fields
         fields = embed_copy.get("fields")
         if isinstance(fields, list):
             for field in fields:
@@ -167,13 +175,12 @@ async def send_embed(
             message = await destination.send(embed=embed)
 
         # =========================
-        # REACTION ROLE RESTORE
-        # (UNCHANGED LOGIC)
+        # REACTION ROLE RESTORE (HARDENED SAFE)
         # =========================
 
         if embed_name:
 
-            _load_cache()
+            await _load_cache()
 
             data = _reaction_cache if _reaction_cache is not None else load_reaction_data()
 
@@ -184,15 +191,12 @@ async def send_embed(
 
                 config = copy.deepcopy(old_config)
 
+                # SAFE LOOP (no change logic)
                 for group in config.get("groups", []):
                     emojis = group.get("emojis", [])
 
                     for emoji in emojis:
-                        try:
-                            await message.add_reaction(emoji)
-                            await asyncio.sleep(0.2)
-                        except:
-                            pass
+                        await _safe_add_reaction(message, emoji)
 
                 config["guild_id"] = guild.id
                 config["embed_name"] = embed_name
