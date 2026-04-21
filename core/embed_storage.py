@@ -4,8 +4,8 @@ import threading
 
 DATA_FILE = "data/embeds.json"
 
-# lock chống ghi đè khi nhiều lệnh chạy cùng lúc
-lock = threading.Lock()
+# single process lock only (NOT async, but safe minimal)
+lock = threading.RLock()
 
 
 # =========================
@@ -20,8 +20,9 @@ def load_all():
 
     try:
         with open(DATA_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except (json.JSONDecodeError, ValueError):
+            data = json.load(f)
+            return data if isinstance(data, dict) else {}
+    except:
         return {}
 
 
@@ -30,11 +31,11 @@ def save_all(data):
 
     temp_file = DATA_FILE + ".tmp"
 
-    with lock:  # 🔥 đảm bảo mọi ghi file đều được lock
+    # ONLY lock write section (fix double-lock issue)
+    with lock:
         with open(temp_file, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=4)
 
-        # replace atomically
         os.replace(temp_file, DATA_FILE)
 
 
@@ -42,10 +43,8 @@ def save_all(data):
 # PUBLIC API
 # =========================
 
-# SAVE
 def save_embed(guild_id, name=None, data=None):
 
-    # hỗ trợ kiểu cũ
     if data is None:
         data = name
         name = guild_id
@@ -54,7 +53,6 @@ def save_embed(guild_id, name=None, data=None):
     guild_id = str(guild_id)
 
     with lock:
-
         all_data = load_all()
 
         if guild_id not in all_data:
@@ -65,7 +63,6 @@ def save_embed(guild_id, name=None, data=None):
         save_all(all_data)
 
 
-# LOAD
 def load_embed(guild_id, name=None):
 
     if name is None:
@@ -76,7 +73,6 @@ def load_embed(guild_id, name=None):
     return all_data.get(str(guild_id), {}).get(name)
 
 
-# DELETE
 def delete_embed(guild_id, name=None):
 
     if name is None:
@@ -85,7 +81,6 @@ def delete_embed(guild_id, name=None):
     guild_id = str(guild_id)
 
     with lock:
-
         all_data = load_all()
 
         if guild_id in all_data and name in all_data[guild_id]:
