@@ -1,25 +1,15 @@
 import discord
 from discord.ext import commands
-import json
-import os
 import asyncio
-import tempfile
 import time
 from collections import deque
 
-DATA_FILE = "data/reaction_roles.json"
-file_lock = asyncio.Lock()
+from core.cache_manager import load, mark_dirty
+
+FILE_KEY = "reaction_roles"
 
 # =========================
-# CACHE (SOURCE OF TRUTH - FILE BASED)
-# =========================
-
-_cache = None
-_cache_loaded = False
-_cache_lock = asyncio.Lock()
-
-# =========================
-# EVENT DEDUP (SAFE FOR SCALE)
+# EVENT DEDUP (UNCHANGED LOGIC)
 # =========================
 
 EVENT_TTL = 60
@@ -60,37 +50,7 @@ def _normalize_emoji(e) -> str:
 
 
 # =========================
-# STORAGE
-# =========================
-
-def load_data():
-    os.makedirs("data", exist_ok=True)
-
-    if not os.path.exists(DATA_FILE):
-        return {}
-
-    try:
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            return data if isinstance(data, dict) else {}
-    except:
-        return {}
-
-
-async def save_data(data):
-    os.makedirs("data", exist_ok=True)
-
-    async with file_lock:
-        tmp = DATA_FILE + ".tmp"
-
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
-
-        os.replace(tmp, DATA_FILE)
-
-
-# =========================
-# CORE COG
+# CORE COG (MIGRATED STORAGE ONLY)
 # =========================
 
 class ReactionRole(commands.Cog):
@@ -98,10 +58,8 @@ class ReactionRole(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-        self.data = {}
-        self._load_safe()
+        self.data = load(FILE_KEY)
 
-        # runtime cache
         self.emoji_map = {}
         self.group_roles = {}
 
@@ -109,15 +67,11 @@ class ReactionRole(commands.Cog):
         self._cache_limit = 200
 
     # =========================
-    # SAFE LOAD (FIXED CACHE DESYNC)
+    # REFRESH SAFE
     # =========================
 
-    def _load_safe(self):
-        self.data = load_data()
-
     def _refresh(self):
-        """Force sync from disk + rebuild cache"""
-        self.data = load_data()
+        self.data = load(FILE_KEY)
         self.build_cache()
 
     # =========================
@@ -130,7 +84,7 @@ class ReactionRole(commands.Cog):
         print("ReactionRole SAFE PATCH LOADED")
 
     # =========================
-    # CACHE BUILD
+    # CACHE BUILD (UNCHANGED LOGIC)
     # =========================
 
     def build_cache(self):
@@ -202,7 +156,6 @@ class ReactionRole(commands.Cog):
 
         msg_id = str(payload.message_id)
 
-        # SAFE REFRESH ONLY ON MISS (NOT ALWAYS)
         if msg_id not in self.emoji_map:
             self._refresh()
             if msg_id not in self.emoji_map:
@@ -238,7 +191,7 @@ class ReactionRole(commands.Cog):
             return
 
         # =========================
-        # SINGLE MODE
+        # SINGLE MODE (UNCHANGED)
         # =========================
 
         if data["mode"] == "single":
@@ -271,11 +224,9 @@ class ReactionRole(commands.Cog):
                     self.message_cache[payload.message_id] = message
 
                 except:
-                    # SAFE DELETE ONLY IF CORRUPTED ENTRY
-                    if msg_id in self.data:
-                        self.data.pop(msg_id, None)
-                        await save_data(self.data)
-                        self.build_cache()
+                    self.data.pop(msg_id, None)
+                    mark_dirty(FILE_KEY)
+                    self.build_cache()
                     return
 
             for old_emoji in data["group_emojis"]:
