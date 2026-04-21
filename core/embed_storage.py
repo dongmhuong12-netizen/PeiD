@@ -53,17 +53,21 @@ def delete_embed(guild_id, name=None):
 
     guild_id = str(guild_id)
 
-    if guild_id in cache and name in cache[guild_id]:
+    guild_data = cache.get(guild_id)
 
-        del cache[guild_id][name]
+    if not guild_data:
+        return False
 
-        if not cache[guild_id]:
-            cache.pop(guild_id, None)
+    if name not in guild_data:
+        return False
 
-        mark_dirty(FILE_KEY)
-        return True
+    del guild_data[name]
 
-    return False
+    if not guild_data:
+        cache.pop(guild_id, None)
+
+    mark_dirty(FILE_KEY)
+    return True
 
 
 # =========================
@@ -88,4 +92,9 @@ def get_all_embed_names(guild_id=None):
 
     cache = load(FILE_KEY)
 
-    return list(cache.get(str(guild_id), {}).keys())
+    guild_data = cache.get(str(guild_id), {})
+
+    if not isinstance(guild_data, dict):
+        return []
+
+    return list(guild_data.keys())
