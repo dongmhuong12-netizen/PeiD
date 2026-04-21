@@ -6,6 +6,7 @@ from aiohttp import web
 
 from core.voice_manager import VoiceManager
 from core.voice_service import VoiceService
+from core.state import State  # 🔥 ADD WAKE SYSTEM
 
 os.makedirs("data", exist_ok=True)
 
@@ -82,6 +83,9 @@ async def on_ready():
     if not bot._is_ready_once:
         bot._is_ready_once = True
 
+        # 🔥 WAKE SAFE SYNC (IMPORTANT FIX)
+        await State.resync()
+
         try:
             synced = await bot.tree.sync()
             print(f"Slash synced: {len(synced)}", flush=True)
@@ -91,12 +95,7 @@ async def on_ready():
         print(f"Logged in as {bot.user} ({bot.user.id})", flush=True)
         print("Bot ready", flush=True)
 
-        # 🔥 SAFE: chỉ chạy 1 lần
         bot.loop.create_task(VoiceService(bot).start())
-
-        # 🔥 PLACE FOR FUTURE SELF-HEALING
-        # ví dụ:
-        # await some_sync_function()
 
     else:
         print("Reconnected to Discord", flush=True)
