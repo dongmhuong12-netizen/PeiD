@@ -45,7 +45,7 @@ intents.members = True
 intents.guilds = True
 intents.reactions = True
 intents.message_content = True
-intents.voice_states = True  # 🔥 ONLY ADD THIS
+intents.voice_states = True
 
 bot = commands.AutoShardedBot(
     command_prefix=commands.when_mentioned,
@@ -59,8 +59,6 @@ bot = commands.AutoShardedBot(
 EXTENSIONS = [
     "core.root",
     "systems.reaction_role",
-
-    # 🔥 ADD VOICE ONLY
     "commands.voice_system",
     "core.voice_listener",
 ]
@@ -77,27 +75,37 @@ async def load_extensions():
 # READY
 # =========================
 
+bot._is_ready_once = False
+
 @bot.event
 async def on_ready():
-    try:
-        synced = await bot.tree.sync()
-        print(f"Slash synced: {len(synced)}", flush=True)
-    except Exception as e:
-        print(f"Slash sync failed: {e}", flush=True)
+    if not bot._is_ready_once:
+        bot._is_ready_once = True
 
-    print(f"Logged in as {bot.user} ({bot.user.id})", flush=True)
-    print("Bot ready", flush=True)
+        try:
+            synced = await bot.tree.sync()
+            print(f"Slash synced: {len(synced)}", flush=True)
+        except Exception as e:
+            print(f"Slash sync failed: {e}", flush=True)
 
-    # 🔥 START VOICE SERVICE (ONLY ADD THIS)
-    bot.loop.create_task(VoiceService(bot).start())
+        print(f"Logged in as {bot.user} ({bot.user.id})", flush=True)
+        print("Bot ready", flush=True)
+
+        # 🔥 SAFE: chỉ chạy 1 lần
+        bot.loop.create_task(VoiceService(bot).start())
+
+        # 🔥 PLACE FOR FUTURE SELF-HEALING
+        # ví dụ:
+        # await some_sync_function()
+
+    else:
+        print("Reconnected to Discord", flush=True)
 
 # =========================
 # MAIN
 # =========================
 
 async def main():
-
-    # 🔥 ATTACH MANAGER (CRITICAL)
     bot.voice_manager = VoiceManager(bot)
 
     await load_extensions()
