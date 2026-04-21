@@ -5,6 +5,7 @@ import os
 import json
 import asyncio
 from typing import Union
+from collections import defaultdict, deque
 from core.variable_engine import apply_variables
 
 DATA_FILE = "data/reaction_roles.json"
@@ -12,30 +13,24 @@ DATA_FILE = "data/reaction_roles.json"
 file_lock = asyncio.Lock()
 
 # =========================
-# WAKE-SAFE CACHE LAYER
+# CACHE LAYER (GLOBAL SAFE)
 # =========================
 
 _reaction_cache = None
 _cache_loaded = False
 _cache_lock = asyncio.Lock()
 
+# per-message restore lock (anti duplicate restore)
+_restore_lock_map = defaultdict(asyncio.Lock)
 
-async def _load_cache():
-    global _reaction_cache, _cache_loaded
-
-    async with _cache_lock:
-        if not _cache_loaded:
-            _reaction_cache = load_reaction_data()
-            _cache_loaded = True
-
-
-def _sync_cache():
-    global _reaction_cache
-    _reaction_cache = load_reaction_data()
+# reaction queue (anti rate-limit burst)
+_reaction_queue = deque()
+_queue_lock = asyncio.Lock()
+_queue_worker_started = False
 
 
 # =========================
-# STORAGE (UNCHANGED LOGIC)
+# CACHE LOAD
 # =========================
 
 def load_reaction_data():
@@ -55,29 +50,83 @@ def load_reaction_data():
 async def save_reaction_data(data):
     os.makedirs("data", exist_ok=True)
 
-    temp_file = DATA_FILE + ".tmp"
+    tmp = DATA_FILE + ".tmp"
 
     async with file_lock:
-        with open(temp_file, "w", encoding="utf-8") as f:
+        with open(tmp, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=4)
 
-        os.replace(temp_file, DATA_FILE)
+        os.replace(tmp, DATA_FILE)
 
         global _reaction_cache, _cache_loaded
         _reaction_cache = data
         _cache_loaded = True
 
 
+async def _load_cache():
+    global _reaction_cache, _cache_loaded
+
+    async with _cache_lock:
+        if not _cache_loaded:
+            _reaction_cache = load_reaction_data()
+            _cache_loaded = True
+
+
+def _sync_cache():
+    global _reaction_cache
+    _reaction_cache = load_reaction_data()
+
+
 # =========================
-# SAFE REACTION ADD
+# REACTION QUEUE WORKER
 # =========================
 
-async def _safe_add_reaction(message, emoji):
-    try:
-        await message.add_reaction(emoji)
-        await asyncio.sleep(0.12)
-    except:
-        pass
+async def _reaction_worker():
+    global _queue_worker_started
+
+    while True:
+        if not _reaction_queue:
+            await asyncio.sleep(0.1)
+            continue
+
+        message, emoji = _reaction_queue.popleft()
+
+        try:
+            await message.add_reaction(emoji)
+        except:
+            pass
+
+        await asyncio.sleep(0.18)  # anti rate limit stable
+
+
+async def _enqueue_reaction(message, emoji):
+    async with _queue_lock:
+        _reaction_queue.append((message, emoji))
+
+    global _queue_worker_started
+    if not _queue_worker_started:
+        _queue_worker_started = True
+        asyncio.create_task(_reaction_worker())
+
+
+# =========================
+# EMBED BUILDER SAFE
+# =========================
+
+def _build_embed(embed_copy: dict):
+    color = embed_copy.get("color")
+
+    if isinstance(color, str):
+        try:
+            color = int(color.replace("#", "").replace("0x", ""), 16)
+        except:
+            color = 0x2F3136
+
+    return discord.Embed(
+        title=embed_copy.get("title"),
+        description=embed_copy.get("description"),
+        color=color or 0x2F3136
+    )
 
 
 # =========================
@@ -92,30 +141,21 @@ async def send_embed(
     embed_name: str | None = None
 ):
 
-    if not embed_data or not isinstance(embed_data, dict):
+    if not isinstance(embed_data, dict) or not embed_data:
         return False
 
     try:
+        # resolve member
         if member is None and isinstance(destination, discord.Interaction):
             member = destination.user
 
+        # variable engine
         embed_copy = copy.deepcopy(embed_data)
         embed_copy = apply_variables(embed_copy, guild, member)
 
-        color = embed_copy.get("color")
-        if isinstance(color, str):
-            try:
-                color = color.replace("#", "").replace("0x", "")
-                embed_copy["color"] = int(color, 16)
-            except:
-                embed_copy["color"] = 0x2F3136
+        embed = _build_embed(embed_copy)
 
-        embed = discord.Embed(
-            title=embed_copy.get("title"),
-            description=embed_copy.get("description"),
-            color=embed_copy.get("color", 0x2F3136)
-        )
-
+        # optional parts
         image = embed_copy.get("image")
         if image:
             embed.set_image(url=image.get("url") if isinstance(image, dict) else image)
@@ -135,12 +175,10 @@ async def send_embed(
         fields = embed_copy.get("fields")
         if isinstance(fields, list):
             for field in fields:
-                name = field.get("name")
-                value = field.get("value")
-                if name and value:
+                if field.get("name") and field.get("value"):
                     embed.add_field(
-                        name=name,
-                        value=value,
+                        name=field["name"],
+                        value=field["value"],
                         inline=field.get("inline", False)
                     )
 
@@ -149,6 +187,10 @@ async def send_embed(
         return False
 
     try:
+        # =========================
+        # SEND MESSAGE
+        # =========================
+
         if isinstance(destination, discord.Interaction):
 
             if destination.response.is_done():
@@ -163,39 +205,41 @@ async def send_embed(
                 return False
 
             perms = destination.permissions_for(bot_member)
-            if not perms.send_messages or not perms.embed_links:
+            if not (perms.send_messages and perms.embed_links):
                 return False
 
             message = await destination.send(embed=embed)
 
         # =========================
-        # REACTION RESTORE (UNCHANGED LOGIC)
+        # REACTION RESTORE (SAFE + NO DUP)
         # =========================
 
         if embed_name:
 
             await _load_cache()
 
-            data = _reaction_cache if _reaction_cache is not None else load_reaction_data()
+            data = _reaction_cache or load_reaction_data()
 
             key = f"{guild.id}::embed::{embed_name}"
             old_config = data.get(key)
 
             if isinstance(old_config, dict) and "groups" in old_config:
 
-                config = copy.deepcopy(old_config)
+                lock = _restore_lock_map[str(message.id)]
 
-                for group in config.get("groups", []):
-                    emojis = group.get("emojis", [])
+                async with lock:
 
-                    for emoji in emojis:
-                        await _safe_add_reaction(message, emoji)
+                    config = copy.deepcopy(old_config)
 
-                config["guild_id"] = guild.id
-                config["embed_name"] = embed_name
+                    for group in config.get("groups", []):
+                        for emoji in group.get("emojis", []):
+                            await _enqueue_reaction(message, emoji)
 
-                data[str(message.id)] = config
-                await save_reaction_data(data)
+                    config["guild_id"] = guild.id
+                    config["embed_name"] = embed_name
+
+                    data[str(message.id)] = config
+                    await save_reaction_data(data)
 
         return True
 
