@@ -20,8 +20,11 @@ def load_reaction_data():
     if not os.path.exists(DATA_FILE):
         return {}
 
-    with open(DATA_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+    try:
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
 
 
 def save_reaction_data(data):
@@ -30,10 +33,13 @@ def save_reaction_data(data):
     temp_file = DATA_FILE + ".tmp"
 
     with file_lock:
-        with open(temp_file, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=4)
+        try:
+            with open(temp_file, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=4)
 
-        os.replace(temp_file, DATA_FILE)
+            os.replace(temp_file, DATA_FILE)
+        except Exception as e:
+            print("save_reaction_data error:", e)
 
 
 # =========================
@@ -148,6 +154,8 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
     async def on_submit(self, interaction: discord.Interaction):
         try:
             guild = interaction.guild
+            if not guild:
+                return
 
             def parse_role(role_input: str):
                 role_input = role_input.strip()
@@ -351,7 +359,11 @@ class EmbedUIView(discord.ui.View):
     @discord.ui.button(label="Delete Embed", style=discord.ButtonStyle.secondary)
     async def delete_btn(self, interaction: discord.Interaction, button):
 
-        guild_id = interaction.guild.id
+        guild = interaction.guild
+        if not guild:
+            return
+
+        guild_id = guild.id
         name = self.name
 
         data = load_embed(guild_id, name)
