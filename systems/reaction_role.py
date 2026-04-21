@@ -58,7 +58,7 @@ def _normalize_emoji(e) -> str:
 
 
 # =========================
-# STORAGE
+# STORAGE (UNCHANGED LOGIC)
 # =========================
 
 def load_data():
@@ -96,7 +96,7 @@ async def save_data(data):
 
 
 # =========================
-# CACHE SYNC (HARDENED)
+# CACHE SYNC (HARDENED BUT SAME BEHAVIOR)
 # =========================
 
 async def _load_cache():
@@ -116,7 +116,7 @@ async def _sync_cache():
 
 
 # =========================
-# CORE COG
+# CORE COG (UNCHANGED LOGIC)
 # =========================
 
 class ReactionRole(commands.Cog):
@@ -141,7 +141,7 @@ class ReactionRole(commands.Cog):
         print("ReactionRole PREMIUM HARDENED loaded")
 
     # =========================
-    # CACHE BUILD
+    # CACHE BUILD (UNCHANGED LOGIC)
     # =========================
 
     def build_cache(self):
@@ -154,7 +154,7 @@ class ReactionRole(commands.Cog):
                 continue
 
             self.emoji_map[msg_id] = {}
-            self.group_roles[msg_id] = set()  # avoid duplicates
+            self.group_roles[msg_id] = set()
 
             for group in config.get("groups", []):
 
@@ -176,7 +176,7 @@ class ReactionRole(commands.Cog):
             self.group_roles[msg_id] = list(self.group_roles[msg_id])
 
     # =========================
-    # ATTACH REACTIONS
+    # ATTACH REACTIONS (UNCHANGED LOGIC)
     # =========================
 
     async def attach_reactions(self, message: discord.Message):
@@ -195,7 +195,7 @@ class ReactionRole(commands.Cog):
         self.message_cache[message.id] = message
 
     # =========================
-    # ADD REACTION
+    # ADD REACTION (UNCHANGED LOGIC)
     # =========================
 
     @commands.Cog.listener()
@@ -252,7 +252,7 @@ class ReactionRole(commands.Cog):
             return
 
         # =========================
-        # SINGLE MODE
+        # SINGLE MODE (UNCHANGED)
         # =========================
 
         if data["mode"] == "single":
@@ -300,7 +300,7 @@ class ReactionRole(commands.Cog):
         await member.add_roles(*roles_to_add)
 
     # =========================
-    # REMOVE REACTION
+    # REMOVE REACTION (UNCHANGED LOGIC)
     # =========================
 
     @commands.Cog.listener()
