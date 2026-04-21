@@ -13,21 +13,22 @@ _cache_loaded = False
 
 
 # =========================
-# CORE UTIL
+# CORE FILE OPS (SAFE IO)
 # =========================
 
 def _ensure_file():
     os.makedirs("data", exist_ok=True)
 
     if not os.path.exists(DATA_FILE):
+        default = {
+            "version": 1,
+            "embeds": {},
+            "reactions": {},
+            "ui": {},
+            "runtime": {}
+        }
         with open(DATA_FILE, "w", encoding="utf-8") as f:
-            json.dump({
-                "version": 1,
-                "embeds": {},
-                "reactions": {},
-                "ui": {},
-                "runtime": {}
-            }, f, indent=2)
+            json.dump(default, f, indent=2)
 
 
 def _load_file() -> Dict[str, Any]:
@@ -35,7 +36,20 @@ def _load_file() -> Dict[str, Any]:
 
     try:
         with open(DATA_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+
+            # auto repair structure (wake-safe)
+            if not isinstance(data, dict):
+                raise ValueError()
+
+            data.setdefault("version", 1)
+            data.setdefault("embeds", {})
+            data.setdefault("reactions", {})
+            data.setdefault("ui", {})
+            data.setdefault("runtime", {})
+
+            return data
+
     except Exception:
         return {
             "version": 1,
@@ -64,7 +78,7 @@ def _write_file(data: Dict[str, Any]):
 
 
 # =========================
-# CACHE LAYER (10/10 UPGRADE)
+# CACHE LAYER (SOURCE OF TRUTH)
 # =========================
 
 def _load_cache():
@@ -87,7 +101,16 @@ def _commit():
 
 
 # =========================
-# PUBLIC API
+# SAFE GETTER (NO CRASH)
+# =========================
+
+def _get():
+    _load_cache()
+    return _cache if _cache is not None else {}
+
+
+# =========================
+# PUBLIC API (PREMIUM SAFE)
 # =========================
 
 class State:
@@ -99,25 +122,24 @@ class State:
     @staticmethod
     async def set_embed(gid: int, name: str, data: dict):
         async with _lock:
-            _load_cache()
-            _cache["embeds"].setdefault(str(gid), {})
-            _cache["embeds"][str(gid)][name] = data
+            cache = _get()
+            cache["embeds"].setdefault(str(gid), {})
+            cache["embeds"][str(gid)][name] = data
             _commit()
 
     @staticmethod
     async def get_embed(gid: int, name: str):
-        _load_cache()
-        return _cache["embeds"].get(str(gid), {}).get(name)
+        cache = _get()
+        return cache["embeds"].get(str(gid), {}).get(name)
 
     @staticmethod
     async def del_embed(gid: int, name: str):
         async with _lock:
-            _load_cache()
-            g = _cache["embeds"].get(str(gid), {})
+            cache = _get()
+            g = cache["embeds"].get(str(gid), {})
             g.pop(name, None)
-            _cache["embeds"][str(gid)] = g
+            cache["embeds"][str(gid)] = g
             _commit()
-
 
     # =====================
     # REACTIONS
@@ -126,22 +148,21 @@ class State:
     @staticmethod
     async def set_reaction(mid: int, data: dict):
         async with _lock:
-            _load_cache()
-            _cache["reactions"][str(mid)] = data
+            cache = _get()
+            cache["reactions"][str(mid)] = data
             _commit()
 
     @staticmethod
     async def get_reaction(mid: int):
-        _load_cache()
-        return _cache["reactions"].get(str(mid))
+        cache = _get()
+        return cache["reactions"].get(str(mid))
 
     @staticmethod
     async def del_reaction(mid: int):
         async with _lock:
-            _load_cache()
-            _cache["reactions"].pop(str(mid), None)
+            cache = _get()
+            cache["reactions"].pop(str(mid), None)
             _commit()
-
 
     # =====================
     # UI STATE
@@ -150,22 +171,21 @@ class State:
     @staticmethod
     async def set_ui(key: str, data: dict):
         async with _lock:
-            _load_cache()
-            _cache["ui"][key] = data
+            cache = _get()
+            cache["ui"][key] = data
             _commit()
 
     @staticmethod
     async def get_ui(key: str):
-        _load_cache()
-        return _cache["ui"].get(key)
+        cache = _get()
+        return cache["ui"].get(key)
 
     @staticmethod
     async def del_ui(key: str):
         async with _lock:
-            _load_cache()
-            _cache["ui"].pop(key, None)
+            cache = _get()
+            cache["ui"].pop(key, None)
             _commit()
-
 
     # =====================
     # RUNTIME CACHE
@@ -174,30 +194,30 @@ class State:
     @staticmethod
     async def set_rt(key: str, data: dict):
         async with _lock:
-            _load_cache()
-            _cache["runtime"][key] = data
+            cache = _get()
+            cache["runtime"][key] = data
             _commit()
 
     @staticmethod
     async def get_rt(key: str):
-        _load_cache()
-        return _cache["runtime"].get(key)
+        cache = _get()
+        return cache["runtime"].get(key)
 
     @staticmethod
     async def clear_rt():
         async with _lock:
-            _load_cache()
-            _cache["runtime"] = {}
+            cache = _get()
+            cache["runtime"] = {}
             _commit()
 
-
     # =====================
-    # FORCE RESYNC (WAKE SYSTEM HOOK)
+    # WAKE RESYNC (FULL RELOAD)
     # =====================
 
     @staticmethod
     async def resync():
-        """reload toàn bộ state từ disk (dùng khi bot restart)"""
         global _cache
         async with _lock:
             _cache = _load_file()
+            global _cache_loaded
+            _cache_loaded = True
