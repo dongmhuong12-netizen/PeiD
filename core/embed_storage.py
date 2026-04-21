@@ -13,6 +13,8 @@ lock = threading.Lock()
 # =========================
 
 def load_all():
+    os.makedirs("data", exist_ok=True)
+
     if not os.path.exists(DATA_FILE):
         return {}
 
@@ -28,12 +30,12 @@ def save_all(data):
 
     temp_file = DATA_FILE + ".tmp"
 
-    # ghi file tạm trước
-    with open(temp_file, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=4)
+    with lock:  # 🔥 đảm bảo mọi ghi file đều được lock
+        with open(temp_file, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4)
 
-    # replace atomically
-    os.replace(temp_file, DATA_FILE)
+        # replace atomically
+        os.replace(temp_file, DATA_FILE)
 
 
 # =========================
