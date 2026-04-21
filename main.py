@@ -6,7 +6,7 @@ from aiohttp import web
 
 from core.voice_manager import VoiceManager
 from core.voice_service import VoiceService
-from core.state import State  # 🔥 CORE MEMORY LAYER
+from core.state import State
 
 os.makedirs("data", exist_ok=True)
 
@@ -73,10 +73,21 @@ async def load_extensions():
             print(f"[ERROR LOAD] {ext}: {e}", flush=True)
 
 # =========================
-# READY STATE (PREMIUM BOOT LOGIC)
+# SERVICE CONTROL (FIXED SAFE LIFECYCLE)
 # =========================
 
 bot._ready_once = False
+bot._voice_task = None
+
+def start_services():
+    # tránh duplicate task khi reconnect
+    if bot._voice_task is None or bot._voice_task.done():
+        bot._voice_task = bot.loop.create_task(VoiceService(bot).start())
+        print("[SERVICE] VoiceService started", flush=True)
+
+# =========================
+# READY STATE
+# =========================
 
 @bot.event
 async def on_ready():
@@ -98,18 +109,15 @@ async def on_ready():
     print(f"[READY] Logged in as {bot.user} ({bot.user.id})", flush=True)
 
     # =========================
-    # 🔥 WAKE SAFE CORE RESTORE (IMPORTANT)
+    # MEMORY RESTORE LAYER
     # =========================
     await State.resync()
-
     print("[STATE] Resynced successfully", flush=True)
 
     # =========================
-    # SERVICES START
+    # START SERVICES (SAFE)
     # =========================
-    bot.loop.create_task(VoiceService(bot).start())
-
-    print("[SERVICE] VoiceService started", flush=True)
+    start_services()
 
 # =========================
 # MAIN ENTRY
