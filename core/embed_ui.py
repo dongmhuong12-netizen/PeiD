@@ -5,15 +5,15 @@ from core.variable_engine import apply_variables
 ACTIVE_EMBED_VIEWS = {}
 
 # =========================
-# STATE WRAPPER (MASTER STORAGE - RUNTIME)
+# STATE WRAPPER (MASTER STORAGE - RUNTIME SAFE)
 # =========================
 
 async def load_reaction_data():
-    data = await State.get_rt("reaction_roles")
+    data = await State.get_reaction_data()
     return data or {}
 
 async def save_reaction_data(data):
-    await State.set_rt("reaction_roles", data)
+    await State.set_reaction_data(data)
 
 
 # =========================
@@ -96,7 +96,7 @@ class EditImageModal(discord.ui.Modal, title="Set Image URL"):
 
 
 # =========================
-# REACTION ROLE MODAL
+# REACTION ROLE MODAL (FIX MULTI-SERVER STORAGE CONSISTENCY)
 # =========================
 
 class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
@@ -141,18 +141,7 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
 
             def parse_emoji(e):
                 e = e.strip()
-
-                if e.startswith("<") and e.endswith(">"):
-                    try:
-                        return guild.get_emoji(int(e.split(":")[-1].replace(">", "")))
-                    except:
-                        return None
-
-                for emoji in guild.emojis:
-                    if emoji.name == e:
-                        return emoji
-
-                return e
+                return e  # giữ nguyên format để tránh mismatch cache
 
             raw_emojis = [x.strip() for x in self.emojis.value.split(",") if x.strip()]
             raw_roles = [x.strip() for x in self.roles.value.split(",") if x.strip()]
@@ -164,7 +153,6 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
             if mode not in ["single", "multi"]:
                 return await interaction.response.send_message("Mode phải là single hoặc multi.", ephemeral=True)
 
-            parsed_emojis = []
             parsed_roles = []
 
             for r in raw_roles:
@@ -173,14 +161,14 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
                     return await interaction.response.send_message(f"Role `{r}` không hợp lệ.", ephemeral=True)
                 parsed_roles.append([str(role_obj.id)])
 
-            for e in raw_emojis:
-                parsed_emojis.append(str(parse_emoji(e)))
+            parsed_emojis = raw_emojis
 
-            guild_id = guild.id
+            guild_id = str(guild.id)
             embed_name = self.view.name
 
             data = await load_reaction_data()
-            key = f"{guild_id}::embed::{embed_name}"
+
+            key = f"{guild_id}:{embed_name}"
 
             if key not in data:
                 data[key] = {
@@ -195,6 +183,7 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
                 "roles": parsed_roles
             }
 
+            # FIX: tránh duplicate group (deep compare safe)
             if new_group not in data[key]["groups"]:
                 data[key]["groups"].append(new_group)
 
@@ -217,19 +206,20 @@ class EmbedUIView(discord.ui.View):
     def __init__(self, guild_id: int, name: str, data: dict):
         super().__init__(timeout=None)
 
+        self.guild_id = str(guild_id)
         self.name = name
         self.data = data
         self.message = None
 
-        key = f"{guild_id}::{name}"
+        key = f"{self.guild_id}:{name}"
 
         if key not in ACTIVE_EMBED_VIEWS:
             ACTIVE_EMBED_VIEWS[key] = []
 
         ACTIVE_EMBED_VIEWS[key].append(self)
 
-        if len(ACTIVE_EMBED_VIEWS[key]) > 25:
-            ACTIVE_EMBED_VIEWS[key] = ACTIVE_EMBED_VIEWS[key][-25:]
+        # FIX: tránh leak view quá lâu (safe cap)
+        ACTIVE_EMBED_VIEWS[key] = ACTIVE_EMBED_VIEWS[key][-20:]
 
     def build_embed(self):
         data = self.data.copy()
@@ -259,9 +249,8 @@ class EmbedUIView(discord.ui.View):
         else:
             await interaction.response.edit_message(embed=embed, view=self)
 
-
     # =========================
-    # BUTTONS
+    # BUTTONS (UNCHANGED UI)
     # =========================
 
     @discord.ui.button(label="Edit Title", style=discord.ButtonStyle.secondary)
