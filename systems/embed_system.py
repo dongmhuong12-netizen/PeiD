@@ -1,4 +1,4 @@
-from core.embed_storage import save_embed, load_embed
+from core.embed_storage import save_embed, load_embed, get_all_embeds
 
 
 class EmbedSystem:
@@ -8,15 +8,29 @@ class EmbedSystem:
     @staticmethod
     def create_embed(guild_id: int, name: str):
 
-        if not name.isalnum():
+        # =========================
+        # VALIDATION
+        # =========================
+        if not name or not name.isalnum():
             return False, "INVALID_NAME"
 
+        # =========================
+        # EXISTS CHECK
+        # =========================
         if load_embed(guild_id, name):
             return False, "EXISTS"
 
-        # Optional: nếu muốn giới hạn 15 embed thì phải đếm từ JSON
-        # Hiện tại bạn chưa có get_all per guild nên bỏ LIMIT hoặc tự bổ sung
+        # =========================
+        # ENFORCE LIMIT PER GUILD
+        # =========================
+        all_embeds = get_all_embeds(guild_id)
 
+        if len(all_embeds) >= EmbedSystem.LIMIT:
+            return False, "LIMIT_REACHED"
+
+        # =========================
+        # CREATE DEFAULT EMBED
+        # =========================
         save_embed(guild_id, name, {
             "title": None,
             "description": None,
