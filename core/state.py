@@ -32,7 +32,7 @@ def _ensure_file():
             # embed UI / editor state
             "ui": {},
 
-            # runtime cache (fast access, no persistence guarantee)
+            # runtime cache (FAST MEMORY ONLY - NOT RELIABLY PERSISTED ACROSS INSTANCES)
             "runtime": {
                 "reaction_cache": {},
                 "message_cache": {}
@@ -94,7 +94,7 @@ def _write_file(data: Dict[str, Any]):
 
 
 # =========================
-# CACHE LAYER
+# CACHE LAYER (FIXED SAFETY)
 # =========================
 
 def _load_cache():
@@ -104,9 +104,11 @@ def _load_cache():
         _cache_loaded = True
 
 
-def _sync_cache():
-    global _cache
+def _force_reload():
+    """SAFE RESYNC for restart / external update cases"""
+    global _cache, _cache_loaded
     _cache = _load_file()
+    _cache_loaded = True
 
 
 def _commit():
@@ -151,7 +153,7 @@ class State:
             _commit()
 
     # =====================
-    # REACTIONS (MASTER SYSTEM)
+    # REACTIONS
     # =====================
 
     @staticmethod
@@ -160,7 +162,6 @@ class State:
             cache = _get()
             cache["reactions"][str(mid)] = data
 
-            # mirror into runtime cache for fast access
             cache["runtime"]["reaction_cache"][str(mid)] = data
 
             _commit()
@@ -169,8 +170,7 @@ class State:
     async def get_reaction(mid: int):
         cache = _get()
 
-        # fast path
-        rt = cache["runtime"]["reaction_cache"].get(str(mid))
+        rt = cache["runtime"].get("reaction_cache", {}).get(str(mid))
         if rt:
             return rt
 
@@ -208,7 +208,7 @@ class State:
             _commit()
 
     # =====================
-    # RUNTIME CACHE (FAST MEMORY)
+    # RUNTIME CACHE (FIXED SEMANTIC)
     # =====================
 
     @staticmethod
@@ -234,7 +234,7 @@ class State:
             _commit()
 
     # =====================
-    # FULL RESYNC
+    # SAFE RESYNC (FIXED FOR SCALE)
     # =====================
 
     @staticmethod
@@ -244,3 +244,9 @@ class State:
             _cache = _load_file()
             global _cache_loaded
             _cache_loaded = True
+
+    @staticmethod
+    async def force_resync():
+        """Use when external systems may modify file"""
+        async with _lock:
+            _force_reload()
