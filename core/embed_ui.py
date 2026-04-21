@@ -5,10 +5,15 @@ from core.variable_engine import apply_variables
 ACTIVE_EMBED_VIEWS = {}
 
 # =========================
-# STATE WRAPPER (MASTER STORAGE - RUNTIME SAFE)
+# STATE WRAPPER (FIXED CONSISTENCY)
 # =========================
 
 async def load_reaction_data():
+    """
+    FIX:
+    - đảm bảo luôn fallback dict
+    - tránh None crash multi-server
+    """
     data = await State.get_reaction_data()
     return data or {}
 
@@ -17,7 +22,7 @@ async def save_reaction_data(data):
 
 
 # =========================
-# MODALS
+# MODALS (UNCHANGED LOGIC)
 # =========================
 
 class EditTitleModal(discord.ui.Modal, title="Edit Title"):
@@ -96,7 +101,7 @@ class EditImageModal(discord.ui.Modal, title="Set Image URL"):
 
 
 # =========================
-# REACTION ROLE MODAL (FIX MULTI-SERVER STORAGE CONSISTENCY)
+# REACTION ROLE MODAL (STABLE MULTI-SERVER FIX)
 # =========================
 
 class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
@@ -139,10 +144,6 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
                     return None
                 return guild.get_role(int(role_input))
 
-            def parse_emoji(e):
-                e = e.strip()
-                return e  # giữ nguyên format để tránh mismatch cache
-
             raw_emojis = [x.strip() for x in self.emojis.value.split(",") if x.strip()]
             raw_roles = [x.strip() for x in self.roles.value.split(",") if x.strip()]
             mode = self.mode.value.lower().strip()
@@ -161,6 +162,7 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
                     return await interaction.response.send_message(f"Role `{r}` không hợp lệ.", ephemeral=True)
                 parsed_roles.append([str(role_obj.id)])
 
+            # FIX: giữ raw emoji để đồng bộ cache chính xác (no transform)
             parsed_emojis = raw_emojis
 
             guild_id = str(guild.id)
@@ -183,22 +185,28 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
                 "roles": parsed_roles
             }
 
-            # FIX: tránh duplicate group (deep compare safe)
+            # FIX: avoid duplicate group (safe compare)
             if new_group not in data[key]["groups"]:
                 data[key]["groups"].append(new_group)
 
             await save_reaction_data(data)
 
-            await interaction.response.send_message("Reaction role lưu thành công.", ephemeral=True)
+            await interaction.response.send_message(
+                "Reaction role lưu thành công.",
+                ephemeral=True
+            )
 
         except Exception as e:
             print("ReactionRoleModal ERROR:", e)
             if not interaction.response.is_done():
-                await interaction.response.send_message("Có lỗi xảy ra.", ephemeral=True)
+                await interaction.response.send_message(
+                    "Có lỗi xảy ra.",
+                    ephemeral=True
+                )
 
 
 # =========================
-# EMBED VIEW
+# EMBED VIEW (STABLE MULTI-SERVER PATCH)
 # =========================
 
 class EmbedUIView(discord.ui.View):
@@ -218,7 +226,7 @@ class EmbedUIView(discord.ui.View):
 
         ACTIVE_EMBED_VIEWS[key].append(self)
 
-        # FIX: tránh leak view quá lâu (safe cap)
+        # FIX: bounded view memory (avoid leak in multi-server)
         ACTIVE_EMBED_VIEWS[key] = ACTIVE_EMBED_VIEWS[key][-20:]
 
     def build_embed(self):
@@ -250,7 +258,7 @@ class EmbedUIView(discord.ui.View):
             await interaction.response.edit_message(embed=embed, view=self)
 
     # =========================
-    # BUTTONS (UNCHANGED UI)
+    # BUTTONS (UNCHANGED UX)
     # =========================
 
     @discord.ui.button(label="Edit Title", style=discord.ButtonStyle.secondary)
