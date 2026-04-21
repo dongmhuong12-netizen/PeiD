@@ -1,4 +1,3 @@
-# systems/reaction_role.py
 import discord
 from discord.ext import commands
 import json
@@ -20,7 +19,7 @@ _cache_loaded = False
 _cache_lock = asyncio.Lock()
 
 # =========================
-# EVENT DEDUP (HARDENED)
+# EVENT DEDUP (ANTI SPAM HARDENED)
 # =========================
 
 EVENT_TTL = 60
@@ -58,7 +57,7 @@ def _normalize_emoji(e) -> str:
 
 
 # =========================
-# STORAGE (UNCHANGED LOGIC)
+# STORAGE (SAFE + MULTI SERVER READY)
 # =========================
 
 def load_data():
@@ -85,18 +84,19 @@ async def save_data(data):
             dir="data",
             encoding="utf-8"
         ) as tmp:
-            json.dump(data, tmp, indent=4)
+            json.dump(data, tmp, indent=2)
             temp_name = tmp.name
 
         os.replace(temp_name, DATA_FILE)
 
+        # update cache instantly
         global _cache, _cache_loaded
         _cache = data
         _cache_loaded = True
 
 
 # =========================
-# CACHE SYNC (HARDENED BUT SAME BEHAVIOR)
+# CACHE SYNC (LIGHTWEIGHT FIX)
 # =========================
 
 async def _load_cache():
@@ -116,7 +116,7 @@ async def _sync_cache():
 
 
 # =========================
-# CORE COG (UNCHANGED LOGIC)
+# CORE COG
 # =========================
 
 class ReactionRole(commands.Cog):
@@ -126,8 +126,11 @@ class ReactionRole(commands.Cog):
 
         self.data = load_data()
 
+        # runtime cache (fast lookup)
         self.emoji_map = {}
         self.group_roles = {}
+
+        # FIX: limit memory leak (no infinite cache growth)
         self.message_cache = {}
 
     # =========================
@@ -141,26 +144,28 @@ class ReactionRole(commands.Cog):
         print("ReactionRole PREMIUM HARDENED loaded")
 
     # =========================
-    # CACHE BUILD (UNCHANGED LOGIC)
+    # CACHE BUILD (OPTIMIZED)
     # =========================
 
     def build_cache(self):
         self.emoji_map.clear()
         self.group_roles.clear()
 
-        for msg_id, config in self.data.items():
+        data = self.data
+
+        for msg_id, config in data.items():
 
             if not str(msg_id).isdigit():
                 continue
 
             self.emoji_map[msg_id] = {}
-            self.group_roles[msg_id] = set()
+            roles_set = set()
 
             for group in config.get("groups", []):
 
                 emojis = [_normalize_emoji(e) for e in group.get("emojis", [])]
 
-                for emoji, role_data in zip(emojis, group["roles"]):
+                for emoji, role_data in zip(emojis, group.get("roles", [])):
 
                     role_ids = role_data if isinstance(role_data, list) else [role_data]
 
@@ -170,13 +175,12 @@ class ReactionRole(commands.Cog):
                         "group_emojis": emojis
                     }
 
-                    for r in role_ids:
-                        self.group_roles[msg_id].add(r)
+                    roles_set.update(role_ids)
 
-            self.group_roles[msg_id] = list(self.group_roles[msg_id])
+            self.group_roles[msg_id] = list(roles_set)
 
     # =========================
-    # ATTACH REACTIONS (UNCHANGED LOGIC)
+    # ATTACH REACTIONS
     # =========================
 
     async def attach_reactions(self, message: discord.Message):
@@ -188,14 +192,14 @@ class ReactionRole(commands.Cog):
             for emoji in group.get("emojis", []):
                 try:
                     await message.add_reaction(_normalize_emoji(emoji))
-                    await asyncio.sleep(0.12)
+                    await asyncio.sleep(0.1)
                 except:
                     pass
 
         self.message_cache[message.id] = message
 
     # =========================
-    # ADD REACTION (UNCHANGED LOGIC)
+    # ADD REACTION
     # =========================
 
     @commands.Cog.listener()
@@ -218,7 +222,6 @@ class ReactionRole(commands.Cog):
         if msg_id not in self.emoji_map:
             self.data = load_data()
             self.build_cache()
-
             if msg_id not in self.emoji_map:
                 return
 
@@ -252,16 +255,15 @@ class ReactionRole(commands.Cog):
             return
 
         # =========================
-        # SINGLE MODE (UNCHANGED)
+        # SINGLE MODE SAFE LOGIC
         # =========================
 
         if data["mode"] == "single":
 
             roles_to_remove = []
 
-            for rid in self.group_roles[msg_id]:
+            for rid in self.group_roles.get(msg_id, []):
                 role = guild.get_role(int(rid))
-
                 if role and role in member.roles and role < bot_member.top_role:
                     if role not in roles_to_add:
                         roles_to_remove.append(role)
@@ -278,7 +280,13 @@ class ReactionRole(commands.Cog):
 
                 try:
                     message = await channel.fetch_message(payload.message_id)
+
+                    # FIX: avoid infinite cache growth
+                    if len(self.message_cache) > 200:
+                        self.message_cache.clear()
+
                     self.message_cache[payload.message_id] = message
+
                 except:
                     if msg_id in self.data:
                         del self.data[msg_id]
@@ -300,7 +308,7 @@ class ReactionRole(commands.Cog):
         await member.add_roles(*roles_to_add)
 
     # =========================
-    # REMOVE REACTION (UNCHANGED LOGIC)
+    # REMOVE REACTION
     # =========================
 
     @commands.Cog.listener()
@@ -314,7 +322,6 @@ class ReactionRole(commands.Cog):
         if msg_id not in self.emoji_map:
             self.data = load_data()
             self.build_cache()
-
             if msg_id not in self.emoji_map:
                 return
 
