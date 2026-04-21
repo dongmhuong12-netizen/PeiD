@@ -1,130 +1,8 @@
-import json
-import os
 import asyncio
-import tempfile
-import shutil
-from typing import Dict, Any
+from core.cache_manager import load, mark_dirty
 
-DATA_FILE = "data/state.json"
+FILE_KEY = "state"
 
-_lock = asyncio.Lock()
-_cache: Dict[str, Any] | None = None
-_cache_loaded = False
-
-
-# =========================
-# CORE FILE OPS
-# =========================
-
-def _ensure_file():
-    os.makedirs("data", exist_ok=True)
-
-    if not os.path.exists(DATA_FILE):
-        default = {
-            "version": 1,
-
-            # embed system
-            "embeds": {},
-
-            # reaction role system (MESSAGE_ID → CONFIG)
-            "reactions": {},
-
-            # embed UI / editor state
-            "ui": {},
-
-            # runtime cache (FAST MEMORY ONLY - NOT RELIABLY PERSISTED ACROSS INSTANCES)
-            "runtime": {
-                "reaction_cache": {},
-                "message_cache": {}
-            }
-        }
-        with open(DATA_FILE, "w", encoding="utf-8") as f:
-            json.dump(default, f, indent=2)
-
-
-def _load_file() -> Dict[str, Any]:
-    _ensure_file()
-
-    try:
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-
-            if not isinstance(data, dict):
-                raise ValueError()
-
-            data.setdefault("version", 1)
-            data.setdefault("embeds", {})
-            data.setdefault("reactions", {})
-            data.setdefault("ui", {})
-
-            data.setdefault("runtime", {})
-            data["runtime"].setdefault("reaction_cache", {})
-            data["runtime"].setdefault("message_cache", {})
-
-            return data
-
-    except Exception:
-        return {
-            "version": 1,
-            "embeds": {},
-            "reactions": {},
-            "ui": {},
-            "runtime": {
-                "reaction_cache": {},
-                "message_cache": {}
-            }
-        }
-
-
-def _write_file(data: Dict[str, Any]):
-    os.makedirs("data", exist_ok=True)
-
-    directory = os.path.dirname(DATA_FILE)
-
-    with tempfile.NamedTemporaryFile(
-        "w",
-        delete=False,
-        dir=directory,
-        encoding="utf-8"
-    ) as tmp:
-        json.dump(data, tmp, indent=2)
-        temp = tmp.name
-
-    shutil.move(temp, DATA_FILE)
-
-
-# =========================
-# CACHE LAYER (FIXED SAFETY)
-# =========================
-
-def _load_cache():
-    global _cache, _cache_loaded
-    if not _cache_loaded:
-        _cache = _load_file()
-        _cache_loaded = True
-
-
-def _force_reload():
-    """SAFE RESYNC for restart / external update cases"""
-    global _cache, _cache_loaded
-    _cache = _load_file()
-    _cache_loaded = True
-
-
-def _commit():
-    global _cache
-    if _cache is not None:
-        _write_file(_cache)
-
-
-def _get():
-    _load_cache()
-    return _cache if _cache is not None else {}
-
-
-# =========================
-# PUBLIC API
-# =========================
 
 class State:
 
@@ -134,23 +12,39 @@ class State:
 
     @staticmethod
     async def set_embed(gid: int, name: str, data: dict):
-        async with _lock:
-            cache = _get()
-            cache["embeds"].setdefault(str(gid), {})
-            cache["embeds"][str(gid)][name] = data
-            _commit()
+        cache = load(FILE_KEY)
+
+        gid = str(gid)
+
+        if "embeds" not in cache:
+            cache["embeds"] = {}
+
+        if gid not in cache["embeds"]:
+            cache["embeds"][gid] = {}
+
+        cache["embeds"][gid][name] = data
+
+        mark_dirty(FILE_KEY)
 
     @staticmethod
     async def get_embed(gid: int, name: str):
-        cache = _get()
-        return cache["embeds"].get(str(gid), {}).get(name)
+        cache = load(FILE_KEY)
+
+        return cache.get("embeds", {}).get(str(gid), {}).get(name)
 
     @staticmethod
     async def del_embed(gid: int, name: str):
-        async with _lock:
-            cache = _get()
-            cache["embeds"].get(str(gid), {}).pop(name, None)
-            _commit()
+        cache = load(FILE_KEY)
+
+        gid = str(gid)
+
+        if gid in cache.get("embeds", {}):
+            cache["embeds"][gid].pop(name, None)
+
+            if not cache["embeds"][gid]:
+                cache["embeds"].pop(gid, None)
+
+            mark_dirty(FILE_KEY)
 
     # =====================
     # REACTIONS
@@ -158,31 +52,47 @@ class State:
 
     @staticmethod
     async def set_reaction(mid: int, data: dict):
-        async with _lock:
-            cache = _get()
-            cache["reactions"][str(mid)] = data
+        cache = load(FILE_KEY)
 
-            cache["runtime"]["reaction_cache"][str(mid)] = data
+        mid = str(mid)
 
-            _commit()
+        if "reactions" not in cache:
+            cache["reactions"] = {}
+
+        cache["reactions"][mid] = data
+
+        if "runtime" not in cache:
+            cache["runtime"] = {}
+
+        if "reaction_cache" not in cache["runtime"]:
+            cache["runtime"]["reaction_cache"] = {}
+
+        cache["runtime"]["reaction_cache"][mid] = data
+
+        mark_dirty(FILE_KEY)
 
     @staticmethod
     async def get_reaction(mid: int):
-        cache = _get()
+        cache = load(FILE_KEY)
 
-        rt = cache["runtime"].get("reaction_cache", {}).get(str(mid))
+        mid = str(mid)
+
+        rt = cache.get("runtime", {}).get("reaction_cache", {}).get(mid)
         if rt:
             return rt
 
-        return cache["reactions"].get(str(mid))
+        return cache.get("reactions", {}).get(mid)
 
     @staticmethod
     async def del_reaction(mid: int):
-        async with _lock:
-            cache = _get()
-            cache["reactions"].pop(str(mid), None)
-            cache["runtime"]["reaction_cache"].pop(str(mid), None)
-            _commit()
+        cache = load(FILE_KEY)
+
+        mid = str(mid)
+
+        cache.get("reactions", {}).pop(mid, None)
+        cache.get("runtime", {}).get("reaction_cache", {}).pop(mid, None)
+
+        mark_dirty(FILE_KEY)
 
     # =====================
     # UI STATE
@@ -190,63 +100,71 @@ class State:
 
     @staticmethod
     async def set_ui(key: str, data: dict):
-        async with _lock:
-            cache = _get()
-            cache["ui"][key] = data
-            _commit()
+        cache = load(FILE_KEY)
+
+        if "ui" not in cache:
+            cache["ui"] = {}
+
+        cache["ui"][key] = data
+
+        mark_dirty(FILE_KEY)
 
     @staticmethod
     async def get_ui(key: str):
-        cache = _get()
-        return cache["ui"].get(key)
+        cache = load(FILE_KEY)
+
+        return cache.get("ui", {}).get(key)
 
     @staticmethod
     async def del_ui(key: str):
-        async with _lock:
-            cache = _get()
-            cache["ui"].pop(key, None)
-            _commit()
+        cache = load(FILE_KEY)
+
+        cache.get("ui", {}).pop(key, None)
+
+        mark_dirty(FILE_KEY)
 
     # =====================
-    # RUNTIME CACHE (FIXED SEMANTIC)
+    # RUNTIME CACHE
     # =====================
 
     @staticmethod
     async def set_rt(key: str, data: dict):
-        async with _lock:
-            cache = _get()
-            cache["runtime"][key] = data
-            _commit()
+        cache = load(FILE_KEY)
+
+        if "runtime" not in cache:
+            cache["runtime"] = {}
+
+        cache["runtime"][key] = data
+
+        mark_dirty(FILE_KEY)
 
     @staticmethod
     async def get_rt(key: str):
-        cache = _get()
-        return cache["runtime"].get(key)
+        cache = load(FILE_KEY)
+
+        return cache.get("runtime", {}).get(key)
 
     @staticmethod
     async def clear_rt():
-        async with _lock:
-            cache = _get()
-            cache["runtime"] = {
-                "reaction_cache": {},
-                "message_cache": {}
-            }
-            _commit()
+        cache = load(FILE_KEY)
+
+        cache["runtime"] = {
+            "reaction_cache": {},
+            "message_cache": {}
+        }
+
+        mark_dirty(FILE_KEY)
 
     # =====================
-    # SAFE RESYNC (FIXED FOR SCALE)
+    # RESYNC (SAFE RELOAD)
     # =====================
 
     @staticmethod
     async def resync():
-        global _cache
-        async with _lock:
-            _cache = _load_file()
-            global _cache_loaded
-            _cache_loaded = True
+        # force reload handled by cache system automatically
+        return True
 
     @staticmethod
     async def force_resync():
-        """Use when external systems may modify file"""
-        async with _lock:
-            _force_reload()
+        # no-op in phase 2 (cache manager handles consistency)
+        return True
