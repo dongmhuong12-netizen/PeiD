@@ -11,6 +11,26 @@ DATA_FILE = "data/reaction_roles.json"
 
 file_lock = asyncio.Lock()
 
+# =========================
+# WAKE-SAFE CACHE LAYER (NEW)
+# =========================
+
+_reaction_cache = None
+_cache_loaded = False
+
+
+def _load_cache():
+    global _reaction_cache, _cache_loaded
+
+    if not _cache_loaded:
+        _reaction_cache = load_reaction_data()
+        _cache_loaded = True
+
+
+def _sync_cache():
+    global _reaction_cache
+    _reaction_cache = load_reaction_data()
+
 
 # =========================
 # REACTION STORAGE
@@ -39,6 +59,11 @@ async def save_reaction_data(data):
             json.dump(data, f, indent=4)
 
         os.replace(temp_file, DATA_FILE)
+
+        # 🔥 sync cache sau khi save
+        global _reaction_cache, _cache_loaded
+        _reaction_cache = data
+        _cache_loaded = True
 
 
 # =========================
@@ -138,12 +163,14 @@ async def send_embed(
             message = await destination.send(embed=embed)
 
         # =========================
-        # REACTION ROLE RESTORE
+        # REACTION ROLE RESTORE (SAFE + CACHE OPT)
         # =========================
 
         if embed_name:
 
-            data = load_reaction_data()
+            _load_cache()
+
+            data = _reaction_cache if _reaction_cache is not None else load_reaction_data()
 
             key = f"{guild.id}::embed::{embed_name}"
 
