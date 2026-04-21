@@ -2,7 +2,6 @@ import asyncio
 import json
 import os
 import time
-import copy
 from typing import Dict, Any
 
 # =========================
@@ -18,8 +17,8 @@ _started = False
 
 DATA_DIR = "data"
 
-FLUSH_INTERVAL = 5  # seconds
-BACKUP_INTERVAL = 60  # seconds
+FLUSH_INTERVAL = 5
+BACKUP_INTERVAL = 60
 
 _last_flush_time = 0
 
@@ -56,13 +55,13 @@ def _write_file(key: str, data: dict):
     path = _file_path(key)
     tmp = path + ".tmp"
 
-    # backup trước khi ghi
+    # backup (safe but lightweight)
     if os.path.exists(path):
         try:
-            backup_path = path + ".bak"
             with open(path, "r", encoding="utf-8") as src:
-                with open(backup_path, "w", encoding="utf-8") as dst:
-                    dst.write(src.read())
+                old = src.read()
+            with open(path + ".bak", "w", encoding="utf-8") as dst:
+                dst.write(old)
         except:
             pass
 
@@ -87,7 +86,7 @@ def _init_key(key: str):
 
 def load(key: str) -> dict:
     """
-    Get cache (RAM-first)
+    RAM-first cache read
     """
     if key not in _cache:
         _init_key(key)
@@ -97,7 +96,7 @@ def load(key: str) -> dict:
 
 def mark_dirty(key: str):
     """
-    Mark key as changed -> will be flushed
+    Mark cache as dirty for flush worker
     """
     _dirty_keys.add(key)
     _ensure_loop()
@@ -111,19 +110,20 @@ async def _flush_worker():
     global _last_flush_time
 
     while True:
+        await asyncio.sleep(FLUSH_INTERVAL)
+
+        if not _dirty_keys:
+            continue
+
         try:
-            await asyncio.sleep(FLUSH_INTERVAL)
-
-            if not _dirty_keys:
-                continue
-
             async with _lock:
                 keys = list(_dirty_keys)
                 _dirty_keys.clear()
 
                 for key in keys:
-                    if key in _cache:
-                        _write_file(key, _cache[key])
+                    data = _cache.get(key)
+                    if data is not None:
+                        _write_file(key, data)
 
                 _last_flush_time = time.time()
 
@@ -137,18 +137,17 @@ async def _flush_worker():
 
 async def _backup_worker():
     while True:
-        try:
-            await asyncio.sleep(BACKUP_INTERVAL)
+        await asyncio.sleep(BACKUP_INTERVAL)
 
+        try:
             async with _lock:
                 for key, data in _cache.items():
-                    backup_path = _file_path(key) + ".auto.bak"
                     try:
+                        backup_path = _file_path(key) + ".auto.bak"
                         with open(backup_path, "w", encoding="utf-8") as f:
                             json.dump(data, f, indent=2)
                     except:
                         pass
-
         except Exception as e:
             print("[CACHE BACKUP ERROR]", e)
 
@@ -158,7 +157,7 @@ async def _backup_worker():
 # =========================
 
 def _ensure_loop():
-    global _started, _flush_task
+    global _started
 
     if _started:
         return
@@ -166,27 +165,25 @@ def _ensure_loop():
     try:
         loop = asyncio.get_running_loop()
 
-        _flush_task = loop.create_task(_flush_worker())
+        loop.create_task(_flush_worker())
         loop.create_task(_backup_worker())
 
         _started = True
 
     except RuntimeError:
-        # event loop chưa chạy
         pass
 
 
 # =========================
-# OPTIONAL UTIL
+# UTIL
 # =========================
 
 def force_flush():
     """
     Force write everything immediately
     """
-    for key in list(_cache.keys()):
-        if key in _cache:
-            _write_file(key, _cache[key])
+    for key, data in list(_cache.items()):
+        _write_file(key, data)
 
 
 def get_status():
