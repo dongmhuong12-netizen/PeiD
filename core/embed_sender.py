@@ -12,7 +12,7 @@ DATA_FILE = "data/reaction_roles.json"
 file_lock = asyncio.Lock()
 
 # =========================
-# WAKE-SAFE CACHE LAYER (NEW)
+# WAKE-SAFE CACHE LAYER
 # =========================
 
 _reaction_cache = None
@@ -60,14 +60,14 @@ async def save_reaction_data(data):
 
         os.replace(temp_file, DATA_FILE)
 
-        # 🔥 sync cache sau khi save
+        # sync cache after save
         global _reaction_cache, _cache_loaded
         _reaction_cache = data
         _cache_loaded = True
 
 
 # =========================
-# SEND EMBED
+# SEND EMBED CORE
 # =========================
 
 async def send_embed(
@@ -82,16 +82,16 @@ async def send_embed(
         return False
 
     try:
-
+        # resolve member from interaction if needed
         if member is None and isinstance(destination, discord.Interaction):
             member = destination.user
 
+        # copy + apply variables (NO CHANGE LOGIC)
         embed_copy = copy.deepcopy(embed_data)
-
         embed_copy = apply_variables(embed_copy, guild, member)
 
+        # color normalize
         color = embed_copy.get("color")
-
         if isinstance(color, str):
             try:
                 color = color.replace("#", "").replace("0x", "")
@@ -105,22 +105,27 @@ async def send_embed(
             color=embed_copy.get("color", 0x2F3136)
         )
 
+        # image
         image = embed_copy.get("image")
         if image:
             embed.set_image(url=image.get("url") if isinstance(image, dict) else image)
 
+        # thumbnail
         thumbnail = embed_copy.get("thumbnail")
         if thumbnail:
             embed.set_thumbnail(url=thumbnail.get("url") if isinstance(thumbnail, dict) else thumbnail)
 
+        # footer
         footer = embed_copy.get("footer")
         if isinstance(footer, dict):
             embed.set_footer(text=footer.get("text"))
 
+        # author
         author = embed_copy.get("author")
         if isinstance(author, dict):
             embed.set_author(name=author.get("name"))
 
+        # fields
         fields = embed_copy.get("fields")
         if isinstance(fields, list):
             for field in fields:
@@ -138,7 +143,6 @@ async def send_embed(
         return False
 
     try:
-
         # =========================
         # SEND MESSAGE
         # =========================
@@ -163,7 +167,8 @@ async def send_embed(
             message = await destination.send(embed=embed)
 
         # =========================
-        # REACTION ROLE RESTORE (SAFE + CACHE OPT)
+        # REACTION ROLE RESTORE
+        # (UNCHANGED LOGIC)
         # =========================
 
         if embed_name:
@@ -173,7 +178,6 @@ async def send_embed(
             data = _reaction_cache if _reaction_cache is not None else load_reaction_data()
 
             key = f"{guild.id}::embed::{embed_name}"
-
             old_config = data.get(key)
 
             if isinstance(old_config, dict) and "groups" in old_config:
@@ -194,7 +198,6 @@ async def send_embed(
                 config["embed_name"] = embed_name
 
                 data[str(message.id)] = config
-
                 await save_reaction_data(data)
 
         return True
