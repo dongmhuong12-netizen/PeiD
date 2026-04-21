@@ -20,12 +20,13 @@ _cache_loaded = False
 _cache_lock = asyncio.Lock()
 
 
-def _load_cache():
+async def _load_cache():
     global _reaction_cache, _cache_loaded
 
-    if not _cache_loaded:
-        _reaction_cache = load_reaction_data()
-        _cache_loaded = True
+    async with _cache_lock:
+        if not _cache_loaded:
+            _reaction_cache = load_reaction_data()
+            _cache_loaded = True
 
 
 def _sync_cache():
@@ -68,13 +69,13 @@ async def save_reaction_data(data):
 
 
 # =========================
-# SAFE REACTION ADD (ANTI SPAM LIGHT)
+# SAFE REACTION ADD
 # =========================
 
 async def _safe_add_reaction(message, emoji):
     try:
         await message.add_reaction(emoji)
-        await asyncio.sleep(0.12)  # giữ nguyên logic nhưng giảm lag burst
+        await asyncio.sleep(0.12)
     except:
         pass
 
@@ -95,15 +96,12 @@ async def send_embed(
         return False
 
     try:
-        # resolve member
         if member is None and isinstance(destination, discord.Interaction):
             member = destination.user
 
-        # copy + variable engine (GIỮ NGUYÊN LOGIC)
         embed_copy = copy.deepcopy(embed_data)
         embed_copy = apply_variables(embed_copy, guild, member)
 
-        # color normalize (GIỮ NGUYÊN)
         color = embed_copy.get("color")
         if isinstance(color, str):
             try:
@@ -151,10 +149,6 @@ async def send_embed(
         return False
 
     try:
-        # =========================
-        # SEND MESSAGE
-        # =========================
-
         if isinstance(destination, discord.Interaction):
 
             if destination.response.is_done():
@@ -175,7 +169,7 @@ async def send_embed(
             message = await destination.send(embed=embed)
 
         # =========================
-        # REACTION ROLE RESTORE (HARDENED SAFE)
+        # REACTION RESTORE (UNCHANGED LOGIC)
         # =========================
 
         if embed_name:
@@ -191,7 +185,6 @@ async def send_embed(
 
                 config = copy.deepcopy(old_config)
 
-                # SAFE LOOP (no change logic)
                 for group in config.get("groups", []):
                     emojis = group.get("emojis", [])
 
