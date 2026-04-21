@@ -9,8 +9,10 @@ class EmbedCreate(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+        # SAFE: tránh crash nếu Root chưa load
         root: Root = bot.get_cog("Root")
-        root.embed.add_command(self.create)
+        if root and hasattr(root, "embed"):
+            root.embed.add_command(self.create)
 
     @discord.app_commands.command(
         name="create",
@@ -29,7 +31,10 @@ class EmbedCreate(commands.Cog):
             )
             return
 
-        data = load_embed(interaction.guild.id, name)
+        # SAFE: normalize guild id (tránh mismatch string/int giữa hệ storage)
+        guild_id = str(interaction.guild.id)
+
+        data = load_embed(guild_id, name)
 
         if not data:
             data = {
@@ -40,7 +45,7 @@ class EmbedCreate(commands.Cog):
             }
 
         view = EmbedUIView(
-            guild_id=interaction.guild.id,
+            guild_id=guild_id,
             name=name,
             data=data
         )
