@@ -2,7 +2,7 @@ import discord
 from discord.ext import commands
 from core.root import Root
 from core.embed_ui import EmbedUIView
-from core.embed_storage import load_embed  # <-- thêm dòng này
+from core.embed_storage import load_embed
 
 
 class EmbedCreate(commands.Cog):
@@ -21,9 +21,14 @@ class EmbedCreate(commands.Cog):
         interaction: discord.Interaction,
         name: str
     ):
-        # =========================
-        # FIX: load embed nếu đã tồn tại
-        # =========================
+        # 🔥 SAFE: tránh crash khi dùng ngoài server
+        if not interaction.guild:
+            await interaction.response.send_message(
+                "This command can only be used in a server.",
+                ephemeral=True
+            )
+            return
+
         data = load_embed(interaction.guild.id, name)
 
         if not data:
