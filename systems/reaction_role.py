@@ -11,7 +11,7 @@ DATA_FILE = "data/reaction_roles.json"
 file_lock = asyncio.Lock()
 
 # =========================
-# CACHE (SOURCE OF TRUTH)
+# CACHE (SOURCE OF TRUTH - FILE BASED)
 # =========================
 
 _cache = None
@@ -19,7 +19,7 @@ _cache_loaded = False
 _cache_lock = asyncio.Lock()
 
 # =========================
-# EVENT DEDUP (UNCHANGED LOGIC, FIXED SAFETY)
+# EVENT DEDUP (SAFE FOR SCALE)
 # =========================
 
 EVENT_TTL = 60
@@ -31,7 +31,6 @@ _event_lock = asyncio.Lock()
 def _cleanup_events():
     now = time.time()
 
-    # FIX: avoid mutation-heavy loop spikes
     while _event_log:
         if now - _event_log[0][0] <= EVENT_TTL:
             break
@@ -53,7 +52,7 @@ async def _mark_event(key: str):
 
 
 # =========================
-# NORMALIZER (UNCHANGED)
+# NORMALIZER
 # =========================
 
 def _normalize_emoji(e) -> str:
@@ -61,7 +60,7 @@ def _normalize_emoji(e) -> str:
 
 
 # =========================
-# STORAGE (UNCHANGED LOGIC)
+# STORAGE
 # =========================
 
 def load_data():
@@ -89,23 +88,6 @@ async def save_data(data):
 
         os.replace(tmp, DATA_FILE)
 
-        global _cache, _cache_loaded
-        _cache = data
-        _cache_loaded = True
-
-
-# =========================
-# CACHE SYNC (UNCHANGED BEHAVIOR)
-# =========================
-
-async def _load_cache():
-    global _cache, _cache_loaded
-
-    async with _cache_lock:
-        if not _cache_loaded:
-            _cache = load_data()
-            _cache_loaded = True
-
 
 # =========================
 # CORE COG
@@ -116,15 +98,27 @@ class ReactionRole(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-        self.data = load_data()
+        self.data = {}
+        self._load_safe()
 
         # runtime cache
         self.emoji_map = {}
         self.group_roles = {}
 
-        # FIX: bounded cache (no infinite growth)
         self.message_cache = {}
         self._cache_limit = 200
+
+    # =========================
+    # SAFE LOAD (FIXED CACHE DESYNC)
+    # =========================
+
+    def _load_safe(self):
+        self.data = load_data()
+
+    def _refresh(self):
+        """Force sync from disk + rebuild cache"""
+        self.data = load_data()
+        self.build_cache()
 
     # =========================
     # READY
@@ -132,12 +126,11 @@ class ReactionRole(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        self.data = load_data()
-        self.build_cache()
+        self._refresh()
         print("ReactionRole SAFE PATCH LOADED")
 
     # =========================
-    # CACHE BUILD (UNCHANGED LOGIC)
+    # CACHE BUILD
     # =========================
 
     def build_cache(self):
@@ -170,7 +163,7 @@ class ReactionRole(commands.Cog):
                         self.group_roles[msg_id].add(r)
 
     # =========================
-    # ATTACH REACTIONS (UNCHANGED)
+    # ATTACH REACTIONS
     # =========================
 
     async def attach_reactions(self, message: discord.Message):
@@ -189,7 +182,7 @@ class ReactionRole(commands.Cog):
         self.message_cache[message.id] = message
 
     # =========================
-    # ADD REACTION (UNCHANGED FLOW)
+    # REACTION ADD
     # =========================
 
     @commands.Cog.listener()
@@ -209,9 +202,9 @@ class ReactionRole(commands.Cog):
 
         msg_id = str(payload.message_id)
 
+        # SAFE REFRESH ONLY ON MISS (NOT ALWAYS)
         if msg_id not in self.emoji_map:
-            self.data = load_data()
-            self.build_cache()
+            self._refresh()
             if msg_id not in self.emoji_map:
                 return
 
@@ -245,7 +238,7 @@ class ReactionRole(commands.Cog):
             return
 
         # =========================
-        # SINGLE MODE (UNCHANGED LOGIC)
+        # SINGLE MODE
         # =========================
 
         if data["mode"] == "single":
@@ -272,15 +265,15 @@ class ReactionRole(commands.Cog):
                 try:
                     message = await channel.fetch_message(payload.message_id)
 
-                    # FIX: bounded cache only
                     if len(self.message_cache) >= self._cache_limit:
                         self.message_cache.clear()
 
                     self.message_cache[payload.message_id] = message
 
                 except:
+                    # SAFE DELETE ONLY IF CORRUPTED ENTRY
                     if msg_id in self.data:
-                        del self.data[msg_id]
+                        self.data.pop(msg_id, None)
                         await save_data(self.data)
                         self.build_cache()
                     return
@@ -299,7 +292,7 @@ class ReactionRole(commands.Cog):
         await member.add_roles(*roles_to_add)
 
     # =========================
-    # REMOVE REACTION (UNCHANGED)
+    # REACTION REMOVE
     # =========================
 
     @commands.Cog.listener()
@@ -311,8 +304,7 @@ class ReactionRole(commands.Cog):
         msg_id = str(payload.message_id)
 
         if msg_id not in self.emoji_map:
-            self.data = load_data()
-            self.build_cache()
+            self._refresh()
             if msg_id not in self.emoji_map:
                 return
 
