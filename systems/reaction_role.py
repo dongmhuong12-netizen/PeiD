@@ -30,14 +30,12 @@ async def save_data(data):
     os.makedirs("data", exist_ok=True)
 
     async with file_lock:
-
         with tempfile.NamedTemporaryFile(
             "w",
             delete=False,
             dir="data",
             encoding="utf-8"
         ) as tmp:
-
             json.dump(data, tmp, indent=4)
             temp_name = tmp.name
 
@@ -63,7 +61,6 @@ class ReactionRole(commands.Cog):
 
 
     def build_cache(self):
-
         self.emoji_map.clear()
         self.group_roles.clear()
 
@@ -95,7 +92,6 @@ class ReactionRole(commands.Cog):
 
 
     async def attach_reactions(self, message: discord.Message):
-
         config = self.data.get(str(message.id))
 
         if not config:
@@ -116,6 +112,9 @@ class ReactionRole(commands.Cog):
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
 
         if payload.user_id == self.bot.user.id:
+            return
+
+        if not payload.guild_id:
             return
 
         msg_id = str(payload.message_id)
@@ -140,14 +139,20 @@ class ReactionRole(commands.Cog):
         if not member or member.bot:
             return
 
+        bot_member = guild.me
+        if not bot_member:
+            return
+
         data = self.emoji_map[msg_id][emoji]
 
         roles_to_add = []
 
-        bot_member = guild.me
-
         for rid in data["roles"]:
-            role = guild.get_role(int(rid))
+            try:
+                role = guild.get_role(int(rid))
+            except:
+                continue
+
             if role and role < bot_member.top_role:
                 roles_to_add.append(role)
 
@@ -160,7 +165,11 @@ class ReactionRole(commands.Cog):
             roles_to_remove = []
 
             for rid in self.group_roles[msg_id]:
-                role = guild.get_role(int(rid))
+                try:
+                    role = guild.get_role(int(rid))
+                except:
+                    continue
+
                 if role and role in member.roles and role < bot_member.top_role:
                     if role not in roles_to_add:
                         roles_to_remove.append(role)
@@ -172,9 +181,7 @@ class ReactionRole(commands.Cog):
             message = self.message_cache.get(payload.message_id)
 
             if not message:
-
                 channel = guild.get_channel(payload.channel_id)
-
                 if not channel:
                     return
 
@@ -209,6 +216,9 @@ class ReactionRole(commands.Cog):
     @commands.Cog.listener()
     async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent):
 
+        if not payload.guild_id:
+            return
+
         msg_id = str(payload.message_id)
 
         if msg_id not in self.emoji_map:
@@ -231,14 +241,20 @@ class ReactionRole(commands.Cog):
         if not member or member.bot:
             return
 
+        bot_member = guild.me
+        if not bot_member:
+            return
+
         data = self.emoji_map[msg_id][emoji]
 
         roles_to_remove = []
 
-        bot_member = guild.me
-
         for rid in data["roles"]:
-            role = guild.get_role(int(rid))
+            try:
+                role = guild.get_role(int(rid))
+            except:
+                continue
+
             if role and role < bot_member.top_role:
                 roles_to_remove.append(role)
 
