@@ -5,30 +5,52 @@ import json
 import os
 import asyncio
 import tempfile
+import time
+from collections import defaultdict, deque
 
 DATA_FILE = "data/reaction_roles.json"
-
 file_lock = asyncio.Lock()
 
 # =========================
-# WAKE CACHE LAYER (NEW)
+# CACHE LAYER (SOURCE OF TRUTH)
 # =========================
 
 _cache = None
 _cache_loaded = False
 
+# =========================
+# EVENT DEDUP (TTL LRU STYLE)
+# =========================
 
-def _load_cache():
-    global _cache, _cache_loaded
-
-    if not _cache_loaded:
-        _cache = load_data()
-        _cache_loaded = True
+EVENT_TTL = 60  # giây
+_event_log = deque()  # (timestamp, key)
+_event_set = set()
 
 
-def _sync_cache():
-    global _cache
-    _cache = load_data()
+def _cleanup_events():
+    now = time.time()
+    while _event_log and now - _event_log[0][0] > EVENT_TTL:
+        _, key = _event_log.popleft()
+        _event_set.discard(key)
+
+
+def _is_duplicate(key: str):
+    _cleanup_events()
+    return key in _event_set
+
+
+def _mark_event(key: str):
+    _cleanup_events()
+    _event_set.add(key)
+    _event_log.append((time.time(), key))
+
+
+# =========================
+# EMOJI NORMALIZER
+# =========================
+
+def _normalize_emoji(e) -> str:
+    return str(e).strip()
 
 
 # =========================
@@ -65,7 +87,6 @@ async def save_data(data):
 
         os.replace(temp_name, DATA_FILE)
 
-        # 🔥 sync cache sau save
         global _cache, _cache_loaded
         _cache = data
         _cache_loaded = True
@@ -79,6 +100,8 @@ class ReactionRole(commands.Cog):
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+
+        # source of truth = cache
         self.data = load_data()
 
         self.emoji_map = {}
@@ -93,10 +116,10 @@ class ReactionRole(commands.Cog):
     async def on_ready(self):
         self.data = load_data()
         self.build_cache()
-        print("ReactionRole optimized system loaded")
+        print("ReactionRole PREMIUM system loaded")
 
     # =========================
-    # CACHE BUILD
+    # CACHE BUILD (NORMALIZED)
     # =========================
 
     def build_cache(self):
@@ -105,7 +128,7 @@ class ReactionRole(commands.Cog):
 
         for msg_id, config in self.data.items():
 
-            if not msg_id.isdigit():
+            if not str(msg_id).isdigit():
                 continue
 
             self.emoji_map[msg_id] = {}
@@ -113,14 +136,16 @@ class ReactionRole(commands.Cog):
 
             for group in config.get("groups", []):
 
-                for emoji, role_data in zip(group["emojis"], group["roles"]):
+                emojis = [_normalize_emoji(e) for e in group.get("emojis", [])]
+
+                for emoji, role_data in zip(emojis, group["roles"]):
 
                     role_ids = role_data if isinstance(role_data, list) else [role_data]
 
                     self.emoji_map[msg_id][emoji] = {
                         "roles": role_ids,
                         "mode": group.get("mode", "multi"),
-                        "group_emojis": group["emojis"]
+                        "group_emojis": emojis
                     }
 
                     self.group_roles[msg_id].extend(role_ids)
@@ -131,15 +156,14 @@ class ReactionRole(commands.Cog):
 
     async def attach_reactions(self, message: discord.Message):
         config = self.data.get(str(message.id))
-
         if not config:
             return
 
         for group in config.get("groups", []):
             for emoji in group.get("emojis", []):
                 try:
-                    await message.add_reaction(emoji)
-                    await asyncio.sleep(0.2)
+                    await message.add_reaction(_normalize_emoji(emoji))
+                    await asyncio.sleep(0.15)
                 except:
                     pass
 
@@ -158,6 +182,11 @@ class ReactionRole(commands.Cog):
         if not payload.guild_id:
             return
 
+        event_key = f"{payload.user_id}:{payload.message_id}:{payload.emoji}"
+        if _is_duplicate(event_key):
+            return
+        _mark_event(event_key)
+
         msg_id = str(payload.message_id)
 
         if msg_id not in self.emoji_map:
@@ -167,7 +196,7 @@ class ReactionRole(commands.Cog):
             if msg_id not in self.emoji_map:
                 return
 
-        emoji = str(payload.emoji)
+        emoji = _normalize_emoji(payload.emoji)
 
         if emoji not in self.emoji_map[msg_id]:
             return
@@ -190,7 +219,6 @@ class ReactionRole(commands.Cog):
 
         for rid in data["roles"]:
             role = guild.get_role(int(rid))
-
             if role and role < bot_member.top_role:
                 roles_to_add.append(role)
 
@@ -198,7 +226,7 @@ class ReactionRole(commands.Cog):
             return
 
         # =========================
-        # SINGLE MODE LOGIC (UNCHANGED)
+        # SINGLE MODE
         # =========================
 
         if data["mode"] == "single":
@@ -226,21 +254,18 @@ class ReactionRole(commands.Cog):
                     message = await channel.fetch_message(payload.message_id)
                     self.message_cache[payload.message_id] = message
                 except:
-
                     if msg_id in self.data:
                         del self.data[msg_id]
                         await save_data(self.data)
                         self.build_cache()
-
                     return
 
             for old_emoji in data["group_emojis"]:
-
-                if str(old_emoji) == emoji:
+                if old_emoji == emoji:
                     continue
 
                 for r in message.reactions:
-                    if str(r.emoji) == str(old_emoji):
+                    if _normalize_emoji(r.emoji) == old_emoji:
                         try:
                             await r.remove(member)
                         except:
@@ -267,7 +292,7 @@ class ReactionRole(commands.Cog):
             if msg_id not in self.emoji_map:
                 return
 
-        emoji = str(payload.emoji)
+        emoji = _normalize_emoji(payload.emoji)
 
         if emoji not in self.emoji_map[msg_id]:
             return
@@ -290,7 +315,6 @@ class ReactionRole(commands.Cog):
 
         for rid in data["roles"]:
             role = guild.get_role(int(rid))
-
             if role and role < bot_member.top_role:
                 roles_to_remove.append(role)
 
