@@ -3,48 +3,70 @@ from core.cache_manager import load, mark_dirty
 
 FILE_KEY = "state"
 
+_lock = asyncio.Lock()
+
+
+# =========================
+# INTERNAL SAFE GET
+# =========================
+
+def _get():
+    cache = load(FILE_KEY)
+
+    # ensure schema (IMPORTANT FOR MULTI-SERVER STABILITY)
+    cache.setdefault("embeds", {})
+    cache.setdefault("reactions", {})
+    cache.setdefault("ui", {})
+    cache.setdefault("runtime", {})
+
+    cache["runtime"].setdefault("reaction_cache", {})
+    cache["runtime"].setdefault("message_cache", {})
+
+    return cache
+
+
+# =========================
+# COMMIT
+# =========================
+
+def _commit():
+    mark_dirty(FILE_KEY)
+
+
+# =====================
+# EMBEDS
+# =====================
 
 class State:
 
-    # =====================
-    # EMBEDS
-    # =====================
-
     @staticmethod
     async def set_embed(gid: int, name: str, data: dict):
-        cache = load(FILE_KEY)
+        async with _lock:
+            cache = _get()
 
-        gid = str(gid)
+            gid = str(gid)
+            cache["embeds"].setdefault(gid, {})
+            cache["embeds"][gid][name] = data
 
-        if "embeds" not in cache:
-            cache["embeds"] = {}
-
-        if gid not in cache["embeds"]:
-            cache["embeds"][gid] = {}
-
-        cache["embeds"][gid][name] = data
-
-        mark_dirty(FILE_KEY)
+            _commit()
 
     @staticmethod
     async def get_embed(gid: int, name: str):
-        cache = load(FILE_KEY)
-
-        return cache.get("embeds", {}).get(str(gid), {}).get(name)
+        cache = _get()
+        return cache["embeds"].get(str(gid), {}).get(name)
 
     @staticmethod
     async def del_embed(gid: int, name: str):
-        cache = load(FILE_KEY)
+        async with _lock:
+            cache = _get()
 
-        gid = str(gid)
+            gid = str(gid)
+            cache["embeds"].get(gid, {}).pop(name, None)
 
-        if gid in cache.get("embeds", {}):
-            cache["embeds"][gid].pop(name, None)
-
-            if not cache["embeds"][gid]:
+            if gid in cache["embeds"] and not cache["embeds"][gid]:
                 cache["embeds"].pop(gid, None)
 
-            mark_dirty(FILE_KEY)
+            _commit()
 
     # =====================
     # REACTIONS
@@ -52,47 +74,35 @@ class State:
 
     @staticmethod
     async def set_reaction(mid: int, data: dict):
-        cache = load(FILE_KEY)
+        async with _lock:
+            cache = _get()
 
-        mid = str(mid)
+            mid = str(mid)
+            cache["reactions"][mid] = data
+            cache["runtime"]["reaction_cache"][mid] = data
 
-        if "reactions" not in cache:
-            cache["reactions"] = {}
-
-        cache["reactions"][mid] = data
-
-        if "runtime" not in cache:
-            cache["runtime"] = {}
-
-        if "reaction_cache" not in cache["runtime"]:
-            cache["runtime"]["reaction_cache"] = {}
-
-        cache["runtime"]["reaction_cache"][mid] = data
-
-        mark_dirty(FILE_KEY)
+            _commit()
 
     @staticmethod
     async def get_reaction(mid: int):
-        cache = load(FILE_KEY)
-
+        cache = _get()
         mid = str(mid)
 
-        rt = cache.get("runtime", {}).get("reaction_cache", {}).get(mid)
-        if rt:
-            return rt
-
-        return cache.get("reactions", {}).get(mid)
+        return (
+            cache["runtime"]["reaction_cache"].get(mid)
+            or cache["reactions"].get(mid)
+        )
 
     @staticmethod
     async def del_reaction(mid: int):
-        cache = load(FILE_KEY)
+        async with _lock:
+            cache = _get()
+            mid = str(mid)
 
-        mid = str(mid)
+            cache["reactions"].pop(mid, None)
+            cache["runtime"]["reaction_cache"].pop(mid, None)
 
-        cache.get("reactions", {}).pop(mid, None)
-        cache.get("runtime", {}).get("reaction_cache", {}).pop(mid, None)
-
-        mark_dirty(FILE_KEY)
+            _commit()
 
     # =====================
     # UI STATE
@@ -100,71 +110,60 @@ class State:
 
     @staticmethod
     async def set_ui(key: str, data: dict):
-        cache = load(FILE_KEY)
-
-        if "ui" not in cache:
-            cache["ui"] = {}
-
-        cache["ui"][key] = data
-
-        mark_dirty(FILE_KEY)
+        async with _lock:
+            cache = _get()
+            cache["ui"][key] = data
+            _commit()
 
     @staticmethod
     async def get_ui(key: str):
-        cache = load(FILE_KEY)
-
-        return cache.get("ui", {}).get(key)
+        cache = _get()
+        return cache["ui"].get(key)
 
     @staticmethod
     async def del_ui(key: str):
-        cache = load(FILE_KEY)
-
-        cache.get("ui", {}).pop(key, None)
-
-        mark_dirty(FILE_KEY)
+        async with _lock:
+            cache = _get()
+            cache["ui"].pop(key, None)
+            _commit()
 
     # =====================
-    # RUNTIME CACHE
+    # RUNTIME
     # =====================
 
     @staticmethod
     async def set_rt(key: str, data: dict):
-        cache = load(FILE_KEY)
-
-        if "runtime" not in cache:
-            cache["runtime"] = {}
-
-        cache["runtime"][key] = data
-
-        mark_dirty(FILE_KEY)
+        async with _lock:
+            cache = _get()
+            cache["runtime"][key] = data
+            _commit()
 
     @staticmethod
     async def get_rt(key: str):
-        cache = load(FILE_KEY)
-
-        return cache.get("runtime", {}).get(key)
+        cache = _get()
+        return cache["runtime"].get(key)
 
     @staticmethod
     async def clear_rt():
-        cache = load(FILE_KEY)
-
-        cache["runtime"] = {
-            "reaction_cache": {},
-            "message_cache": {}
-        }
-
-        mark_dirty(FILE_KEY)
+        async with _lock:
+            cache = _get()
+            cache["runtime"] = {
+                "reaction_cache": {},
+                "message_cache": {}
+            }
+            _commit()
 
     # =====================
-    # RESYNC (SAFE RELOAD)
+    # RESYNC (REAL FIX)
     # =====================
 
     @staticmethod
     async def resync():
-        # force reload handled by cache system automatically
+        # cache manager handles reload automatically
         return True
 
     @staticmethod
     async def force_resync():
-        # no-op in phase 2 (cache manager handles consistency)
+        # force invalidate cache layer
+        load(FILE_KEY)
         return True
