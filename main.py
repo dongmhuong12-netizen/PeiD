@@ -6,7 +6,7 @@ from aiohttp import web
 
 from core.voice_manager import VoiceManager
 from core.voice_service import VoiceService
-from core.state import State  # 🔥 ADD WAKE SYSTEM
+from core.state import State  # 🔥 CORE MEMORY LAYER
 
 os.makedirs("data", exist_ok=True)
 
@@ -15,7 +15,7 @@ if not TOKEN:
     raise RuntimeError("TOKEN environment variable not found")
 
 # =========================
-# WEB SERVER FOR RENDER
+# WEB SERVER (RENDER KEEP ALIVE)
 # =========================
 
 async def health(request):
@@ -32,13 +32,13 @@ async def run_web_server():
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
 
-    print(f"Web server running on port {port}", flush=True)
+    print(f"[WEB] Running on port {port}", flush=True)
 
     while True:
         await asyncio.sleep(3600)
 
 # =========================
-# INTENTS
+# BOT SETUP
 # =========================
 
 intents = discord.Intents.default()
@@ -68,40 +68,51 @@ async def load_extensions():
     for ext in EXTENSIONS:
         try:
             await bot.load_extension(ext)
-            print(f"Loaded {ext}", flush=True)
+            print(f"[LOAD] {ext}", flush=True)
         except Exception as e:
-            print(f"Failed to load {ext}: {e}", flush=True)
+            print(f"[ERROR LOAD] {ext}: {e}", flush=True)
 
 # =========================
-# READY
+# READY STATE (PREMIUM BOOT LOGIC)
 # =========================
 
-bot._is_ready_once = False
+bot._ready_once = False
 
 @bot.event
 async def on_ready():
-    if not bot._is_ready_once:
-        bot._is_ready_once = True
+    if bot._ready_once:
+        print("[RECONNECT] Bot reconnected", flush=True)
+        return
 
-        # 🔥 WAKE SAFE SYNC (IMPORTANT FIX)
-        await State.resync()
+    bot._ready_once = True
 
-        try:
-            synced = await bot.tree.sync()
-            print(f"Slash synced: {len(synced)}", flush=True)
-        except Exception as e:
-            print(f"Slash sync failed: {e}", flush=True)
+    # =========================
+    # SLASH SYNC
+    # =========================
+    try:
+        synced = await bot.tree.sync()
+        print(f"[SLASH] Synced: {len(synced)}", flush=True)
+    except Exception as e:
+        print(f"[SLASH ERROR] {e}", flush=True)
 
-        print(f"Logged in as {bot.user} ({bot.user.id})", flush=True)
-        print("Bot ready", flush=True)
+    print(f"[READY] Logged in as {bot.user} ({bot.user.id})", flush=True)
 
-        bot.loop.create_task(VoiceService(bot).start())
+    # =========================
+    # 🔥 WAKE SAFE CORE RESTORE (IMPORTANT)
+    # =========================
+    await State.resync()
 
-    else:
-        print("Reconnected to Discord", flush=True)
+    print("[STATE] Resynced successfully", flush=True)
+
+    # =========================
+    # SERVICES START
+    # =========================
+    bot.loop.create_task(VoiceService(bot).start())
+
+    print("[SERVICE] VoiceService started", flush=True)
 
 # =========================
-# MAIN
+# MAIN ENTRY
 # =========================
 
 async def main():
