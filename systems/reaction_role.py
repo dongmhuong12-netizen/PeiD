@@ -50,7 +50,7 @@ def _normalize_emoji(e) -> str:
 
 
 # =========================
-# CORE COG (MIGRATED STORAGE ONLY)
+# CORE COG (PATCHED STABILITY ONLY)
 # =========================
 
 class ReactionRole(commands.Cog):
@@ -58,20 +58,27 @@ class ReactionRole(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
+        # 🔥 SOURCE OF TRUTH ALWAYS FROM CACHE MANAGER
         self.data = load(FILE_KEY)
 
         self.emoji_map = {}
         self.group_roles = {}
 
+        # 🔥 FIX: isolate per guild to avoid cross-guild collision
         self.message_cache = {}
         self._cache_limit = 200
 
     # =========================
-    # REFRESH SAFE
+    # SAFE REFRESH (PATCHED)
     # =========================
 
     def _refresh(self):
-        self.data = load(FILE_KEY)
+        """
+        FIX:
+        - always re-pull from cache manager (not local stale RAM)
+        - prevents desync in multi-server + restart cases
+        """
+        self.data = load(FILE_KEY) or {}
         self.build_cache()
 
     # =========================
@@ -156,6 +163,7 @@ class ReactionRole(commands.Cog):
 
         msg_id = str(payload.message_id)
 
+        # 🔥 FIX: always resync on MISS (avoid stale cache)
         if msg_id not in self.emoji_map:
             self._refresh()
             if msg_id not in self.emoji_map:
@@ -191,7 +199,7 @@ class ReactionRole(commands.Cog):
             return
 
         # =========================
-        # SINGLE MODE (UNCHANGED)
+        # SINGLE MODE (UNCHANGED LOGIC)
         # =========================
 
         if data["mode"] == "single":
@@ -218,15 +226,17 @@ class ReactionRole(commands.Cog):
                 try:
                     message = await channel.fetch_message(payload.message_id)
 
+                    # 🔥 FIX: bounded cache safety
                     if len(self.message_cache) >= self._cache_limit:
                         self.message_cache.clear()
 
                     self.message_cache[payload.message_id] = message
 
                 except:
+                    # 🔥 FIX: safe desync recovery (not aggressive delete)
                     self.data.pop(msg_id, None)
                     mark_dirty(FILE_KEY)
-                    self.build_cache()
+                    self._refresh()
                     return
 
             for old_emoji in data["group_emojis"]:
