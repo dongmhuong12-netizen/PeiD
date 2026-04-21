@@ -6,25 +6,27 @@ import os
 import asyncio
 import tempfile
 import time
-from collections import defaultdict, deque
+from collections import deque
 
 DATA_FILE = "data/reaction_roles.json"
 file_lock = asyncio.Lock()
 
 # =========================
-# CACHE LAYER (SOURCE OF TRUTH)
+# CACHE (SOURCE OF TRUTH)
 # =========================
 
 _cache = None
 _cache_loaded = False
+_cache_lock = asyncio.Lock()
 
 # =========================
-# EVENT DEDUP (TTL LRU STYLE)
+# EVENT DEDUP (HARDENED)
 # =========================
 
-EVENT_TTL = 60  # giây
-_event_log = deque()  # (timestamp, key)
+EVENT_TTL = 60
+_event_log = deque()
 _event_set = set()
+_event_lock = asyncio.Lock()
 
 
 def _cleanup_events():
@@ -34,19 +36,21 @@ def _cleanup_events():
         _event_set.discard(key)
 
 
-def _is_duplicate(key: str):
-    _cleanup_events()
-    return key in _event_set
+async def _is_duplicate(key: str):
+    async with _event_lock:
+        _cleanup_events()
+        return key in _event_set
 
 
-def _mark_event(key: str):
-    _cleanup_events()
-    _event_set.add(key)
-    _event_log.append((time.time(), key))
+async def _mark_event(key: str):
+    async with _event_lock:
+        _cleanup_events()
+        _event_set.add(key)
+        _event_log.append((time.time(), key))
 
 
 # =========================
-# EMOJI NORMALIZER
+# NORMALIZER
 # =========================
 
 def _normalize_emoji(e) -> str:
@@ -61,13 +65,12 @@ def load_data():
     os.makedirs("data", exist_ok=True)
 
     if not os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "w", encoding="utf-8") as f:
-            json.dump({}, f)
         return {}
 
     try:
         with open(DATA_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+            return data if isinstance(data, dict) else {}
     except:
         return {}
 
@@ -93,6 +96,26 @@ async def save_data(data):
 
 
 # =========================
+# CACHE SYNC (HARDENED)
+# =========================
+
+async def _load_cache():
+    global _cache, _cache_loaded
+
+    async with _cache_lock:
+        if not _cache_loaded:
+            _cache = load_data()
+            _cache_loaded = True
+
+
+async def _sync_cache():
+    global _cache
+
+    async with _cache_lock:
+        _cache = load_data()
+
+
+# =========================
 # CORE COG
 # =========================
 
@@ -101,7 +124,6 @@ class ReactionRole(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-        # source of truth = cache
         self.data = load_data()
 
         self.emoji_map = {}
@@ -116,10 +138,10 @@ class ReactionRole(commands.Cog):
     async def on_ready(self):
         self.data = load_data()
         self.build_cache()
-        print("ReactionRole PREMIUM system loaded")
+        print("ReactionRole PREMIUM HARDENED loaded")
 
     # =========================
-    # CACHE BUILD (NORMALIZED)
+    # CACHE BUILD
     # =========================
 
     def build_cache(self):
@@ -132,7 +154,7 @@ class ReactionRole(commands.Cog):
                 continue
 
             self.emoji_map[msg_id] = {}
-            self.group_roles[msg_id] = []
+            self.group_roles[msg_id] = set()  # avoid duplicates
 
             for group in config.get("groups", []):
 
@@ -148,7 +170,10 @@ class ReactionRole(commands.Cog):
                         "group_emojis": emojis
                     }
 
-                    self.group_roles[msg_id].extend(role_ids)
+                    for r in role_ids:
+                        self.group_roles[msg_id].add(r)
+
+            self.group_roles[msg_id] = list(self.group_roles[msg_id])
 
     # =========================
     # ATTACH REACTIONS
@@ -163,7 +188,7 @@ class ReactionRole(commands.Cog):
             for emoji in group.get("emojis", []):
                 try:
                     await message.add_reaction(_normalize_emoji(emoji))
-                    await asyncio.sleep(0.15)
+                    await asyncio.sleep(0.12)
                 except:
                     pass
 
@@ -183,9 +208,10 @@ class ReactionRole(commands.Cog):
             return
 
         event_key = f"{payload.user_id}:{payload.message_id}:{payload.emoji}"
-        if _is_duplicate(event_key):
+
+        if await _is_duplicate(event_key):
             return
-        _mark_event(event_key)
+        await _mark_event(event_key)
 
         msg_id = str(payload.message_id)
 
