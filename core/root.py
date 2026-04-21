@@ -43,7 +43,6 @@ def _cleanup_views(key: str):
     for view in list(views):
         try:
             if getattr(view, "message", None):
-                # async safe delete (không block event loop)
                 asyncio.create_task(view.message.delete())
         except:
             pass
