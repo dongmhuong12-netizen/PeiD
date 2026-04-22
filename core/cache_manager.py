@@ -5,10 +5,6 @@ import time
 import copy
 from typing import Dict, Any
 
-# =========================
-# MEMORY CORE (FIXED ARCH)
-# =========================
-
 _cache: Dict[str, Dict[str, Any]] = {}
 _dirty_keys: set[str] = set()
 
@@ -75,20 +71,24 @@ def _write_file(key: str, data: dict):
 # =========================
 
 def _init_key(key: str):
-    if key not in _cache:
-        _cache[key] = _load_file(key)
+    if key in _cache:
+        return
+
+    _cache[key] = _load_file(key)
+
+    # FIX: schema init ONLY HERE
+    if isinstance(_cache[key], dict):
+        _cache[key].setdefault("runtime", {})
+        _cache[key].setdefault("embeds", {})
+        _cache[key].setdefault("reactions", {})
+        _cache[key].setdefault("ui", {})
 
 
 # =========================
-# PUBLIC API (FIXED CORE)
+# PUBLIC API
 # =========================
 
 def load(key: str) -> dict:
-    """
-    SAFE SNAPSHOT READ
-    FIX:
-    - vẫn deepcopy nhưng đảm bảo schema runtime không bị phá
-    """
     if key not in _cache:
         _init_key(key)
 
@@ -96,21 +96,10 @@ def load(key: str) -> dict:
 
 
 def get_raw(key: str) -> dict:
-    """
-    INTERNAL MUTABLE ACCESS
-    FIX:
-    - đảm bảo init + schema luôn tồn tại (QUAN TRỌNG CHO STATE)
-    """
     if key not in _cache:
         _init_key(key)
 
-    # 🔥 FIX CRITICAL: guarantee schema container tồn tại
-    if isinstance(_cache[key], dict):
-        _cache[key].setdefault("runtime", {})
-        _cache[key].setdefault("embeds", {})
-        _cache[key].setdefault("reactions", {})
-        _cache[key].setdefault("ui", {})
-
+    # ❌ NO MUTATION HERE ANYMORE
     return _cache[key]
 
 
@@ -120,11 +109,6 @@ def mark_dirty(key: str):
 
 
 def update(key: str, value: dict):
-    """
-    ATOMIC REPLACE SAFE
-    FIX:
-    - không deepcopy input nữa (tránh double-copy bug sender/state mismatch)
-    """
     if key not in _cache:
         _init_key(key)
 
@@ -162,10 +146,6 @@ async def _flush_worker():
             print("[CACHE FLUSH ERROR]", e)
 
 
-# =========================
-# BACKUP
-# =========================
-
 async def _backup_worker():
     while True:
         await asyncio.sleep(BACKUP_INTERVAL)
@@ -184,7 +164,7 @@ async def _backup_worker():
 
 
 # =========================
-# LOOP START
+# LOOP
 # =========================
 
 def _ensure_loop():
@@ -198,14 +178,9 @@ def _ensure_loop():
         loop.create_task(_flush_worker())
         loop.create_task(_backup_worker())
         _started = True
-
     except RuntimeError:
         pass
 
-
-# =========================
-# UTIL
-# =========================
 
 def force_flush():
     for key, data in list(_cache.items()):
