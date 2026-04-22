@@ -202,7 +202,13 @@ async def send_embed(
             message = await destination.send(embed=embed)
 
         # =========================
-        # REACTION RESTORE (FIXED ARCHITECTURE)
+        # 🔥 CRITICAL FIX: BIND NAME → MESSAGE
+        # =========================
+        if embed_name:
+            await State.set_embed_message(guild.id, embed_name, message.id)
+
+        # =========================
+        # REACTION RESTORE
         # =========================
 
         await _load_cache()
@@ -212,26 +218,24 @@ async def send_embed(
 
         async with lock:
 
-            # SOURCE OF TRUTH FIRST
             data = load_reaction_data()
 
-            # STATE = CACHE ONLY (NO AUTHORITY)
-            state_config = await State.get_reaction(message.id)
+            # 🔥 FIX: resolve via NAME FIRST
+            state_msg_id = await State.get_embed_message(guild.id, embed_name) if embed_name else None
 
-            config = data.get(msg_id)
+            config = None
 
-            if not isinstance(config, dict):
-                if isinstance(state_config, dict):
-                    config = state_config
+            if state_msg_id:
+                config = data.get(str(state_msg_id)) or await State.get_reaction(int(state_msg_id))
+            else:
+                config = data.get(msg_id)
 
-            # RESTORE
             if isinstance(config, dict) and "groups" in config:
 
                 for group in config.get("groups", []):
                     for emoji in group.get("emojis", []):
                         await _enqueue_reaction(message, emoji)
 
-            # INIT NEW
             else:
                 new_config = {
                     "guild_id": guild.id,
@@ -244,10 +248,6 @@ async def send_embed(
                 await save_reaction_data(data)
 
                 await State.set_reaction(message.id, new_config)
-
-            # SYNC STATE IF MISSING
-            if isinstance(config, dict) and not state_config:
-                await State.set_reaction(message.id, config)
 
         return True
 
