@@ -1,4 +1,3 @@
-# core/embed_sender.py
 import discord
 import copy
 import os
@@ -8,7 +7,6 @@ from typing import Union
 from collections import defaultdict, deque
 from core.variable_engine import apply_variables
 
-# 🔥 ADD
 from core.state import State
 
 DATA_FILE = "data/reaction_roles.json"
@@ -16,24 +14,22 @@ DATA_FILE = "data/reaction_roles.json"
 file_lock = asyncio.Lock()
 
 # =========================
-# CACHE LAYER (GLOBAL SAFE)
+# CACHE LAYER
 # =========================
 
 _reaction_cache = None
 _cache_loaded = False
 _cache_lock = asyncio.Lock()
 
-# per-message restore lock (anti duplicate restore)
 _restore_lock_map = defaultdict(asyncio.Lock)
 
-# reaction queue (anti rate-limit burst)
 _reaction_queue = deque()
 _queue_lock = asyncio.Lock()
 _queue_worker_started = False
 
 
 # =========================
-# CACHE LOAD
+# LOAD JSON
 # =========================
 
 def load_reaction_data():
@@ -46,7 +42,7 @@ def load_reaction_data():
         with open(DATA_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
             return data if isinstance(data, dict) else {}
-    except Exception:
+    except:
         return {}
 
 
@@ -75,13 +71,8 @@ async def _load_cache():
             _cache_loaded = True
 
 
-def _sync_cache():
-    global _reaction_cache
-    _reaction_cache = load_reaction_data()
-
-
 # =========================
-# REACTION QUEUE WORKER
+# QUEUE SYSTEM
 # =========================
 
 async def _reaction_worker():
@@ -99,7 +90,7 @@ async def _reaction_worker():
         except:
             pass
 
-        await asyncio.sleep(0.18)  # anti rate limit stable
+        await asyncio.sleep(0.18)
 
 
 async def _enqueue_reaction(message, emoji):
@@ -113,7 +104,7 @@ async def _enqueue_reaction(message, emoji):
 
 
 # =========================
-# EMBED BUILDER SAFE
+# EMBED BUILDER
 # =========================
 
 def _build_embed(embed_copy: dict):
@@ -148,17 +139,14 @@ async def send_embed(
         return False
 
     try:
-        # resolve member
         if member is None and isinstance(destination, discord.Interaction):
             member = destination.user
 
-        # variable engine
         embed_copy = copy.deepcopy(embed_data)
         embed_copy = apply_variables(embed_copy, guild, member)
 
         embed = _build_embed(embed_copy)
 
-        # optional parts
         image = embed_copy.get("image")
         if image:
             embed.set_image(url=image.get("url") if isinstance(image, dict) else image)
@@ -214,37 +202,36 @@ async def send_embed(
             message = await destination.send(embed=embed)
 
         # =========================
-        # REACTION RESTORE + INIT (DUAL LAYER, KHÔNG MẤT LOGIC)
+        # REACTION RESTORE (FIXED ARCHITECTURE)
         # =========================
 
         await _load_cache()
 
-        data = _reaction_cache or load_reaction_data()
         msg_id = str(message.id)
-
         lock = _restore_lock_map[msg_id]
 
         async with lock:
 
-            # 🔥 NEW: ưu tiên State
+            # SOURCE OF TRUTH FIRST
+            data = load_reaction_data()
+
+            # STATE = CACHE ONLY (NO AUTHORITY)
             state_config = await State.get_reaction(message.id)
 
-            config = None
+            config = data.get(msg_id)
 
-            if isinstance(state_config, dict) and "groups" in state_config:
-                config = state_config
-            else:
-                # 🔥 fallback JSON (GIỮ NGUYÊN LOGIC CŨ)
-                config = data.get(msg_id)
+            if not isinstance(config, dict):
+                if isinstance(state_config, dict):
+                    config = state_config
 
-            # CASE 1: đã có config → restore reaction
+            # RESTORE
             if isinstance(config, dict) and "groups" in config:
 
                 for group in config.get("groups", []):
                     for emoji in group.get("emojis", []):
                         await _enqueue_reaction(message, emoji)
 
-            # CASE 2: chưa có → tạo mới (GIỮ LOGIC + ADD STATE)
+            # INIT NEW
             else:
                 new_config = {
                     "guild_id": guild.id,
@@ -253,14 +240,12 @@ async def send_embed(
                     "groups": []
                 }
 
-                # 🔥 save JSON (LOGIC CŨ)
                 data[msg_id] = new_config
                 await save_reaction_data(data)
 
-                # 🔥 save State (NEW)
                 await State.set_reaction(message.id, new_config)
 
-            # 🔥 SYNC: nếu có JSON nhưng chưa có State → bổ sung
+            # SYNC STATE IF MISSING
             if isinstance(config, dict) and not state_config:
                 await State.set_reaction(message.id, config)
 
