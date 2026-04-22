@@ -2,17 +2,17 @@ import asyncio
 import json
 import os
 import time
+import copy
 from typing import Dict, Any
 
 # =========================
-# MEMORY CORE
+# MEMORY CORE (FIXED ARCH)
 # =========================
 
 _cache: Dict[str, Dict[str, Any]] = {}
 _dirty_keys: set[str] = set()
 
 _lock = asyncio.Lock()
-_flush_task = None
 _started = False
 
 DATA_DIR = "data"
@@ -55,7 +55,6 @@ def _write_file(key: str, data: dict):
     path = _file_path(key)
     tmp = path + ".tmp"
 
-    # backup (safe but lightweight)
     if os.path.exists(path):
         try:
             with open(path, "r", encoding="utf-8") as src:
@@ -72,7 +71,7 @@ def _write_file(key: str, data: dict):
 
 
 # =========================
-# INIT SYSTEM
+# INIT
 # =========================
 
 def _init_key(key: str):
@@ -81,24 +80,23 @@ def _init_key(key: str):
 
 
 # =========================
-# PUBLIC API
+# PUBLIC API (FIXED)
 # =========================
 
 def load(key: str) -> dict:
     """
-    RAM-first cache read
-    IMPORTANT: return COPY to prevent external mutation bypassing dirty tracking
+    SAFE SNAPSHOT READ
+    - FIX: deep copy để chống shared mutation leak
     """
     if key not in _cache:
         _init_key(key)
 
-    # 🔥 FIX C1: chống silent mutation bypass flush system
-    return _cache[key].copy()
+    return copy.deepcopy(_cache[key])
 
 
 def get_raw(key: str) -> dict:
     """
-    Direct reference (internal use only)
+    INTERNAL ONLY (MUTABLE REF)
     """
     if key not in _cache:
         _init_key(key)
@@ -107,23 +105,18 @@ def get_raw(key: str) -> dict:
 
 
 def mark_dirty(key: str):
-    """
-    Mark cache as dirty for flush worker
-    """
     _dirty_keys.add(key)
     _ensure_loop()
 
 
 def update(key: str, value: dict):
     """
-    SAFE WRITE API (C1 CORE FIX)
-    - replaces manual cache mutation
-    - guarantees dirty tracking
+    ATOMIC REPLACE (NO MUTATION)
     """
     if key not in _cache:
         _init_key(key)
 
-    _cache[key] = value
+    _cache[key] = copy.deepcopy(value)
     _dirty_keys.add(key)
     _ensure_loop()
 
@@ -158,7 +151,7 @@ async def _flush_worker():
 
 
 # =========================
-# BACKUP SAFETY LOOP
+# BACKUP
 # =========================
 
 async def _backup_worker():
@@ -179,7 +172,7 @@ async def _backup_worker():
 
 
 # =========================
-# LOOP STARTER
+# LOOP START
 # =========================
 
 def _ensure_loop():
@@ -190,10 +183,8 @@ def _ensure_loop():
 
     try:
         loop = asyncio.get_running_loop()
-
         loop.create_task(_flush_worker())
         loop.create_task(_backup_worker())
-
         _started = True
 
     except RuntimeError:
@@ -205,9 +196,6 @@ def _ensure_loop():
 # =========================
 
 def force_flush():
-    """
-    Force write everything immediately
-    """
     for key, data in list(_cache.items()):
         _write_file(key, data)
 
