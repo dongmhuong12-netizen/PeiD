@@ -1,4 +1,3 @@
-# core/root.py
 import discord
 from discord.ext import commands
 from discord import app_commands
@@ -12,6 +11,7 @@ from core.booster import BoostGroup, BoosterListener
 from core.wellcome import WellcomeGroup, WellcomeListener
 
 import asyncio
+
 
 # =============================
 # SAFE AUTOCOMPLETE
