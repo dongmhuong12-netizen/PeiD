@@ -5,7 +5,7 @@ from core.variable_engine import apply_variables
 from core.embed_storage import save_embed, delete_embed
 from systems.reaction_role import ReactionRole
 from core.cache_manager import load, mark_dirty
-from core.state import State  # 🔥 FIX: missing import
+from core.state import State
 
 ACTIVE_EMBED_VIEWS = {}
 
@@ -29,7 +29,7 @@ async def save_reaction_data(data):
 
 
 # =========================
-# MODALS (UNCHANGED)
+# MODALS
 # =========================
 
 class EditTitleModal(discord.ui.Modal, title="Edit Title"):
@@ -230,8 +230,6 @@ class EmbedUIView(discord.ui.View):
         self.member = interaction.user
 
         embed = self.build_embed()
-
-        # 🔥 FIX: ensure message reference exists
         self.message = interaction.message
 
         if interaction.response.is_done():
@@ -268,7 +266,7 @@ class EmbedUIView(discord.ui.View):
 
         save_embed(interaction.guild.id, self.name, self.data)
 
-        # 🔥 FIX CRITICAL: bind runtime message instance
+        # 🔥 FIX CORE: bind message BEFORE state register
         if self.message:
             await State.atomic_embed_register(
                 interaction.guild.id,
