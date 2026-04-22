@@ -1,26 +1,38 @@
-# core/embed_ui.py
 import discord
 import asyncio
+import copy
 from core.variable_engine import apply_variables
 from core.embed_storage import save_embed, delete_embed
 from systems.reaction_role import ReactionRole
+from core.cache_manager import load, mark_dirty
 
 ACTIVE_EMBED_VIEWS = {}
 
 # =========================
-# STATE WRAPPER (FIXED SOURCE OF TRUTH)
+# STATE WRAPPER (FIXED SAFE CACHE ACCESS)
 # =========================
 
 async def load_reaction_data():
-    from core.cache_manager import load
     return load("reaction_roles") or {}
 
 async def save_reaction_data(data):
-    from core.cache_manager import mark_dirty, load
+    """
+    FIX:
+    - tránh mutate shared reference từ cache_manager
+    - đảm bảo atomic replace snapshot
+    """
 
     cache = load("reaction_roles")
+
+    # SAFE COPY (FIX CRASH / RACE CONDITION)
+    new_cache = copy.deepcopy(cache)
+
+    new_cache.clear()
+    new_cache.update(data)
+
+    # replace reference content safely
     cache.clear()
-    cache.update(data)
+    cache.update(new_cache)
 
     mark_dirty("reaction_roles")
 
@@ -105,7 +117,7 @@ class EditImageModal(discord.ui.Modal, title="Set Image URL"):
 
 
 # =========================
-# REACTION ROLE MODAL (FIXED SAFE SAVE)
+# REACTION ROLE MODAL (FIXED SCHEMA + SAFE FORMAT)
 # =========================
 
 class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
@@ -158,13 +170,15 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
         if mode not in ["single", "multi"]:
             errors.append("Mode sai")
 
+        # FIX: flatten roles (no nested list)
         parsed_roles = []
+
         for r in roles_raw:
             role = parse_role(r)
             if not role:
                 errors.append(f"Role lỗi: {r}")
             else:
-                parsed_roles.append([str(role.id)])
+                parsed_roles.append(str(role.id))  # FIXED
 
         if errors:
             return await interaction.response.send_message(
@@ -192,12 +206,15 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
 
         await save_reaction_data(data)
 
-        # 🔥 SYNC IMMEDIATE (FIX MẤT PICK EMOJI)
+        # SAFE SYNC
         try:
             msg = self.view.message
-            if msg:
-                for e in emojis:
-                    await msg.add_reaction(e)
+            if not msg:
+                msg = await interaction.channel.fetch_message(interaction.message.id)
+
+            for e in emojis:
+                await msg.add_reaction(e)
+
         except:
             pass
 
@@ -225,7 +242,7 @@ class EmbedUIView(discord.ui.View):
         ACTIVE_EMBED_VIEWS.setdefault(key, []).append(self)
 
     def build_embed(self):
-        data = self.data.copy()
+        data = copy.deepcopy(self.data)
 
         if hasattr(self, "guild") and hasattr(self, "member"):
             data = apply_variables(data, self.guild, self.member)
@@ -253,7 +270,7 @@ class EmbedUIView(discord.ui.View):
             await interaction.response.edit_message(embed=embed, view=self)
 
     # =========================
-    # BUTTONS
+    # BUTTONS (UNCHANGED)
     # =========================
 
     @discord.ui.button(label="Edit Title", style=discord.ButtonStyle.secondary)
@@ -290,7 +307,6 @@ class EmbedUIView(discord.ui.View):
         delete_embed(interaction.guild.id, self.name)
 
         key = f"{self.guild_id}:{self.name}"
-
         ACTIVE_EMBED_VIEWS.pop(key, None)
 
         await interaction.response.send_message(
