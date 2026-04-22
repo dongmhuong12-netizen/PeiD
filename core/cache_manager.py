@@ -51,6 +51,7 @@ def _write_file(key: str, data: dict):
     path = _file_path(key)
     tmp = path + ".tmp"
 
+    # Backup an toàn trước khi ghi đè
     if os.path.exists(path):
         try:
             with open(path, "r", encoding="utf-8") as src:
@@ -76,7 +77,7 @@ def _init_key(key: str):
 
     _cache[key] = _load_file(key)
 
-    # FIX: schema init ONLY HERE
+    # Đảm bảo schema cơ bản luôn tồn tại trong RAM
     if isinstance(_cache[key], dict):
         _cache[key].setdefault("runtime", {})
         _cache[key].setdefault("embeds", {})
@@ -89,29 +90,35 @@ def _init_key(key: str):
 # =========================
 
 def load(key: str) -> dict:
+    """Trả về bản sao dữ liệu từ RAM. Đảm bảo Show thấy data mới nhất."""
     if key not in _cache:
         _init_key(key)
 
+    # FIX 10/10: Phải deepcopy từ RAM (_cache) 
+    # vì đây là 'Source of Truth' duy nhất khi bot đang chạy.
     return copy.deepcopy(_cache[key])
 
 
 def get_raw(key: str) -> dict:
+    """Trả về bản gốc trong RAM để sửa trực tiếp (Dành cho State.py)"""
     if key not in _cache:
         _init_key(key)
 
-    # ❌ NO MUTATION HERE ANYMORE
     return _cache[key]
 
 
 def mark_dirty(key: str):
+    """Đánh dấu key cần được ghi xuống đĩa"""
     _dirty_keys.add(key)
     _ensure_loop()
 
 
 def update(key: str, value: dict):
+    """Cập nhật toàn bộ data cho một key và đánh dấu dirty"""
     if key not in _cache:
         _init_key(key)
 
+    # Cập nhật trực tiếp vào RAM
     _cache[key] = value
     _dirty_keys.add(key)
     _ensure_loop()
@@ -131,6 +138,7 @@ async def _flush_worker():
             continue
 
         try:
+            # Dùng lock để tránh việc đang ghi thì bị can thiệp
             async with _lock:
                 keys = list(_dirty_keys)
                 _dirty_keys.clear()
@@ -179,10 +187,12 @@ def _ensure_loop():
         loop.create_task(_backup_worker())
         _started = True
     except RuntimeError:
+        # Nếu chưa có loop (lúc khởi động cực sớm)
         pass
 
 
 def force_flush():
+    """Ép ghi toàn bộ cache xuống đĩa ngay lập tức"""
     for key, data in list(_cache.items()):
         _write_file(key, data)
 
