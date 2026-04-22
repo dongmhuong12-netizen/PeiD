@@ -1,4 +1,3 @@
-# core/embed_ui.py
 import discord
 import asyncio
 import copy
@@ -6,30 +5,23 @@ from core.variable_engine import apply_variables
 from core.embed_storage import save_embed, delete_embed
 from systems.reaction_role import ReactionRole
 from core.cache_manager import load, mark_dirty
+from core.state import State  # 🔥 FIX: missing import
 
 ACTIVE_EMBED_VIEWS = {}
 
 # =========================
-# STATE WRAPPER (FIXED SAFE CACHE ACCESS)
+# STATE WRAPPER
 # =========================
 
 async def load_reaction_data():
     return load("reaction_roles") or {}
 
 async def save_reaction_data(data):
-    """
-    FIX:
-    - remove deepcopy (cause stale + race + overhead)
-    - direct cache replace via shared reference (cache_manager design)
-    - single source of truth
-    """
-
     cache = load("reaction_roles")
 
     if cache is None:
         cache = {}
-    
-    # atomic replace (safe for cache_manager RAM model)
+
     cache.clear()
     cache.update(data)
 
@@ -37,7 +29,7 @@ async def save_reaction_data(data):
 
 
 # =========================
-# MODALS (UNCHANGED LOGIC)
+# MODALS (UNCHANGED)
 # =========================
 
 class EditTitleModal(discord.ui.Modal, title="Edit Title"):
@@ -92,10 +84,7 @@ class EditColorModal(discord.ui.Modal, title="Edit Color (HEX)"):
             self.view.data["color"] = int(self.input.value.replace("#", ""), 16)
             await self.view.update_message(interaction)
         except:
-            await interaction.response.send_message(
-                "❌ Color không hợp lệ",
-                ephemeral=True
-            )
+            await interaction.response.send_message("❌ Color không hợp lệ", ephemeral=True)
 
 
 class EditImageModal(discord.ui.Modal, title="Set Image URL"):
@@ -116,7 +105,7 @@ class EditImageModal(discord.ui.Modal, title="Set Image URL"):
 
 
 # =========================
-# REACTION ROLE MODAL (FIXED)
+# REACTION ROLE MODAL
 # =========================
 
 class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
@@ -124,21 +113,9 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
         super().__init__()
         self.view = view
 
-        self.emojis = discord.ui.TextInput(
-            label="Emojis (,)",
-            required=True
-        )
-
-        self.roles = discord.ui.TextInput(
-            label="Roles ID/mention (,)",
-            required=True
-        )
-
-        self.mode = discord.ui.TextInput(
-            label="Mode single/multi",
-            required=True,
-            default="single"
-        )
+        self.emojis = discord.ui.TextInput(label="Emojis (,)", required=True)
+        self.roles = discord.ui.TextInput(label="Roles ID/mention (,)", required=True)
+        self.mode = discord.ui.TextInput(label="Mode single/multi", required=True, default="single")
 
         self.add_item(self.emojis)
         self.add_item(self.roles)
@@ -178,10 +155,7 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
                 parsed_roles.append(str(role.id))
 
         if errors:
-            return await interaction.response.send_message(
-                "❌ Lỗi:\n- " + "\n- ".join(errors),
-                ephemeral=True
-            )
+            return await interaction.response.send_message("❌ Lỗi:\n- " + "\n- ".join(errors), ephemeral=True)
 
         data = await load_reaction_data()
 
@@ -201,14 +175,11 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
 
         await save_reaction_data(data)
 
-        # SAFE SYNC (FIX interaction.message fallback crash)
         try:
             msg = getattr(self.view, "message", None)
 
             if not msg:
-                channel = interaction.channel
-                if channel:
-                    msg = await channel.fetch_message(interaction.message.id)
+                msg = await interaction.channel.fetch_message(interaction.message.id)
 
             if msg:
                 for e in emojis:
@@ -217,10 +188,7 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
         except:
             pass
 
-        await interaction.response.send_message(
-            "✅ Reaction role saved",
-            ephemeral=True
-        )
+        await interaction.response.send_message("✅ Reaction role saved", ephemeral=True)
 
 
 # =========================
@@ -263,12 +231,18 @@ class EmbedUIView(discord.ui.View):
 
         embed = self.build_embed()
 
+        # 🔥 FIX: ensure message reference exists
+        self.message = interaction.message
+
         if interaction.response.is_done():
             await interaction.message.edit(embed=embed, view=self)
         else:
             await interaction.response.edit_message(embed=embed, view=self)
 
-    # BUTTONS (UNCHANGED)
+    # =========================
+    # BUTTONS
+    # =========================
+
     @discord.ui.button(label="Edit Title", style=discord.ButtonStyle.secondary)
     async def edit_title(self, interaction, button):
         await interaction.response.send_modal(EditTitleModal(self))
@@ -291,21 +265,26 @@ class EmbedUIView(discord.ui.View):
 
     @discord.ui.button(label="Save Embed", style=discord.ButtonStyle.success)
     async def save_embed(self, interaction, button):
+
         save_embed(interaction.guild.id, self.name, self.data)
 
-        await interaction.response.send_message(
-            "Saved",
-            ephemeral=True
-        )
+        # 🔥 FIX CRITICAL: bind runtime message instance
+        if self.message:
+            await State.atomic_embed_register(
+                interaction.guild.id,
+                self.name,
+                self.message.id,
+                None
+            )
+
+        await interaction.response.send_message("Saved", ephemeral=True)
 
     @discord.ui.button(label="Delete Embed", style=discord.ButtonStyle.danger)
     async def delete_embed(self, interaction, button):
+
         delete_embed(interaction.guild.id, self.name)
 
         key = f"{self.guild_id}:{self.name}"
         ACTIVE_EMBED_VIEWS.pop(key, None)
 
-        await interaction.response.send_message(
-            "Deleted",
-            ephemeral=True
-        )
+        await interaction.response.send_message("Deleted", ephemeral=True)
