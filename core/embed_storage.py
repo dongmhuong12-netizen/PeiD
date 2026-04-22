@@ -13,7 +13,20 @@ def _get_cache():
 
     if not isinstance(cache, dict):
         cache = {}
+
     return cache
+
+
+# =========================
+# NORMALIZE GUILD KEY
+# =========================
+
+def _gid(guild_id):
+    return str(guild_id) if guild_id is not None else "global"
+
+
+def _nid(name):
+    return str(name) if name is not None else None
 
 
 # =========================
@@ -29,16 +42,19 @@ def save_embed(guild_id, name=None, data=None):
 
     cache = _get_cache()
 
-    guild_id = str(guild_id)
+    gid = _gid(guild_id)
+    name = _nid(name)
 
-    # 🔥 FIX: isolate guild bucket safely
-    if guild_id not in cache or not isinstance(cache[guild_id], dict):
-        cache[guild_id] = {}
+    if not name:
+        return False
 
-    # 🔥 FIX: deepcopy to avoid shared mutation bug
-    cache[guild_id][name] = copy.deepcopy(data)
+    if gid not in cache or not isinstance(cache[gid], dict):
+        cache[gid] = {}
+
+    cache[gid][name] = copy.deepcopy(data)
 
     mark_dirty(FILE_KEY)
+    return True
 
 
 # =========================
@@ -52,7 +68,10 @@ def load_embed(guild_id, name=None):
 
     cache = _get_cache()
 
-    guild_data = cache.get(str(guild_id), {})
+    gid = _gid(guild_id)
+    name = _nid(name)
+
+    guild_data = cache.get(gid, {})
 
     if not isinstance(guild_data, dict):
         return None
@@ -71,9 +90,10 @@ def delete_embed(guild_id, name=None):
 
     cache = _get_cache()
 
-    guild_id = str(guild_id)
+    gid = _gid(guild_id)
+    name = _nid(name)
 
-    guild_data = cache.get(guild_id)
+    guild_data = cache.get(gid)
 
     if not isinstance(guild_data, dict):
         return False
@@ -84,7 +104,7 @@ def delete_embed(guild_id, name=None):
     del guild_data[name]
 
     if not guild_data:
-        cache.pop(guild_id, None)
+        cache.pop(gid, None)
 
     mark_dirty(FILE_KEY)
     return True
@@ -98,7 +118,9 @@ def get_all_embeds(guild_id):
 
     cache = _get_cache()
 
-    guild_data = cache.get(str(guild_id), {})
+    gid = _gid(guild_id)
+
+    guild_data = cache.get(gid, {})
 
     if not isinstance(guild_data, dict):
         return {}
@@ -117,7 +139,9 @@ def get_all_embed_names(guild_id=None):
 
     cache = _get_cache()
 
-    guild_data = cache.get(str(guild_id), {})
+    gid = _gid(guild_id)
+
+    guild_data = cache.get(gid, {})
 
     if not isinstance(guild_data, dict):
         return []
