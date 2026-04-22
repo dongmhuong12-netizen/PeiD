@@ -4,6 +4,7 @@ from core.cache_manager import load, mark_dirty, get_raw
 FILE_KEY = "state"
 
 _lock = asyncio.Lock()
+_tx_lock = asyncio.Lock()
 
 
 # =========================
@@ -12,10 +13,11 @@ _lock = asyncio.Lock()
 
 def _get():
     """
-    SAFE READ LAYER
-    - always ensure schema
-    - avoids mutation on shared reference
+    SAFE READ LAYER (FIXED)
+    - schema guarantee
+    - runtime isolation
     """
+
     cache = get_raw(FILE_KEY)
 
     cache.setdefault("embeds", {})
@@ -23,11 +25,13 @@ def _get():
     cache.setdefault("ui", {})
     cache.setdefault("runtime", {})
 
-    cache["runtime"].setdefault("reaction_cache", {})
-    cache["runtime"].setdefault("message_cache", {})
+    rt = cache["runtime"]
 
-    # 🔥 FIX: name-based mapping (CRITICAL FOR EMBED LOOKUP)
-    cache["runtime"].setdefault("embed_name_to_message", {})
+    rt.setdefault("reaction_cache", {})
+    rt.setdefault("message_cache", {})
+    rt.setdefault("embed_name_to_message", {})
+
+    cache["runtime"] = rt
 
     return cache
 
@@ -41,7 +45,7 @@ def _commit():
 
 
 # =========================
-# SAFE WRITE HELPER
+# SAFE WRITE
 # =========================
 
 def _write(mutator):
@@ -50,11 +54,15 @@ def _write(mutator):
     _commit()
 
 
-# =====================
+# =========================
 # EMBEDS
-# =====================
+# =========================
 
 class State:
+
+    # =========================
+    # BASIC EMBED STORAGE
+    # =========================
 
     @staticmethod
     async def set_embed(gid: int, name: str, data: dict):
@@ -85,33 +93,53 @@ class State:
 
             _write(op)
 
-    # =====================
-    # 🔥 FIX: EMBED NAME → MESSAGE ID MAPPING
-    # =====================
+    # =========================
+    # 🔥 ATOMIC PIPELINE CORE
+    # =========================
 
     @staticmethod
-    async def set_embed_message(gid: int, name: str, message_id: int):
-        async with _lock:
+    async def atomic_embed_register(
+        gid: int,
+        name: str,
+        message_id: int,
+        reaction_data: dict | None = None
+    ):
+        """
+        SINGLE SOURCE OF TRUTH TRANSACTION
+        - bind embed_name → message_id
+        - optionally sync reaction config
+        """
+
+        async with _tx_lock:
 
             def op(cache):
                 gid_s = str(gid)
+                mid_s = str(message_id)
+
+                # embed mapping
                 cache["runtime"]["embed_name_to_message"].setdefault(gid_s, {})
-                cache["runtime"]["embed_name_to_message"][gid_s][name] = str(message_id)
+                cache["runtime"]["embed_name_to_message"][gid_s][name] = mid_s
+
+                # optional reaction sync
+                if reaction_data:
+                    cache["reactions"][mid_s] = reaction_data
+                    cache["runtime"]["reaction_cache"][mid_s] = reaction_data
 
             _write(op)
 
     @staticmethod
     async def get_embed_message(gid: int, name: str):
         cache = _get()
+
         return (
             cache["runtime"]["embed_name_to_message"]
             .get(str(gid), {})
             .get(name)
         )
 
-    # =====================
+    # =========================
     # REACTIONS
-    # =====================
+    # =========================
 
     @staticmethod
     async def set_reaction(mid: int, data: dict):
@@ -145,9 +173,9 @@ class State:
 
             _write(op)
 
-    # =====================
-    # UI STATE
-    # =====================
+    # =========================
+    # UI
+    # =========================
 
     @staticmethod
     async def set_ui(key: str, data: dict):
@@ -172,9 +200,9 @@ class State:
 
             _write(op)
 
-    # =====================
+    # =========================
     # RUNTIME
-    # =====================
+    # =========================
 
     @staticmethod
     async def set_rt(key: str, data: dict):
@@ -203,9 +231,9 @@ class State:
 
             _write(op)
 
-    # =====================
+    # =========================
     # RESYNC
-    # =====================
+    # =========================
 
     @staticmethod
     async def resync():
