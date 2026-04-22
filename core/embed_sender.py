@@ -202,10 +202,11 @@ async def send_embed(
             message = await destination.send(embed=embed)
 
         # =========================
-        # 🔥 CRITICAL FIX: BIND NAME → MESSAGE
+        # 🔥 FIX: MAP NAME → MESSAGE ID (SAFE UI LAYER)
         # =========================
         if embed_name:
-            await State.set_embed_message(guild.id, embed_name, message.id)
+            key = f"{guild.id}:{embed_name}"
+            await State.set_ui(key, {"message_id": message.id})
 
         # =========================
         # REACTION RESTORE
@@ -220,14 +221,21 @@ async def send_embed(
 
             data = load_reaction_data()
 
-            # 🔥 FIX: resolve via NAME FIRST
-            state_msg_id = await State.get_embed_message(guild.id, embed_name) if embed_name else None
-
             config = None
 
-            if state_msg_id:
-                config = data.get(str(state_msg_id)) or await State.get_reaction(int(state_msg_id))
-            else:
+            # =========================
+            # 🔥 FIX: RESOLVE BY NAME FIRST
+            # =========================
+            if embed_name:
+                key = f"{guild.id}:{embed_name}"
+                ui = await State.get_ui(key)
+
+                if ui and "message_id" in ui:
+                    mapped_id = str(ui["message_id"])
+                    config = data.get(mapped_id)
+
+            # fallback
+            if not config:
                 config = data.get(msg_id)
 
             if isinstance(config, dict) and "groups" in config:
