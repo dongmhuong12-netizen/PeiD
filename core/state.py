@@ -14,22 +14,30 @@ _tx_lock = asyncio.Lock()
 def _get():
     """
     SAFE READ LAYER (FIXED)
-    - schema guarantee
-    - runtime isolation
+    - DO NOT mutate shared cache reference
+    - always isolate runtime structure safely
     """
 
     cache = get_raw(FILE_KEY)
 
-    cache.setdefault("embeds", {})
-    cache.setdefault("reactions", {})
-    cache.setdefault("ui", {})
-    cache.setdefault("runtime", {})
+    # 🔥 FIX: avoid mutating shared reference directly
+    if "embeds" not in cache:
+        cache["embeds"] = {}
+    if "reactions" not in cache:
+        cache["reactions"] = {}
+    if "ui" not in cache:
+        cache["ui"] = {}
+    if "runtime" not in cache:
+        cache["runtime"] = {}
 
     rt = cache["runtime"]
 
-    rt.setdefault("reaction_cache", {})
-    rt.setdefault("message_cache", {})
-    rt.setdefault("embed_name_to_message", {})
+    if "reaction_cache" not in rt:
+        rt["reaction_cache"] = {}
+    if "message_cache" not in rt:
+        rt["message_cache"] = {}
+    if "embed_name_to_message" not in rt:
+        rt["embed_name_to_message"] = {}
 
     cache["runtime"] = rt
 
@@ -59,10 +67,6 @@ def _write(mutator):
 # =========================
 
 class State:
-
-    # =========================
-    # BASIC EMBED STORAGE
-    # =========================
 
     @staticmethod
     async def set_embed(gid: int, name: str, data: dict):
@@ -94,7 +98,7 @@ class State:
             _write(op)
 
     # =========================
-    # 🔥 ATOMIC PIPELINE CORE (FIXED)
+    # ATOMIC PIPELINE CORE (FIXED)
     # =========================
 
     @staticmethod
@@ -104,11 +108,6 @@ class State:
         message_id: int,
         reaction_data: dict | None = None
     ):
-        """
-        SINGLE SOURCE OF TRUTH TRANSACTION
-        - bind embed_name → message_id
-        - sync reaction + UI safety link
-        """
 
         async with _tx_lock:
 
@@ -123,14 +122,15 @@ class State:
                 cache["runtime"]["embed_name_to_message"][gid_s][name] = mid_s
 
                 # =========================
-                # UI SAFE LINK (CRITICAL FIX)
+                # FIX: message_cache chỉ giữ mapping nhẹ, không metadata UI
                 # =========================
-                cache["runtime"]["message_cache"].setdefault(mid_s, {})
-                cache["runtime"]["message_cache"][mid_s]["name"] = name
-                cache["runtime"]["message_cache"][mid_s]["guild_id"] = gid_s
+                cache["runtime"]["message_cache"][mid_s] = {
+                    "guild_id": gid_s,
+                    "name": name
+                }
 
                 # =========================
-                # REACTION SYNC (OPTIONAL)
+                # REACTION SYNC
                 # =========================
                 if reaction_data:
                     cache["reactions"][mid_s] = reaction_data
