@@ -87,6 +87,18 @@ def _init_key(key: str):
 def load(key: str) -> dict:
     """
     RAM-first cache read
+    IMPORTANT: return COPY to prevent external mutation bypassing dirty tracking
+    """
+    if key not in _cache:
+        _init_key(key)
+
+    # 🔥 FIX C1: chống silent mutation bypass flush system
+    return _cache[key].copy()
+
+
+def get_raw(key: str) -> dict:
+    """
+    Direct reference (internal use only)
     """
     if key not in _cache:
         _init_key(key)
@@ -98,6 +110,20 @@ def mark_dirty(key: str):
     """
     Mark cache as dirty for flush worker
     """
+    _dirty_keys.add(key)
+    _ensure_loop()
+
+
+def update(key: str, value: dict):
+    """
+    SAFE WRITE API (C1 CORE FIX)
+    - replaces manual cache mutation
+    - guarantees dirty tracking
+    """
+    if key not in _cache:
+        _init_key(key)
+
+    _cache[key] = value
     _dirty_keys.add(key)
     _ensure_loop()
 
