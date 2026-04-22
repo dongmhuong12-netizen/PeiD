@@ -26,6 +26,9 @@ def _get():
     cache["runtime"].setdefault("reaction_cache", {})
     cache["runtime"].setdefault("message_cache", {})
 
+    # 🔥 FIX: name-based mapping (CRITICAL FOR EMBED LOOKUP)
+    cache["runtime"].setdefault("embed_name_to_message", {})
+
     return cache
 
 
@@ -38,16 +41,10 @@ def _commit():
 
 
 # =========================
-# SAFE WRITE HELPER (C1 CORE FIX)
+# SAFE WRITE HELPER
 # =========================
 
 def _write(mutator):
-    """
-    Atomic mutation wrapper
-    ensures:
-    - no partial state corruption
-    - safe multi-task update
-    """
     cache = _get()
     mutator(cache)
     _commit()
@@ -87,6 +84,30 @@ class State:
                     cache["embeds"].pop(gid_s, None)
 
             _write(op)
+
+    # =====================
+    # 🔥 FIX: EMBED NAME → MESSAGE ID MAPPING
+    # =====================
+
+    @staticmethod
+    async def set_embed_message(gid: int, name: str, message_id: int):
+        async with _lock:
+
+            def op(cache):
+                gid_s = str(gid)
+                cache["runtime"]["embed_name_to_message"].setdefault(gid_s, {})
+                cache["runtime"]["embed_name_to_message"][gid_s][name] = str(message_id)
+
+            _write(op)
+
+    @staticmethod
+    async def get_embed_message(gid: int, name: str):
+        cache = _get()
+        return (
+            cache["runtime"]["embed_name_to_message"]
+            .get(str(gid), {})
+            .get(name)
+        )
 
     # =====================
     # REACTIONS
@@ -176,7 +197,8 @@ class State:
             def op(cache):
                 cache["runtime"] = {
                     "reaction_cache": {},
-                    "message_cache": {}
+                    "message_cache": {},
+                    "embed_name_to_message": {}
                 }
 
             _write(op)
@@ -187,16 +209,9 @@ class State:
 
     @staticmethod
     async def resync():
-        """
-        cache_manager already handles reload + flush
-        keep for interface compatibility
-        """
         return True
 
     @staticmethod
     async def force_resync():
-        """
-        force reload from disk into memory layer
-        """
         load(FILE_KEY)
         return True
