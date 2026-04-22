@@ -1,3 +1,4 @@
+# core/embed_ui.py
 import discord
 import asyncio
 import copy
@@ -18,21 +19,19 @@ async def load_reaction_data():
 async def save_reaction_data(data):
     """
     FIX:
-    - tránh mutate shared reference từ cache_manager
-    - đảm bảo atomic replace snapshot
+    - remove deepcopy (cause stale + race + overhead)
+    - direct cache replace via shared reference (cache_manager design)
+    - single source of truth
     """
 
     cache = load("reaction_roles")
 
-    # SAFE COPY (FIX CRASH / RACE CONDITION)
-    new_cache = copy.deepcopy(cache)
-
-    new_cache.clear()
-    new_cache.update(data)
-
-    # replace reference content safely
+    if cache is None:
+        cache = {}
+    
+    # atomic replace (safe for cache_manager RAM model)
     cache.clear()
-    cache.update(new_cache)
+    cache.update(data)
 
     mark_dirty("reaction_roles")
 
@@ -117,7 +116,7 @@ class EditImageModal(discord.ui.Modal, title="Set Image URL"):
 
 
 # =========================
-# REACTION ROLE MODAL (FIXED SCHEMA + SAFE FORMAT)
+# REACTION ROLE MODAL (FIXED)
 # =========================
 
 class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
@@ -170,15 +169,13 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
         if mode not in ["single", "multi"]:
             errors.append("Mode sai")
 
-        # FIX: flatten roles (no nested list)
         parsed_roles = []
-
         for r in roles_raw:
             role = parse_role(r)
             if not role:
                 errors.append(f"Role lỗi: {r}")
             else:
-                parsed_roles.append(str(role.id))  # FIXED
+                parsed_roles.append(str(role.id))
 
         if errors:
             return await interaction.response.send_message(
@@ -196,24 +193,26 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
             "groups": []
         })
 
-        group = {
+        data[key]["groups"].append({
             "mode": mode,
             "emojis": emojis,
             "roles": parsed_roles
-        }
-
-        data[key]["groups"].append(group)
+        })
 
         await save_reaction_data(data)
 
-        # SAFE SYNC
+        # SAFE SYNC (FIX interaction.message fallback crash)
         try:
-            msg = self.view.message
-            if not msg:
-                msg = await interaction.channel.fetch_message(interaction.message.id)
+            msg = getattr(self.view, "message", None)
 
-            for e in emojis:
-                await msg.add_reaction(e)
+            if not msg:
+                channel = interaction.channel
+                if channel:
+                    msg = await channel.fetch_message(interaction.message.id)
+
+            if msg:
+                for e in emojis:
+                    await msg.add_reaction(e)
 
         except:
             pass
@@ -269,10 +268,7 @@ class EmbedUIView(discord.ui.View):
         else:
             await interaction.response.edit_message(embed=embed, view=self)
 
-    # =========================
     # BUTTONS (UNCHANGED)
-    # =========================
-
     @discord.ui.button(label="Edit Title", style=discord.ButtonStyle.secondary)
     async def edit_title(self, interaction, button):
         await interaction.response.send_modal(EditTitleModal(self))
