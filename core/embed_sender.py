@@ -184,7 +184,8 @@ async def send_embed(
         if isinstance(destination, discord.Interaction):
 
             if destination.response.is_done():
-                message = await destination.followup.send(embed=embed)
+                await destination.followup.send(embed=embed)
+                message = await destination.original_response()
             else:
                 await destination.response.send_message(embed=embed)
                 message = await destination.original_response()
@@ -201,16 +202,17 @@ async def send_embed(
             message = await destination.send(embed=embed)
 
         # =========================
-        # FIX 1: MAP NAME → MESSAGE ID (SOURCE OF TRUTH)
+        # FIX 1: STATE REGISTER (CRITICAL - MUST USE ATOMIC)
         # =========================
         if embed_name:
-            await State.set_ui(f"{guild.id}:{embed_name}", {
-                "message_id": message.id,
-                "channel_id": message.channel.id
-            })
+            await State.atomic_embed_register(
+                guild.id,
+                embed_name,
+                message.id
+            )
 
         # =========================
-        # REACTION RESTORE (FIXED RESOLVE FLOW)
+        # REACTION RESTORE
         # =========================
 
         await _load_cache()
@@ -224,23 +226,15 @@ async def send_embed(
 
             config = None
 
-            # =========================
-            # FIX 2: PRIORITY RESOLVE BY EMBED NAME MAP
-            # =========================
+            # FIX: resolve via STATE mapping first
             if embed_name:
-                ui = await State.get_ui(f"{guild.id}:{embed_name}")
+                mapped = await State.get_embed_message(guild.id, embed_name)
+                if mapped:
+                    config = data.get(str(mapped))
 
-                if ui and ui.get("message_id"):
-                    mapped_id = str(ui["message_id"])
-                    config = data.get(mapped_id)
-
-            # fallback raw message id
             if not config:
                 config = data.get(msg_id)
 
-            # =========================
-            # APPLY REACTIONS
-            # =========================
             if isinstance(config, dict) and "groups" in config:
 
                 for group in config.get("groups", []):
