@@ -211,35 +211,37 @@ async def send_embed(
             message = await destination.send(embed=embed)
 
         # =========================
-        # REACTION RESTORE (SAFE + NO DUP)
+        # REACTION RESTORE + INIT (FIXED, KHÔNG MẤT LOGIC)
         # =========================
 
-        if embed_name:
+        await _load_cache()
 
-            await _load_cache()
+        data = _reaction_cache or load_reaction_data()
+        msg_id = str(message.id)
 
-            data = _reaction_cache or load_reaction_data()
+        lock = _restore_lock_map[msg_id]
 
-            key = f"{guild.id}::embed::{embed_name}"
-            old_config = data.get(key)
+        async with lock:
 
-            if isinstance(old_config, dict) and "groups" in old_config:
+            config = data.get(msg_id)
 
-                lock = _restore_lock_map[str(message.id)]
+            # CASE 1: đã có config → restore reaction
+            if isinstance(config, dict) and "groups" in config:
 
-                async with lock:
+                for group in config.get("groups", []):
+                    for emoji in group.get("emojis", []):
+                        await _enqueue_reaction(message, emoji)
 
-                    config = copy.deepcopy(old_config)
+            # CASE 2: chưa có → tạo mới (giữ logic cũ)
+            else:
+                data[msg_id] = {
+                    "guild_id": guild.id,
+                    "channel_id": message.channel.id,
+                    "embed_name": embed_name,
+                    "groups": []
+                }
 
-                    for group in config.get("groups", []):
-                        for emoji in group.get("emojis", []):
-                            await _enqueue_reaction(message, emoji)
-
-                    config["guild_id"] = guild.id
-                    config["embed_name"] = embed_name
-
-                    data[str(message.id)] = config
-                    await save_reaction_data(data)
+                await save_reaction_data(data)
 
         return True
 
