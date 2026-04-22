@@ -8,6 +8,9 @@ from typing import Union
 from collections import defaultdict, deque
 from core.variable_engine import apply_variables
 
+# 🔥 ADD
+from core.state import State
+
 DATA_FILE = "data/reaction_roles.json"
 
 file_lock = asyncio.Lock()
@@ -211,7 +214,7 @@ async def send_embed(
             message = await destination.send(embed=embed)
 
         # =========================
-        # REACTION RESTORE + INIT (FIXED, KHÔNG MẤT LOGIC)
+        # REACTION RESTORE + INIT (DUAL LAYER, KHÔNG MẤT LOGIC)
         # =========================
 
         await _load_cache()
@@ -223,7 +226,16 @@ async def send_embed(
 
         async with lock:
 
-            config = data.get(msg_id)
+            # 🔥 NEW: ưu tiên State
+            state_config = await State.get_reaction(message.id)
+
+            config = None
+
+            if isinstance(state_config, dict) and "groups" in state_config:
+                config = state_config
+            else:
+                # 🔥 fallback JSON (GIỮ NGUYÊN LOGIC CŨ)
+                config = data.get(msg_id)
 
             # CASE 1: đã có config → restore reaction
             if isinstance(config, dict) and "groups" in config:
@@ -232,16 +244,25 @@ async def send_embed(
                     for emoji in group.get("emojis", []):
                         await _enqueue_reaction(message, emoji)
 
-            # CASE 2: chưa có → tạo mới (giữ logic cũ)
+            # CASE 2: chưa có → tạo mới (GIỮ LOGIC + ADD STATE)
             else:
-                data[msg_id] = {
+                new_config = {
                     "guild_id": guild.id,
                     "channel_id": message.channel.id,
                     "embed_name": embed_name,
                     "groups": []
                 }
 
+                # 🔥 save JSON (LOGIC CŨ)
+                data[msg_id] = new_config
                 await save_reaction_data(data)
+
+                # 🔥 save State (NEW)
+                await State.set_reaction(message.id, new_config)
+
+            # 🔥 SYNC: nếu có JSON nhưng chưa có State → bổ sung
+            if isinstance(config, dict) and not state_config:
+                await State.set_reaction(message.id, config)
 
         return True
 
