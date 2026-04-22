@@ -123,7 +123,7 @@ def _build_embed(embed_copy: dict):
 
 
 # =========================
-# SEND EMBED CORE
+# SEND EMBED CORE (FIXED FLOW)
 # =========================
 
 async def send_embed(
@@ -177,6 +177,7 @@ async def send_embed(
         return False
 
     try:
+
         # =========================
         # SEND MESSAGE
         # =========================
@@ -202,8 +203,9 @@ async def send_embed(
             message = await destination.send(embed=embed)
 
         # =========================
-        # FIX 1: STATE REGISTER (CRITICAL - MUST USE ATOMIC)
+        # STATE REGISTER (SOURCE OF TRUTH)
         # =========================
+
         if embed_name:
             await State.atomic_embed_register(
                 guild.id,
@@ -212,7 +214,7 @@ async def send_embed(
             )
 
         # =========================
-        # REACTION RESTORE
+        # REACTION RESTORE FIXED FLOW
         # =========================
 
         await _load_cache()
@@ -226,15 +228,17 @@ async def send_embed(
 
             config = None
 
-            # FIX: resolve via STATE mapping first
+            # PRIORITY 1: STATE MAP
             if embed_name:
-                mapped = await State.get_embed_message(guild.id, embed_name)
-                if mapped:
-                    config = data.get(str(mapped))
+                mapped_id = await State.get_embed_message(guild.id, embed_name)
+                if mapped_id:
+                    config = data.get(str(mapped_id))
 
+            # PRIORITY 2: MESSAGE ID
             if not config:
                 config = data.get(msg_id)
 
+            # APPLY
             if isinstance(config, dict) and "groups" in config:
 
                 for group in config.get("groups", []):
