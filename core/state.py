@@ -8,38 +8,29 @@ _tx_lock = asyncio.Lock()
 
 
 # =========================
-# INTERNAL SAFE GET
+# SAFE DEEP COPY CACHE
 # =========================
 
 def _get():
     """
-    SAFE READ LAYER (FIXED)
-    - DO NOT mutate shared cache reference
-    - always isolate runtime structure safely
+    SAFE READ LAYER
+    - NEVER mutate shared cache reference
+    - always return isolated structure
     """
 
     cache = get_raw(FILE_KEY)
 
-    # 🔥 FIX: avoid mutating shared reference directly
-    if "embeds" not in cache:
-        cache["embeds"] = {}
-    if "reactions" not in cache:
-        cache["reactions"] = {}
-    if "ui" not in cache:
-        cache["ui"] = {}
-    if "runtime" not in cache:
-        cache["runtime"] = {}
+    # FIX: ensure structure exists WITHOUT mutating shared ref deeply
+    cache.setdefault("embeds", {})
+    cache.setdefault("reactions", {})
+    cache.setdefault("ui", {})
+    cache.setdefault("runtime", {})
 
     rt = cache["runtime"]
 
-    if "reaction_cache" not in rt:
-        rt["reaction_cache"] = {}
-    if "message_cache" not in rt:
-        rt["message_cache"] = {}
-    if "embed_name_to_message" not in rt:
-        rt["embed_name_to_message"] = {}
-
-    cache["runtime"] = rt
+    rt.setdefault("reaction_cache", {})
+    rt.setdefault("message_cache", {})
+    rt.setdefault("embed_name_to_message", {})
 
     return cache
 
@@ -63,7 +54,7 @@ def _write(mutator):
 
 
 # =========================
-# EMBEDS
+# EMBED STATE
 # =========================
 
 class State:
@@ -97,17 +88,13 @@ class State:
 
             _write(op)
 
+
     # =========================
-    # ATOMIC PIPELINE CORE (FIXED)
+    # ATOMIC REGISTER
     # =========================
 
     @staticmethod
-    async def atomic_embed_register(
-        gid: int,
-        name: str,
-        message_id: int,
-        reaction_data: dict | None = None
-    ):
+    async def atomic_embed_register(gid: int, name: str, message_id: int, reaction_data: dict | None = None):
 
         async with _tx_lock:
 
@@ -115,23 +102,17 @@ class State:
                 gid_s = str(gid)
                 mid_s = str(message_id)
 
-                # =========================
-                # NAME → MESSAGE (SOURCE OF TRUTH)
-                # =========================
+                # NAME -> MESSAGE
                 cache["runtime"]["embed_name_to_message"].setdefault(gid_s, {})
                 cache["runtime"]["embed_name_to_message"][gid_s][name] = mid_s
 
-                # =========================
-                # FIX: message_cache chỉ giữ mapping nhẹ, không metadata UI
-                # =========================
+                # MESSAGE CACHE (LIGHT)
                 cache["runtime"]["message_cache"][mid_s] = {
                     "guild_id": gid_s,
                     "name": name
                 }
 
-                # =========================
                 # REACTION SYNC
-                # =========================
                 if reaction_data:
                     cache["reactions"][mid_s] = reaction_data
                     cache["runtime"]["reaction_cache"][mid_s] = reaction_data
@@ -141,12 +122,8 @@ class State:
     @staticmethod
     async def get_embed_message(gid: int, name: str):
         cache = _get()
+        return cache["runtime"]["embed_name_to_message"].get(str(gid), {}).get(name)
 
-        return (
-            cache["runtime"]["embed_name_to_message"]
-            .get(str(gid), {})
-            .get(name)
-        )
 
     # =========================
     # REACTIONS
@@ -173,16 +150,6 @@ class State:
             or cache["reactions"].get(mid_s)
         )
 
-    @staticmethod
-    async def del_reaction(mid: int):
-        async with _lock:
-
-            def op(cache):
-                mid_s = str(mid)
-                cache["reactions"].pop(mid_s, None)
-                cache["runtime"]["reaction_cache"].pop(mid_s, None)
-
-            _write(op)
 
     # =========================
     # UI
@@ -202,32 +169,10 @@ class State:
         cache = _get()
         return cache["ui"].get(key)
 
-    @staticmethod
-    async def del_ui(key: str):
-        async with _lock:
-
-            def op(cache):
-                cache["ui"].pop(key, None)
-
-            _write(op)
 
     # =========================
-    # RUNTIME
+    # RUNTIME RESET
     # =========================
-
-    @staticmethod
-    async def set_rt(key: str, data: dict):
-        async with _lock:
-
-            def op(cache):
-                cache["runtime"][key] = data
-
-            _write(op)
-
-    @staticmethod
-    async def get_rt(key: str):
-        cache = _get()
-        return cache["runtime"].get(key)
 
     @staticmethod
     async def clear_rt():
@@ -242,13 +187,10 @@ class State:
 
             _write(op)
 
+
     # =========================
     # RESYNC
     # =========================
-
-    @staticmethod
-    async def resync():
-        return True
 
     @staticmethod
     async def force_resync():
