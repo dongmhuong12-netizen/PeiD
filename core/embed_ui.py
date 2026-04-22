@@ -1,3 +1,4 @@
+# core/embed_ui.py
 import discord
 from core.state import State
 from core.variable_engine import apply_variables
@@ -73,7 +74,7 @@ class EditColorModal(discord.ui.Modal, title="Edit Color (HEX)"):
             await self.view.update_message(interaction)
         except ValueError:
             await interaction.response.send_message(
-                "Mã màu không hợp lệ.",
+                "Mã màu không hợp lệ (color).",
                 ephemeral=True
             )
 
@@ -143,21 +144,9 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
             raw_roles = [x.strip() for x in self.roles.value.split(",") if x.strip()]
             mode = self.mode.value.lower().strip()
 
-            if len(raw_emojis) != len(raw_roles):
-                return await interaction.response.send_message("Emoji và role không khớp.", ephemeral=True)
-
-            if mode not in ["single", "multi"]:
-                return await interaction.response.send_message("Mode phải là single hoặc multi.", ephemeral=True)
-
-            parsed_roles = []
-
-            for r in raw_roles:
-                role_obj = parse_role(r)
-                if not role_obj:
-                    return await interaction.response.send_message(f"Role `{r}` không hợp lệ.", ephemeral=True)
-                parsed_roles.append([str(role_obj.id)])
-
-            parsed_emojis = raw_emojis
+            # =========================
+            # 🔥 SAVE TRƯỚC (ANTI MẤT DATA)
+            # =========================
 
             guild_id = str(guild.id)
             embed_name = self.view.name
@@ -172,18 +161,64 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
                     "groups": []
                 }
 
+            # temp save input raw (để không mất)
+            temp_group = {
+                "mode": mode,
+                "emojis": raw_emojis,
+                "roles": raw_roles
+            }
+
+            data[key]["last_input"] = temp_group
+            await save_reaction_data(data)
+
+            # =========================
+            # 🔥 VALIDATE SAU SAVE
+            # =========================
+
+            errors = []
+
+            if len(raw_emojis) != len(raw_roles):
+                errors.append("Emoji và role không khớp")
+
+            if mode not in ["single", "multi"]:
+                errors.append("Mode phải là single hoặc multi")
+
+            parsed_roles = []
+
+            for r in raw_roles:
+                role_obj = parse_role(r)
+                if not role_obj:
+                    errors.append(f"Role sai: {r}")
+                else:
+                    parsed_roles.append([str(role_obj.id)])
+
+            if errors:
+                return await interaction.response.send_message(
+                    "❌ Lỗi:\n- " + "\n- ".join(errors),
+                    ephemeral=True
+                )
+
+            # =========================
+            # 🔥 SAVE CHÍNH THỨC
+            # =========================
+
             new_group = {
                 "mode": mode,
-                "emojis": parsed_emojis,
+                "emojis": raw_emojis,
                 "roles": parsed_roles
             }
 
             if new_group not in data[key]["groups"]:
                 data[key]["groups"].append(new_group)
 
+            data[key].pop("last_input", None)
+
             await save_reaction_data(data)
 
-            await interaction.response.send_message("Reaction role lưu thành công.", ephemeral=True)
+            await interaction.response.send_message(
+                "Reaction role lưu thành công.",
+                ephemeral=True
+            )
 
         except Exception as e:
             print("ReactionRoleModal ERROR:", e)
@@ -242,10 +277,6 @@ class EmbedUIView(discord.ui.View):
         else:
             await interaction.response.edit_message(embed=embed, view=self)
 
-    # =========================
-    # BUTTONS (UI ORIGINAL)
-    # =========================
-
     @discord.ui.button(label="Edit Title", style=discord.ButtonStyle.secondary)
     async def edit_title(self, interaction, button):
         await interaction.response.send_modal(EditTitleModal(self))
@@ -265,10 +296,6 @@ class EmbedUIView(discord.ui.View):
     @discord.ui.button(label="Reaction Roles", style=discord.ButtonStyle.secondary)
     async def reaction_roles(self, interaction, button):
         await interaction.response.send_modal(ReactionRoleModal(self))
-
-    # =========================
-    # SAVE / DELETE (RESTORED CORE LOGIC)
-    # =========================
 
     @discord.ui.button(label="Save Embed", style=discord.ButtonStyle.success)
     async def save_embed(self, interaction, button):
