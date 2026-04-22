@@ -94,7 +94,7 @@ class State:
             _write(op)
 
     # =========================
-    # 🔥 ATOMIC PIPELINE CORE
+    # 🔥 ATOMIC PIPELINE CORE (FIXED)
     # =========================
 
     @staticmethod
@@ -107,7 +107,7 @@ class State:
         """
         SINGLE SOURCE OF TRUTH TRANSACTION
         - bind embed_name → message_id
-        - optionally sync reaction config
+        - sync reaction + UI safety link
         """
 
         async with _tx_lock:
@@ -116,11 +116,22 @@ class State:
                 gid_s = str(gid)
                 mid_s = str(message_id)
 
-                # embed mapping
+                # =========================
+                # NAME → MESSAGE (SOURCE OF TRUTH)
+                # =========================
                 cache["runtime"]["embed_name_to_message"].setdefault(gid_s, {})
                 cache["runtime"]["embed_name_to_message"][gid_s][name] = mid_s
 
-                # optional reaction sync
+                # =========================
+                # UI SAFE LINK (CRITICAL FIX)
+                # =========================
+                cache["runtime"]["message_cache"].setdefault(mid_s, {})
+                cache["runtime"]["message_cache"][mid_s]["name"] = name
+                cache["runtime"]["message_cache"][mid_s]["guild_id"] = gid_s
+
+                # =========================
+                # REACTION SYNC (OPTIONAL)
+                # =========================
                 if reaction_data:
                     cache["reactions"][mid_s] = reaction_data
                     cache["runtime"]["reaction_cache"][mid_s] = reaction_data
