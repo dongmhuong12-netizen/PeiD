@@ -6,7 +6,6 @@ import asyncio
 from typing import Union
 from collections import defaultdict, deque
 from core.variable_engine import apply_variables
-
 from core.state import State
 
 DATA_FILE = "data/reaction_roles.json"
@@ -202,14 +201,16 @@ async def send_embed(
             message = await destination.send(embed=embed)
 
         # =========================
-        # 🔥 FIX: MAP NAME → MESSAGE ID (SAFE UI LAYER)
+        # FIX 1: MAP NAME → MESSAGE ID (SOURCE OF TRUTH)
         # =========================
         if embed_name:
-            key = f"{guild.id}:{embed_name}"
-            await State.set_ui(key, {"message_id": message.id})
+            await State.set_ui(f"{guild.id}:{embed_name}", {
+                "message_id": message.id,
+                "channel_id": message.channel.id
+            })
 
         # =========================
-        # REACTION RESTORE
+        # REACTION RESTORE (FIXED RESOLVE FLOW)
         # =========================
 
         await _load_cache()
@@ -224,20 +225,22 @@ async def send_embed(
             config = None
 
             # =========================
-            # 🔥 FIX: RESOLVE BY NAME FIRST
+            # FIX 2: PRIORITY RESOLVE BY EMBED NAME MAP
             # =========================
             if embed_name:
-                key = f"{guild.id}:{embed_name}"
-                ui = await State.get_ui(key)
+                ui = await State.get_ui(f"{guild.id}:{embed_name}")
 
-                if ui and "message_id" in ui:
+                if ui and ui.get("message_id"):
                     mapped_id = str(ui["message_id"])
                     config = data.get(mapped_id)
 
-            # fallback
+            # fallback raw message id
             if not config:
                 config = data.get(msg_id)
 
+            # =========================
+            # APPLY REACTIONS
+            # =========================
             if isinstance(config, dict) and "groups" in config:
 
                 for group in config.get("groups", []):
