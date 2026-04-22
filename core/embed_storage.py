@@ -1,6 +1,19 @@
 from core.cache_manager import load, mark_dirty
+import copy
 
 FILE_KEY = "embeds"
+
+
+# =========================
+# SAFE CACHE ACCESS
+# =========================
+
+def _get_cache():
+    cache = load(FILE_KEY)
+
+    if not isinstance(cache, dict):
+        cache = {}
+    return cache
 
 
 # =========================
@@ -14,14 +27,16 @@ def save_embed(guild_id, name=None, data=None):
         name = guild_id
         guild_id = "global"
 
-    cache = load(FILE_KEY)
+    cache = _get_cache()
 
     guild_id = str(guild_id)
 
-    if guild_id not in cache:
+    # 🔥 FIX: isolate guild bucket safely
+    if guild_id not in cache or not isinstance(cache[guild_id], dict):
         cache[guild_id] = {}
 
-    cache[guild_id][name] = data
+    # 🔥 FIX: deepcopy to avoid shared mutation bug
+    cache[guild_id][name] = copy.deepcopy(data)
 
     mark_dirty(FILE_KEY)
 
@@ -35,9 +50,14 @@ def load_embed(guild_id, name=None):
     if name is None:
         return None
 
-    cache = load(FILE_KEY)
+    cache = _get_cache()
 
-    return cache.get(str(guild_id), {}).get(name)
+    guild_data = cache.get(str(guild_id), {})
+
+    if not isinstance(guild_data, dict):
+        return None
+
+    return guild_data.get(name)
 
 
 # =========================
@@ -49,13 +69,13 @@ def delete_embed(guild_id, name=None):
     if name is None:
         return False
 
-    cache = load(FILE_KEY)
+    cache = _get_cache()
 
     guild_id = str(guild_id)
 
     guild_data = cache.get(guild_id)
 
-    if not guild_data:
+    if not isinstance(guild_data, dict):
         return False
 
     if name not in guild_data:
@@ -76,9 +96,14 @@ def delete_embed(guild_id, name=None):
 
 def get_all_embeds(guild_id):
 
-    cache = load(FILE_KEY)
+    cache = _get_cache()
 
-    return cache.get(str(guild_id), {})
+    guild_data = cache.get(str(guild_id), {})
+
+    if not isinstance(guild_data, dict):
+        return {}
+
+    return guild_data
 
 
 # =========================
@@ -90,7 +115,7 @@ def get_all_embed_names(guild_id=None):
     if guild_id is None:
         return []
 
-    cache = load(FILE_KEY)
+    cache = _get_cache()
 
     guild_data = cache.get(str(guild_id), {})
 
