@@ -1,4 +1,3 @@
-# systems/reaction_role.py
 import discord
 from discord.ext import commands
 import asyncio
@@ -44,7 +43,7 @@ async def _mark_event(key: str):
 
 
 # =========================
-# NORMALIZER (HARDENED)
+# NORMALIZER
 # =========================
 
 def _normalize_emoji(e) -> str:
@@ -55,6 +54,18 @@ def _normalize_emoji(e) -> str:
 
 def _emoji_key(payload_emoji) -> str:
     return _normalize_emoji(payload_emoji)
+
+
+def _normalize_roles(roles):
+    result = []
+
+    if isinstance(roles, list):
+        for r in roles:
+            result.append(str(r))
+    else:
+        result = [str(roles)]
+
+    return result
 
 
 # =========================
@@ -75,7 +86,7 @@ class ReactionRole(commands.Cog):
         self._cache_limit = 200
 
     # =========================
-    # REFRESH (SAFE)
+    # REFRESH
     # =========================
 
     def _refresh(self):
@@ -92,7 +103,7 @@ class ReactionRole(commands.Cog):
         print("ReactionRole SAFE PATCH LOADED")
 
     # =========================
-    # CACHE BUILD (FIXED TYPE SAFETY)
+    # CACHE BUILD (FIXED)
     # =========================
 
     def build_cache(self):
@@ -110,21 +121,16 @@ class ReactionRole(commands.Cog):
 
                 emojis = [_normalize_emoji(e) for e in group.get("emojis", [])]
 
-                roles = group.get("roles", [])
+                role_ids = _normalize_roles(group.get("roles", []))
 
-                # FIX: force flat list
-                if isinstance(roles, list):
-                    role_ids = roles
-                else:
-                    role_ids = [roles]
+                group_data = {
+                    "roles": role_ids,
+                    "mode": group.get("mode", "multi"),
+                    "group_emojis": emojis
+                }
 
                 for emoji in emojis:
-
-                    self.emoji_map[msg_id][emoji] = {
-                        "roles": role_ids,
-                        "mode": group.get("mode", "multi"),
-                        "group_emojis": emojis
-                    }
+                    self.emoji_map[msg_id][emoji] = group_data
 
                 for r in role_ids:
                     self.group_roles[msg_id].add(str(r))
@@ -230,7 +236,7 @@ class ReactionRole(commands.Cog):
                     if len(self.message_cache) >= self._cache_limit:
                         self.message_cache.clear()
 
-                    self.message_cache[str(payload.message_id)] = message
+                    self.message_cache[msg_id] = message
 
                 except:
                     self.data.pop(msg_id, None)
