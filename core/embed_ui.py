@@ -10,11 +10,13 @@ ACTIVE_EMBED_VIEWS = {}
 # =========================
 
 async def load_reaction_data():
-    data = await State.get_reaction_data()
+    # FIX: dùng runtime store (tránh gọi API không tồn tại)
+    data = await State.get_rt("reaction_ui_store")
     return data or {}
 
 async def save_reaction_data(data):
-    await State.set_reaction_data(data)
+    # FIX: lưu vào runtime store
+    await State.set_rt("reaction_ui_store", data)
 
 
 # =========================
@@ -161,7 +163,6 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
                     "groups": []
                 }
 
-            # temp save input raw (để không mất)
             temp_group = {
                 "mode": mode,
                 "emojis": raw_emojis,
@@ -246,7 +247,6 @@ class EmbedUIView(discord.ui.View):
             ACTIVE_EMBED_VIEWS[key] = []
 
         ACTIVE_EMBED_VIEWS[key].append(self)
-
         ACTIVE_EMBED_VIEWS[key] = ACTIVE_EMBED_VIEWS[key][-20:]
 
     def build_embed(self):
