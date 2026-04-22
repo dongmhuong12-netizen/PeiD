@@ -80,13 +80,14 @@ def _init_key(key: str):
 
 
 # =========================
-# PUBLIC API (FIXED)
+# PUBLIC API (FIXED CORE)
 # =========================
 
 def load(key: str) -> dict:
     """
     SAFE SNAPSHOT READ
-    - FIX: deep copy để chống shared mutation leak
+    FIX:
+    - vẫn deepcopy nhưng đảm bảo schema runtime không bị phá
     """
     if key not in _cache:
         _init_key(key)
@@ -96,10 +97,19 @@ def load(key: str) -> dict:
 
 def get_raw(key: str) -> dict:
     """
-    INTERNAL ONLY (MUTABLE REF)
+    INTERNAL MUTABLE ACCESS
+    FIX:
+    - đảm bảo init + schema luôn tồn tại (QUAN TRỌNG CHO STATE)
     """
     if key not in _cache:
         _init_key(key)
+
+    # 🔥 FIX CRITICAL: guarantee schema container tồn tại
+    if isinstance(_cache[key], dict):
+        _cache[key].setdefault("runtime", {})
+        _cache[key].setdefault("embeds", {})
+        _cache[key].setdefault("reactions", {})
+        _cache[key].setdefault("ui", {})
 
     return _cache[key]
 
@@ -111,12 +121,14 @@ def mark_dirty(key: str):
 
 def update(key: str, value: dict):
     """
-    ATOMIC REPLACE (NO MUTATION)
+    ATOMIC REPLACE SAFE
+    FIX:
+    - không deepcopy input nữa (tránh double-copy bug sender/state mismatch)
     """
     if key not in _cache:
         _init_key(key)
 
-    _cache[key] = copy.deepcopy(value)
+    _cache[key] = value
     _dirty_keys.add(key)
     _ensure_loop()
 
