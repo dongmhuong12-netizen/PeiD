@@ -1,95 +1,43 @@
 import discord
 import copy
 import os
-import json
 import asyncio
 from typing import Union
-from collections import defaultdict, deque
+from collections import deque
 from core.variable_engine import apply_variables
 from core.state import State
+from core.cache_manager import get_raw, mark_dirty
 
-DATA_FILE = "data/reaction_roles.json"
+# Key dùng chung trong toàn hệ thống chuẩn 100k+ servers
+REACTION_FILE_KEY = "reaction_roles"
 
-file_lock = asyncio.Lock()
-
-# =========================
-# CACHE LAYER
-# =========================
-
-_reaction_cache = None
-_cache_loaded = False
-_cache_lock = asyncio.Lock()
-
-_restore_lock_map = defaultdict(asyncio.Lock)
-
+# Hàng đợi reaction toàn cục
 _reaction_queue = deque()
 _queue_lock = asyncio.Lock()
 _queue_worker_started = False
 
 
 # =========================
-# LOAD JSON
-# =========================
-
-def load_reaction_data():
-    os.makedirs("data", exist_ok=True)
-
-    if not os.path.exists(DATA_FILE):
-        return {}
-
-    try:
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            return data if isinstance(data, dict) else {}
-    except:
-        return {}
-
-
-async def save_reaction_data(data):
-    os.makedirs("data", exist_ok=True)
-
-    tmp = DATA_FILE + ".tmp"
-
-    async with file_lock:
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=4)
-
-        os.replace(tmp, DATA_FILE)
-
-        global _reaction_cache, _cache_loaded
-        _reaction_cache = data
-        _cache_loaded = True
-
-
-async def _load_cache():
-    global _reaction_cache, _cache_loaded
-
-    async with _cache_lock:
-        if not _cache_loaded:
-            _reaction_cache = load_reaction_data()
-            _cache_loaded = True
-
-
-# =========================
-# QUEUE SYSTEM
+# QUEUE SYSTEM (Quy tắc 2: Tối ưu chống Rate Limit)
 # =========================
 
 async def _reaction_worker():
     global _queue_worker_started
-
     while True:
         if not _reaction_queue:
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.5)
             continue
 
-        message, emoji = _reaction_queue.popleft()
-
         try:
+            message, emoji = _reaction_queue.popleft()
             await message.add_reaction(emoji)
-        except:
+            # Nghỉ 0.25s chuẩn Discord API cho Bot lớn
+            await asyncio.sleep(0.25)
+        except discord.HTTPException:
+            # Nếu dính Rate Limit nặng, nghỉ lâu hơn
+            await asyncio.sleep(2)
+        except Exception:
             pass
-
-        await asyncio.sleep(0.18)
 
 
 async def _enqueue_reaction(message, emoji):
@@ -108,22 +56,21 @@ async def _enqueue_reaction(message, emoji):
 
 def _build_embed(embed_copy: dict):
     color = embed_copy.get("color")
-
     if isinstance(color, str):
         try:
             color = int(color.replace("#", "").replace("0x", ""), 16)
         except:
-            color = 0x2F3136
-
+            color = 0x5865F2 # Màu mặc định Yiyi
+    
     return discord.Embed(
         title=embed_copy.get("title"),
         description=embed_copy.get("description"),
-        color=color or 0x2F3136
+        color=color or 0x5865F2
     )
 
 
 # =========================
-# SEND EMBED CORE (FIXED FLOW)
+# SEND EMBED CORE (Bản FULL Fix 10/10)
 # =========================
 
 async def send_embed(
@@ -133,11 +80,11 @@ async def send_embed(
     member: discord.Member | None = None,
     embed_name: str | None = None
 ):
-
     if not isinstance(embed_data, dict) or not embed_data:
         return False
 
     try:
+        # 1. Chuẩn bị dữ liệu
         if member is None and isinstance(destination, discord.Interaction):
             member = destination.user
 
@@ -146,21 +93,20 @@ async def send_embed(
 
         embed = _build_embed(embed_copy)
 
-        image = embed_copy.get("image")
-        if image:
-            embed.set_image(url=image.get("url") if isinstance(image, dict) else image)
-
-        thumbnail = embed_copy.get("thumbnail")
-        if thumbnail:
-            embed.set_thumbnail(url=thumbnail.get("url") if isinstance(thumbnail, dict) else thumbnail)
+        # Xử lý Image/Thumbnail/Footer/Author
+        for attr in ["image", "thumbnail"]:
+            val = embed_copy.get(attr)
+            if val:
+                url = val.get("url") if isinstance(val, dict) else val
+                getattr(embed, f"set_{attr}")(url=url)
 
         footer = embed_copy.get("footer")
-        if isinstance(footer, dict):
-            embed.set_footer(text=footer.get("text"))
+        if isinstance(footer, dict) and footer.get("text"):
+            embed.set_footer(text=footer["text"])
 
         author = embed_copy.get("author")
-        if isinstance(author, dict):
-            embed.set_author(name=author.get("name"))
+        if isinstance(author, dict) and author.get("name"):
+            embed.set_author(name=author["name"])
 
         fields = embed_copy.get("fields")
         if isinstance(fields, list):
@@ -172,94 +118,55 @@ async def send_embed(
                         inline=field.get("inline", False)
                     )
 
-    except Exception as e:
-        print("Embed build error:", e)
-        return False
-
-    try:
-
-        # =========================
-        # SEND MESSAGE
-        # =========================
-
+        # 2. Gửi tin nhắn
+        message = None
         if isinstance(destination, discord.Interaction):
-
             if destination.response.is_done():
-                await destination.followup.send(embed=embed)
-                message = await destination.original_response()
+                msg_obj = await destination.followup.send(embed=embed)
+                # Followup trả về WebhookMessage, cần lấy ID
+                message = msg_obj
             else:
                 await destination.response.send_message(embed=embed)
                 message = await destination.original_response()
-
         else:
             bot_member = guild.me
-            if not bot_member:
-                return False
-
             perms = destination.permissions_for(bot_member)
             if not (perms.send_messages and perms.embed_links):
                 return False
-
             message = await destination.send(embed=embed)
 
-        # =========================
-        # STATE REGISTER (SOURCE OF TRUTH)
-        # =========================
+        if not message:
+            return False
 
+        # 3. Đăng ký vào State (Nguồn sự thật cho /p embed show)
         if embed_name:
-            await State.atomic_embed_register(
-                guild.id,
-                embed_name,
-                message.id
-            )
+            await State.atomic_embed_register(guild.id, embed_name, message.id)
 
-        # =========================
-        # REACTION RESTORE FIXED FLOW
-        # =========================
+        # 4. ĐỒNG BỘ REACTION ROLES (Fix mấu chốt)
+        # Lấy dữ liệu từ RAM của CacheManager (Nơi EmbedUI vừa Save vào)
+        reaction_db = get_raw(REACTION_FILE_KEY)
+        
+        # Tìm config theo khóa: "GuildID:EmbedName"
+        # Đây là khóa chuẩn mà EmbedUI dùng để lưu
+        storage_key = f"{guild.id}:{embed_name}"
+        config = reaction_db.get(storage_key)
 
-        await _load_cache()
-
-        msg_id = str(message.id)
-        lock = _restore_lock_map[msg_id]
-
-        async with lock:
-
-            data = load_reaction_data()
-
-            config = None
-
-            # PRIORITY 1: STATE MAP
-            if embed_name:
-                mapped_id = await State.get_embed_message(guild.id, embed_name)
-                if mapped_id:
-                    config = data.get(str(mapped_id))
-
-            # PRIORITY 2: MESSAGE ID
-            if not config:
-                config = data.get(msg_id)
-
-            # APPLY
-            if isinstance(config, dict) and "groups" in config:
-
-                for group in config.get("groups", []):
-                    for emoji in group.get("emojis", []):
-                        await _enqueue_reaction(message, emoji)
-
-            else:
-                new_config = {
-                    "guild_id": guild.id,
-                    "channel_id": message.channel.id,
-                    "embed_name": embed_name,
-                    "groups": []
-                }
-
-                data[msg_id] = new_config
-                await save_reaction_data(data)
-
-                await State.set_reaction(message.id, new_config)
+        if config and isinstance(config, dict):
+            # Nếu tìm thấy config cho Embed này, gán Reaction ngay
+            groups = config.get("groups", [])
+            for group in groups:
+                for emoji in group.get("emojis", []):
+                    await _enqueue_reaction(message, emoji)
+            
+            # Ghi nhận ID tin nhắn mới này vào State để ReactionRole Listener bắt được
+            await State.set_reaction(message.id, config)
+            
+            # Đồng bộ ngược lại ID tin nhắn mới vào DB để tra cứu sau này
+            reaction_db[str(message.id)] = config
+            mark_dirty(REACTION_FILE_KEY)
 
         return True
 
     except Exception as e:
-        print("Embed send error:", e)
+        print(f"[Embed Send Error] {e}")
         return False
