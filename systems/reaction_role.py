@@ -10,7 +10,7 @@ from core.state import State
 FILE_KEY = "reaction_roles"
 
 # =========================
-# EVENT DEDUP (UNCHANGED LOGIC)
+# EVENT DEDUP (GIỮ NGUYÊN LOGIC CỦA NGUYỆT)
 # =========================
 
 EVENT_TTL = 60
@@ -18,22 +18,18 @@ _event_log = deque()
 _event_set = set()
 _event_lock = asyncio.Lock()
 
-
 def _cleanup_events():
     now = time.time()
-
     while _event_log:
         if now - _event_log[0][0] <= EVENT_TTL:
             break
         _, key = _event_log.popleft()
         _event_set.discard(key)
 
-
 async def _is_duplicate(key: str):
     async with _event_lock:
         _cleanup_events()
         return key in _event_set
-
 
 async def _mark_event(key: str):
     async with _event_lock:
@@ -41,268 +37,138 @@ async def _mark_event(key: str):
         _event_set.add(key)
         _event_log.append((time.time(), key))
 
-
 # =========================
 # NORMALIZER
 # =========================
 
 def _normalize_emoji(e) -> str:
-    if isinstance(e, str):
-        return e.strip()
     return str(e).strip()
-
 
 def _emoji_key(payload_emoji) -> str:
     return _normalize_emoji(payload_emoji)
 
-
 def _normalize_roles(roles):
-    result = []
-
     if isinstance(roles, list):
-        for r in roles:
-            result.append(str(r))
-    else:
-        result = [str(roles)]
-
-    return result
-
+        return [str(r) for r in roles]
+    return [str(roles)]
 
 # =========================
-# CORE COG
+# CORE COG (BẢN FIX 10/10)
 # =========================
 
 class ReactionRole(commands.Cog):
-
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-
         self.data = load(FILE_KEY) or {}
-
-        self.emoji_map = {}
-        self.group_roles = {}
-
+        self.emoji_map = {} # Map Emoji -> {target_role, mode, all_roles_in_group}
         self.message_cache = {}
         self._cache_limit = 200
-
-    # =========================
-    # REFRESH
-    # =========================
 
     def _refresh(self):
         self.data = load(FILE_KEY) or {}
         self.build_cache()
-
-    # =========================
-    # READY
-    # =========================
 
     @commands.Cog.listener()
     async def on_ready(self):
         self._refresh()
         print("ReactionRole SAFE PATCH LOADED")
 
-    # =========================
-    # CACHE BUILD (FIXED)
-    # =========================
-
     def build_cache(self):
+        """Hệ thống ánh xạ Emoji tương ứng chính xác với Role theo vị trí (Index)"""
         self.emoji_map.clear()
-        self.group_roles.clear()
 
         for msg_id, config in self.data.items():
-
             msg_id = str(msg_id)
-
             self.emoji_map[msg_id] = {}
-            self.group_roles[msg_id] = set()
 
             for group in config.get("groups", []):
-
+                mode = group.get("mode", "multi")
                 emojis = [_normalize_emoji(e) for e in group.get("emojis", [])]
+                roles = _normalize_roles(group.get("roles", []))
 
-                role_ids = _normalize_roles(group.get("roles", []))
-
-                group_data = {
-                    "roles": role_ids,
-                    "mode": group.get("mode", "multi"),
-                    "group_emojis": emojis
-                }
-
-                for emoji in emojis:
-                    self.emoji_map[msg_id][emoji] = group_data
-
-                for r in role_ids:
-                    self.group_roles[msg_id].add(str(r))
-
-    # =========================
-    # ATTACH
-    # =========================
-
-    async def attach_reactions(self, message: discord.Message):
-        config = self.data.get(str(message.id))
-        if not config:
-            return
-
-        for group in config.get("groups", []):
-            for emoji in group.get("emojis", []):
-                try:
-                    await message.add_reaction(_normalize_emoji(emoji))
-                    await asyncio.sleep(0.1)
-                except:
-                    pass
-
-        self.message_cache[str(message.id)] = message
-
-    # =========================
-    # ADD REACTION
-    # =========================
+                # FIX MẤU CHỐT: Ghép cặp Emoji[i] với Role[i]
+                for i in range(len(emojis)):
+                    if i < len(roles):
+                        self.emoji_map[msg_id][emojis[i]] = {
+                            "target_role": roles[i],
+                            "mode": mode,
+                            "group_roles": roles, # Dùng để xóa role cũ nếu là Single
+                            "group_emojis": emojis # Dùng để gỡ reaction cũ nếu là Single
+                        }
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
+        if payload.user_id == self.bot.user.id: return
+        if not payload.guild_id: return
 
-        if payload.user_id == self.bot.user.id:
-            return
-
-        if not payload.guild_id:
-            return
-
-        key = f"{payload.user_id}:{payload.message_id}:{_emoji_key(payload.emoji)}"
-
-        if await _is_duplicate(key):
-            return
+        emoji = _emoji_key(payload.emoji)
+        key = f"{payload.user_id}:{payload.message_id}:{emoji}"
+        
+        if await _is_duplicate(key): return
         await _mark_event(key)
 
         msg_id = str(payload.message_id)
-
         if msg_id not in self.emoji_map:
             self._refresh()
-            if msg_id not in self.emoji_map:
-                return
+            if msg_id not in self.emoji_map: return
 
-        emoji = _emoji_key(payload.emoji)
-
-        if emoji not in self.emoji_map[msg_id]:
-            return
+        if emoji not in self.emoji_map[msg_id]: return
 
         guild = self.bot.get_guild(payload.guild_id)
-        if not guild:
-            return
-
         member = guild.get_member(payload.user_id)
-        if not member or member.bot:
-            return
-
-        bot_member = guild.me
-        if not bot_member:
-            return
+        if not member or member.bot: return
 
         data = self.emoji_map[msg_id][emoji]
+        target_role = guild.get_role(int(data["target_role"]))
+        if not target_role: return
 
-        roles_to_add = []
-
-        for rid in data["roles"]:
-            role = guild.get_role(int(rid))
-            if role and role < bot_member.top_role:
-                roles_to_add.append(role)
-
-        if not roles_to_add:
-            return
-
+        # XỬ LÝ MODE SINGLE (Fix lỗi gán nhầm/gán thừa)
         if data["mode"] == "single":
-
+            # 1. Gỡ tất cả role khác trong cùng group
             roles_to_remove = []
-
-            for rid in self.group_roles.get(msg_id, []):
-                role = guild.get_role(int(rid))
-
-                if role and role in member.roles and role < bot_member.top_role:
-                    if role not in roles_to_add:
-                        roles_to_remove.append(role)
-
+            for r_id in data["group_roles"]:
+                if int(r_id) == target_role.id: continue
+                r_obj = guild.get_role(int(r_id))
+                if r_obj and r_obj in member.roles:
+                    roles_to_remove.append(r_obj)
+            
             if roles_to_remove:
                 await member.remove_roles(*roles_to_remove)
 
-            message = self.message_cache.get(msg_id)
-
-            if not message:
-                channel = guild.get_channel(payload.channel_id)
-                if not channel:
-                    return
-
-                try:
-                    message = await channel.fetch_message(payload.message_id)
-
-                    if len(self.message_cache) >= self._cache_limit:
-                        self.message_cache.clear()
-
-                    self.message_cache[msg_id] = message
-
-                except:
-                    self.data.pop(msg_id, None)
-                    mark_dirty(FILE_KEY)
-                    self._refresh()
-                    return
-
-            for old_emoji in data["group_emojis"]:
-                if old_emoji == emoji:
-                    continue
-
+            # 2. Gỡ reaction cũ của các emoji khác trong group (UI Sync)
+            try:
+                channel = self.bot.get_channel(payload.channel_id)
+                message = await channel.fetch_message(payload.message_id)
                 for r in message.reactions:
-                    if _normalize_emoji(r.emoji) == old_emoji:
-                        try:
-                            await r.remove(member)
-                        except:
-                            pass
+                    if _normalize_emoji(r.emoji) in data["group_emojis"] and _normalize_emoji(r.emoji) != emoji:
+                        await r.remove(member)
+            except: pass
 
-        await member.add_roles(*roles_to_add)
-
-    # =========================
-    # REMOVE REACTION
-    # =========================
+        # Cuối cùng mới gán Role mục tiêu
+        if target_role not in member.roles:
+            await member.add_roles(target_role)
 
     @commands.Cog.listener()
     async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent):
-
-        if not payload.guild_id:
-            return
+        if not payload.guild_id: return
 
         msg_id = str(payload.message_id)
-
         if msg_id not in self.emoji_map:
             self._refresh()
-            if msg_id not in self.emoji_map:
-                return
+            if msg_id not in self.emoji_map: return
 
         emoji = _emoji_key(payload.emoji)
-
-        if emoji not in self.emoji_map[msg_id]:
-            return
+        if emoji not in self.emoji_map[msg_id]: return
 
         guild = self.bot.get_guild(payload.guild_id)
-        if not guild:
-            return
-
         member = guild.get_member(payload.user_id)
-        if not member or member.bot:
-            return
-
-        bot_member = guild.me
-        if not bot_member:
-            return
+        if not member or member.bot: return
 
         data = self.emoji_map[msg_id][emoji]
-
-        roles_to_remove = []
-
-        for rid in data["roles"]:
-            role = guild.get_role(int(rid))
-            if role and role < bot_member.top_role:
-                roles_to_remove.append(role)
-
-        if roles_to_remove:
-            await member.remove_roles(*roles_to_remove)
-
+        role = guild.get_role(int(data["target_role"]))
+        
+        if role and role in member.roles:
+            await member.remove_roles(role)
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(ReactionRole(bot))
