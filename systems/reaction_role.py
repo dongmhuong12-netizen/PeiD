@@ -10,7 +10,7 @@ from core.state import State
 FILE_KEY = "reaction_roles"
 
 # =========================
-# EVENT DEDUP (GIỮ NGUYÊN LOGIC CỦA NGUYỆT)
+# EVENT DEDUP (Giữ nguyên logic của Nguyệt)
 # =========================
 
 EVENT_TTL = 60
@@ -53,14 +53,14 @@ def _normalize_roles(roles):
     return [str(roles)]
 
 # =========================
-# CORE COG (BẢN FIX 10/10)
+# CORE COG
 # =========================
 
 class ReactionRole(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.data = load(FILE_KEY) or {}
-        self.emoji_map = {} # Map Emoji -> {target_role, mode, all_roles_in_group}
+        self.emoji_map = {} 
         self.message_cache = {}
         self._cache_limit = 200
 
@@ -74,9 +74,7 @@ class ReactionRole(commands.Cog):
         print("ReactionRole SAFE PATCH LOADED")
 
     def build_cache(self):
-        """Hệ thống ánh xạ Emoji tương ứng chính xác với Role theo vị trí (Index)"""
         self.emoji_map.clear()
-
         for msg_id, config in self.data.items():
             msg_id = str(msg_id)
             self.emoji_map[msg_id] = {}
@@ -86,14 +84,13 @@ class ReactionRole(commands.Cog):
                 emojis = [_normalize_emoji(e) for e in group.get("emojis", [])]
                 roles = _normalize_roles(group.get("roles", []))
 
-                # FIX MẤU CHỐT: Ghép cặp Emoji[i] với Role[i]
                 for i in range(len(emojis)):
                     if i < len(roles):
                         self.emoji_map[msg_id][emojis[i]] = {
                             "target_role": roles[i],
                             "mode": mode,
-                            "group_roles": roles, # Dùng để xóa role cũ nếu là Single
-                            "group_emojis": emojis # Dùng để gỡ reaction cũ nếu là Single
+                            "group_roles": roles,
+                            "group_emojis": emojis
                         }
 
     @commands.Cog.listener()
@@ -119,32 +116,40 @@ class ReactionRole(commands.Cog):
         if not member or member.bot: return
 
         data = self.emoji_map[msg_id][emoji]
-        target_role = guild.get_role(int(data["target_role"]))
+        target_role_id = int(data["target_role"])
+        target_role = guild.get_role(target_role_id)
         if not target_role: return
 
-        # XỬ LÝ MODE SINGLE (Fix lỗi gán nhầm/gán thừa)
+        # --- LOGIC FIX LỖI SINGLE (Quy tắc 5: Cưỡng ép dọn dẹp) ---
         if data["mode"] == "single":
-            # 1. Gỡ tất cả role khác trong cùng group
+            cleanup_tasks = []
+            
+            # 1. Gom danh sách Role cũ cần xóa
             roles_to_remove = []
             for r_id in data["group_roles"]:
-                if int(r_id) == target_role.id: continue
+                if int(r_id) == target_role_id: continue
                 r_obj = guild.get_role(int(r_id))
                 if r_obj and r_obj in member.roles:
                     roles_to_remove.append(r_obj)
             
             if roles_to_remove:
-                await member.remove_roles(*roles_to_remove)
+                cleanup_tasks.append(member.remove_roles(*roles_to_remove))
 
-            # 2. Gỡ reaction cũ của các emoji khác trong group (UI Sync)
+            # 2. Gom danh sách Reaction cũ cần gỡ (UI Sync)
             try:
                 channel = self.bot.get_channel(payload.channel_id)
                 message = await channel.fetch_message(payload.message_id)
                 for r in message.reactions:
-                    if _normalize_emoji(r.emoji) in data["group_emojis"] and _normalize_emoji(r.emoji) != emoji:
-                        await r.remove(member)
+                    r_emo = _normalize_emoji(r.emoji)
+                    if r_emo in data["group_emojis"] and r_emo != emoji:
+                        cleanup_tasks.append(r.remove(member))
             except: pass
 
-        # Cuối cùng mới gán Role mục tiêu
+            # Chạy song song tất cả các lệnh gỡ để đảm bảo tốc độ cực nhanh
+            if cleanup_tasks:
+                await asyncio.gather(*cleanup_tasks, return_exceptions=True)
+
+        # 3. Gán Role mới (Sau khi đã dọn dẹp hoặc chạy song song)
         if target_role not in member.roles:
             await member.add_roles(target_role)
 
