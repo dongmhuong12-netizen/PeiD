@@ -279,6 +279,7 @@ class BoostGroup(app_commands.Group):
             except Exception:
                 pass
 
+        # Lệnh TEST thì vẫn gửi message để Admin kiểm tra nội dung
         success = await send_config_message(guild, member, "booster")
         msg = "Test Boost thành công (Giữ role 5p)." if success else "Thiếu cấu hình booster."
 
@@ -305,10 +306,15 @@ class BoosterListener(commands.Cog):
         if after.id in _test_bypass and time.time() < _test_bypass[after.id]:
             return
 
-        is_boosting = after.premium_since is not None
-        await self.handle_boost_sync(after, is_boosting)
+        # Chỉ gửi Embed khi có sự kiện NGƯỜI DÙNG MỚI nhấn nút Boost
+        if not before.premium_since and after.premium_since:
+            await self.handle_boost_sync(after, True, send_embed=True)
+        # Các trường hợp thay đổi khác (ví dụ admin gỡ role tay) hoặc hết hạn boost
+        else:
+            is_active = after.premium_since is not None
+            await self.handle_boost_sync(after, is_active, send_embed=False)
 
-    async def handle_boost_sync(self, member: discord.Member, boosted: bool):
+    async def handle_boost_sync(self, member: discord.Member, boosted: bool, send_embed: bool = False):
         guild = member.guild
         config = await get_guild_config(guild.id)
         role_id = config.get("booster_role")
@@ -320,8 +326,9 @@ class BoosterListener(commands.Cog):
         try:
             if boosted:
                 if role not in member.roles:
-                    await member.add_roles(role, reason="Server Boost")
-                    await send_config_message(guild, member, "booster")
+                    await member.add_roles(role, reason="Server Boost Sync")
+                    if send_embed:
+                        await send_config_message(guild, member, "booster")
             else:
                 if role in member.roles and member.id not in _test_bypass:
                     await member.remove_roles(role, reason="Boost Ended")
@@ -335,6 +342,7 @@ class BoosterListener(commands.Cog):
 
     @tasks.loop(minutes=5)
     async def booster_radar(self):
+        """Radar quét dọn và đồng bộ im lặng (Không gửi Embed chúc mừng)"""
         await self.bot.wait_until_ready()
         now = time.time()
 
@@ -344,16 +352,13 @@ class BoosterListener(commands.Cog):
             role = guild.get_role(int(role_id)) if role_id else None
             if not role: continue
 
-            # Gán cho người boost thật
+            # Gán im lặng cho người boost thật (Dùng handle_boost_sync với send_embed=False)
             for booster in guild.premium_subscribers:
                 if role not in booster.roles:
-                    try:
-                        await booster.add_roles(role, reason="Radar: Boost Sync")
-                        await send_config_message(guild, booster, "booster")
-                    except: pass
+                    await self.handle_boost_sync(booster, True, send_embed=False)
                 await asyncio.sleep(0.1)
 
-            # Gỡ người giả
+            # Gỡ im lặng người giả hoặc hết hạn test
             for member in role.members:
                 if member.bot: continue
                 if member.id in _test_bypass:
@@ -362,7 +367,7 @@ class BoosterListener(commands.Cog):
 
                 if member.premium_since is None:
                     try:
-                        await member.remove_roles(role, reason="Radar: Clean Up")
+                        await member.remove_roles(role, reason="Radar: Silent Clean Up")
                     except: pass
                 await asyncio.sleep(0.1)
 
