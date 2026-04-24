@@ -3,6 +3,7 @@ from core.cache_manager import load, mark_dirty, get_raw
 
 FILE_KEY = "state"
 
+# Sử dụng lock cho các thao tác quan trọng để tránh race condition ở RAM
 _lock = asyncio.Lock()
 _tx_lock = asyncio.Lock()
 
@@ -16,19 +17,23 @@ def _get():
     Lấy reference trực tiếp từ RAM của CacheManager.
     Đảm bảo mọi thay đổi được phản ánh ngay lập tức.
     """
-    # Lấy bản gốc trong RAM
     cache = get_raw(FILE_KEY)
 
-    # Khởi tạo cấu trúc nếu chưa có (Sửa trực tiếp vào RAM)
+    # Khởi tạo cấu trúc dữ liệu bền vững (Lưu Disk)
     cache.setdefault("embeds", {})
     cache.setdefault("reactions", {})
     cache.setdefault("ui", {})
-    cache.setdefault("runtime", {})
+    
+    # Sổ hộ khẩu: NAME <-> MESSAGE (Đã đưa ra khỏi runtime để chống mất trí nhớ)
+    cache.setdefault("mapping", {
+        "name_to_mid": {}, # {gid: {name: mid}}
+        "mid_to_info": {}  # {mid: {gid: gid, name: name}}
+    })
 
-    rt = cache["runtime"]
-    rt.setdefault("reaction_cache", {})
-    rt.setdefault("message_cache", {})
-    rt.setdefault("embed_name_to_message", {})
+    # Chỉ giữ lại nhánh runtime cho các cache thực sự tạm thời
+    cache.setdefault("runtime", {
+        "reaction_cache": {} # Đệm tốc độ cao cho reaction
+    })
 
     return cache
 
@@ -37,13 +42,10 @@ def _write(mutator):
     """
     Thực hiện ghi dữ liệu an toàn vào bộ nhớ cache.
     """
-    # Lấy reference trực tiếp
     cache = _get()
-    
-    # Mutator sẽ thay đổi trực tiếp trên reference này
     mutator(cache)
     
-    # Đánh dấu dirty để CacheManager tự flush sau 5s
+    # Mark dirty để CacheManager tự động lưu xuống Disk sau 5s
     mark_dirty(FILE_KEY)
 
 
@@ -58,18 +60,12 @@ class State:
         async with _lock:
             def op(cache):
                 gid_s = str(gid)
-                # Đảm bảo lưu đúng vào nhánh embeds
-                if "embeds" not in cache:
-                    cache["embeds"] = {}
-                
                 cache["embeds"].setdefault(gid_s, {})
                 cache["embeds"][gid_s][name] = data
-
             _write(op)
 
     @staticmethod
     async def get_embed(gid: int, name: str):
-        # Đọc trực tiếp từ RAM để đảm bảo tính thời gian thực
         cache = _get()
         return cache.get("embeds", {}).get(str(gid), {}).get(name)
 
@@ -78,38 +74,39 @@ class State:
         async with _lock:
             def op(cache):
                 gid_s = str(gid)
-                if gid_s in cache.get("embeds", {}):
+                if gid_s in cache["embeds"]:
                     cache["embeds"][gid_s].pop(name, None)
-
-                    # Dọn dẹp guild rỗng để tiết kiệm RAM/Disk
                     if not cache["embeds"][gid_s]:
                         cache["embeds"].pop(gid_s, None)
-
             _write(op)
 
 
     # =========================
-    # ATOMIC REGISTER
+    # ATOMIC REGISTER (BỀN VỮNG)
     # =========================
 
     @staticmethod
     async def atomic_embed_register(gid: int, name: str, message_id: int, reaction_data: dict | None = None):
+        """
+        Lưu liên kết Message ID vào database bền vững thay vì runtime.
+        Giúp Bot không mất trí nhớ sau khi restart.
+        """
         async with _tx_lock:
             def op(cache):
                 gid_s = str(gid)
                 mid_s = str(message_id)
 
                 # NAME -> MESSAGE
-                cache["runtime"]["embed_name_to_message"].setdefault(gid_s, {})
-                cache["runtime"]["embed_name_to_message"][gid_s][name] = mid_s
+                cache["mapping"]["name_to_mid"].setdefault(gid_s, {})
+                cache["mapping"]["name_to_mid"][gid_s][name] = mid_s
 
-                # MESSAGE CACHE (Dùng để truy xuất ngược từ tin nhắn ra tên embed)
-                cache["runtime"]["message_cache"][mid_s] = {
+                # MESSAGE -> INFO (Truy xuất ngược)
+                cache["mapping"]["mid_to_info"][mid_s] = {
                     "guild_id": gid_s,
                     "name": name
                 }
 
-                # Đồng bộ Reaction nếu có
+                # Đồng bộ Reaction
                 if reaction_data:
                     cache["reactions"][mid_s] = reaction_data
                     cache["runtime"]["reaction_cache"][mid_s] = reaction_data
@@ -119,7 +116,13 @@ class State:
     @staticmethod
     async def get_embed_message(gid: int, name: str):
         cache = _get()
-        return cache["runtime"]["embed_name_to_message"].get(str(gid), {}).get(name)
+        return cache["mapping"]["name_to_mid"].get(str(gid), {}).get(name)
+
+    @staticmethod
+    async def get_info_by_mid(mid: int):
+        """Lấy thông tin guild/name từ message id (Dùng cho Reaction Role)"""
+        cache = _get()
+        return cache["mapping"]["mid_to_info"].get(str(mid))
 
 
     # =========================
@@ -133,18 +136,16 @@ class State:
                 mid_s = str(mid)
                 cache["reactions"][mid_s] = data
                 cache["runtime"]["reaction_cache"][mid_s] = data
-
             _write(op)
 
     @staticmethod
     async def get_reaction(mid: int):
         cache = _get()
         mid_s = str(mid)
-
-        # Ưu tiên lấy từ runtime cache (RAM) trước
+        # Check RAM trước, hụt thì check Disk dữ liệu bền vững
         return (
             cache["runtime"]["reaction_cache"].get(mid_s)
-            or cache.get("reactions", {}).get(mid_s)
+            or cache["reactions"].get(mid_s)
         )
 
 
@@ -156,15 +157,13 @@ class State:
     async def set_ui(key: str, data: dict):
         async with _lock:
             def op(cache):
-                cache.setdefault("ui", {})
                 cache["ui"][key] = data
-
             _write(op)
 
     @staticmethod
     async def get_ui(key: str):
         cache = _get()
-        return cache.get("ui", {}).get(key)
+        return cache["ui"].get(key)
 
 
     # =========================
@@ -173,15 +172,12 @@ class State:
 
     @staticmethod
     async def clear_rt():
-        """Reset các dữ liệu tạm thời khi bot khởi động hoặc lỗi"""
+        """Reset các dữ liệu THỰC SỰ tạm thời, không chạm vào Mapping"""
         async with _lock:
             def op(cache):
                 cache["runtime"] = {
-                    "reaction_cache": {},
-                    "message_cache": {},
-                    "embed_name_to_message": {}
+                    "reaction_cache": {}
                 }
-
             _write(op)
 
 
