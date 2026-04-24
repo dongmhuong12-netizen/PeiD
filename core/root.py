@@ -36,22 +36,30 @@ async def embed_name_autocomplete(interaction: discord.Interaction, current: str
 # =============================
 
 def _cleanup_views(key: str):
+    """
+    Dọn dẹp các View cũ để tránh rò rỉ RAM và xung đột UI.
+    Sử dụng cơ chế an toàn để tránh bị Discord chặn (Rate Limit).
+    """
     views = ACTIVE_EMBED_VIEWS.get(key)
     if not views:
         return
 
     for view in list(views):
-        try:
-            if getattr(view, "message", None):
+        # 1. Xóa message cũ một cách an toàn (Task tách biệt)
+        if hasattr(view, "message") and view.message:
+            try:
+                # Tạo task xóa nhưng không làm nghẽn dòng chảy chính
                 asyncio.create_task(view.message.delete())
-        except:
-            pass
+            except Exception:
+                pass
 
+        # 2. Dừng View để giải phóng tài nguyên RAM
         try:
             view.stop()
-        except:
+        except Exception:
             pass
 
+    # Làm sạch danh sách sau khi đã stop toàn bộ
     ACTIVE_EMBED_VIEWS[key] = []
 
 
@@ -92,7 +100,8 @@ class EmbedGroup(app_commands.Group):
             "color": 0x5865F2
         }
 
-        view = EmbedUIView(guild.id, name, embed_data)
+        # THÊM TIMEOUT: 600 giây (10 phút) để tránh rò rỉ bộ nhớ (RAM Leak)
+        view = EmbedUIView(guild.id, name, embed_data, timeout=600.0)
         embed = view.build_embed()
 
         await interaction.response.send_message(
@@ -144,7 +153,8 @@ class EmbedGroup(app_commands.Group):
         key = f"{guild.id}:{name}"
         _cleanup_views(key)
 
-        view = EmbedUIView(guild.id, name, data)
+        # THÊM TIMEOUT: Bảo vệ RAM tương tự lệnh create
+        view = EmbedUIView(guild.id, name, data, timeout=600.0)
         embed = view.build_embed()
 
         await interaction.response.send_message(
@@ -208,6 +218,7 @@ class EmbedGroup(app_commands.Group):
             )
             return
 
+        # Gọi hàm gửi và lưu liên kết bền vững (đã fix ở state.py)
         await send_embed(interaction.channel, data, guild, interaction.user, embed_name=name)
 
         await interaction.response.send_message(
