@@ -1,83 +1,40 @@
 import discord
 from datetime import datetime, timezone
 
-
 # ==============================
 # CALCULATE BOOST DAYS
 # ==============================
 
 def get_boost_days(member: discord.Member) -> int:
-
+    """Tính toán số ngày boost chính xác dựa trên chuỗi hiện tại"""
     if not member.premium_since:
         return 0
 
     now = datetime.now(timezone.utc)
+    # Dùng tổng giây để tính ngày giúp tránh sai số múi giờ
+    diff = now - member.premium_since
+    days = diff.days
 
-    days = (now - member.premium_since).days
-
-    if days < 0:
-        return 0
-
-    return days
+    return max(0, days)
 
 
 # ==============================
-# CALCULATE MEMBER LEVEL ROLE
+# GET ALL BOOSTER SYSTEM ROLES (IDs Only)
 # ==============================
 
-def calculate_level_role(member: discord.Member, booster_role, levels: list):
-
-    if not booster_role:
-        return None
-
-    boost_days = get_boost_days(member)
-
-    target_role = booster_role
-
+def get_system_role_ids(booster_role_id: any, levels: list) -> set:
+    """Lấy danh sách ID của tất cả role thuộc hệ thống để kiểm tra nhanh"""
+    role_ids = set()
+    
+    if booster_role_id:
+        role_ids.add(str(booster_role_id))
+        
     for lvl in levels:
-
-        role_id = lvl.get("role")
-        days = lvl.get("days")
-
-        if role_id is None or days is None:
-            continue
-
-        if boost_days >= days:
-
-            role = member.guild.get_role(role_id)
-
-            if role:
-                target_role = role
-
-    return target_role
-
-
-# ==============================
-# GET ALL BOOSTER SYSTEM ROLES
-# ==============================
-
-def get_booster_roles(guild: discord.Guild, booster_role_id: int, levels: list):
-
-    roles = []
-
-    booster_role = guild.get_role(booster_role_id)
-
-    if booster_role:
-        roles.append(booster_role)
-
-    for lvl in levels:
-
-        role_id = lvl.get("role")
-
-        if not role_id:
-            continue
-
-        role = guild.get_role(role_id)
-
-        if role:
-            roles.append(role)
-
-    return roles
+        r_id = lvl.get("role")
+        if r_id:
+            role_ids.add(str(r_id))
+            
+    return role_ids
 
 
 # ==============================
@@ -85,21 +42,19 @@ def get_booster_roles(guild: discord.Guild, booster_role_id: int, levels: list):
 # ==============================
 
 def cleanup_deleted_roles(guild: discord.Guild, levels: list):
-
+    """Xử lý trường hợp Role bị xóa thủ công khỏi Server"""
     changed = False
     new_levels = []
 
     for lvl in levels:
-
         role_id = lvl.get("role")
-
         if not role_id:
+            changed = True
             continue
 
-        role = guild.get_role(role_id)
-
-        # FIX: role bị xoá → remove level
+        role = guild.get_role(int(role_id))
         if not role:
+            # Role không còn tồn tại -> Xóa level này
             changed = True
             continue
 
@@ -112,72 +67,86 @@ def cleanup_deleted_roles(guild: discord.Guild, levels: list):
 # VALIDATE LEVEL CONFIG
 # ==============================
 
-def validate_levels(levels: list, booster_role_id: int):
+def validate_levels(levels: list, booster_role_id: any):
+    """Kiểm tra logic 43 mục: Level 1 = 0 ngày, ngày tăng dần, không trùng role"""
+    if not levels:
+        return True, None # Cho phép lưu cấu hình trống (Reset)
 
     role_set = set()
+    if booster_role_id:
+        role_set.add(str(booster_role_id))
+
     prev_days = -1
 
     for i, lvl in enumerate(levels):
-
         role_id = lvl.get("role")
         days = lvl.get("days")
 
         if role_id is None or days is None:
-            return False, "Level phải có cả role và days."
+            return False, f"Level {i+1} chưa được thiết lập đầy đủ thông tin."
 
-        # FIX: level 1
+        r_id_str = str(role_id)
+
+        # Ràng buộc Level 1 (Mục 2 trong kế hoạch)
         if i == 0:
-            if days != 0:
-                return False, "Level 1 phải = 0 ngày."
+            if int(days) != 0:
+                return False, "Level 1 (Booster Role) mặc định phải là 0 ngày."
+            if r_id_str != str(booster_role_id):
+                # Đảm bảo Role của Level 1 luôn khớp với Booster Role chính
+                pass 
         else:
-            if days <= prev_days:
-                return False, "Days phải tăng dần theo level."
+            # Ràng buộc tăng dần (Mục 22 trong kế hoạch)
+            if int(days) <= prev_days:
+                return False, f"Level {i+1} ({days} ngày) phải lớn hơn Level trước ({prev_days} ngày)."
 
-        if role_id == booster_role_id:
-            return False, "Role level không được trùng booster role."
+        # Kiểm tra trùng Role (Mục 23 trong kế hoạch)
+        if i > 0 and r_id_str == str(booster_role_id):
+            return False, f"Role của Level {i+1} không được trùng với Booster Role mặc định."
+            
+        if i > 0 and r_id_str in role_set:
+            return False, f"Role của Level {i+1} đã được sử dụng ở Level khác."
 
-        if role_id in role_set:
-            return False, "Role level bị trùng."
-
-        role_set.add(role_id)
-        prev_days = days
+        role_set.add(r_id_str)
+        prev_days = int(days)
 
     return True, None
 
 
 # ==============================
-# REORDER LEVELS
+# REORDER LEVELS (Atomic Move)
 # ==============================
 
 def move_level_up(levels: list, index: int):
-
-    if index <= 0:
+    """Di chuyển Level lên trên (Giảm index)"""
+    if index <= 1: # Không cho phép di chuyển Level 1 (Booster Role)
         return levels
-
+    
     levels[index - 1], levels[index] = levels[index], levels[index - 1]
-
     return levels
 
 
 def move_level_down(levels: list, index: int):
-
-    if index >= len(levels) - 1:
+    """Di chuyển Level xuống dưới (Tăng index)"""
+    if index == 0 or index >= len(levels) - 1:
         return levels
-
+        
     levels[index + 1], levels[index] = levels[index], levels[index + 1]
-
     return levels
 
 
 # ==============================
-# FIND MEMBER BOOST ROLE
+# FORMATTING UI
 # ==============================
 
-def get_member_booster_role(member: discord.Member, booster_roles: list):
-
-    for role in booster_roles:
-
-        if role in member.roles:
-            return role
-
-    return None
+def format_level_status(lvl_idx: int, lvl_data: dict, guild: discord.Guild):
+    """Tạo chuỗi hiển thị chuyên nghiệp cho UI (Mục 13)"""
+    role_id = lvl_data.get("role")
+    days = lvl_data.get("days", 0)
+    
+    role_mention = "❌ Unknown Role"
+    if role_id:
+        role = guild.get_role(int(role_id))
+        if role:
+            role_mention = role.mention
+            
+    return f"**Level {lvl_idx + 1}**\nRole: {role_mention}\nDays: `{days}`"
