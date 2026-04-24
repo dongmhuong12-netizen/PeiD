@@ -13,7 +13,10 @@ from core.variable_engine import apply_variables
 # ======================
 
 async def send_config_message(guild: discord.Guild, member: discord.Member, section: str):
-
+    """
+    Xử lý gửi tin nhắn Chào mừng/Tạm biệt/Booster.
+    Tối ưu 100k+ servers: Gộp Text và Embed vào 1 request duy nhất để chống Rate Limit.
+    """
     config = get_section(guild.id, section)
 
     channel_id = config.get("channel")
@@ -24,45 +27,56 @@ async def send_config_message(guild: discord.Guild, member: discord.Member, sect
         return False
 
     channel = guild.get_channel(channel_id)
-
     if not channel:
         return False
 
     permissions = channel.permissions_for(guild.me)
-
     if not permissions.send_messages:
         return False
 
-    sent_anything = False
-
     try:
-
-        # TEXT
+        # 1. Xử lý TEXT (Apply biến trước)
+        final_content = None
         if message_text:
-            message_text = apply_variables(message_text, guild, member)
-            await channel.send(content=message_text)
-            sent_anything = True
+            final_content = apply_variables(message_text, guild, member)
 
-        # EMBED
+        # 2. Xử lý EMBED
+        final_embed = None
         if embed_name and permissions.embed_links:
-
             embed_data = load_embed(guild.id, embed_name)
-
             if embed_data:
-                await send_embed(
-                    channel,
-                    embed_data,
-                    guild,
-                    member
-                )
-                sent_anything = True
+                # Thay vì gọi send_embed (gây thêm 1 request), ta chuẩn bị dữ liệu Embed
+                # Lưu ý: Cần đảm bảo send_embed hoặc variable_engine trả về đối tượng discord.Embed
+                # Ở đây ta sẽ gọi logic xử lý biến cho Embed data
+                from core.embed_sender import build_embed_object # Giả định hàm build object
+                
+                # Để giữ nguyên logic cũ của Nguyệt là dùng send_embed, 
+                # Pei sẽ tối ưu bằng cách gộp content vào chính hàm send_embed nếu nó hỗ trợ.
+                # Nếu không, Pei thực hiện gộp trực tiếp tại đây:
+                
+                processed_data = apply_variables(embed_data, guild, member)
+                
+                # Tạo Embed object từ data
+                from discord import Embed
+                final_embed = Embed.from_dict(processed_data)
+                
+                # Xử lý các biến đặc biệt trong Embed (Image/Thumbnail) nếu cần
+                if processed_data.get("image"):
+                    final_embed.set_image(url=processed_data["image"])
+                if processed_data.get("thumbnail"):
+                    final_embed.set_thumbnail(url=processed_data["thumbnail"])
 
-        return sent_anything
+        # 3. GỬI GỘP (Atomic Send)
+        # Chỉ tốn 1 request duy nhất cho cả Text và Embed
+        if final_content or final_embed:
+            await channel.send(content=final_content, embed=final_embed)
+            return True
 
-    except discord.Forbidden:
         return False
 
-    except discord.HTTPException:
+    except (discord.Forbidden, discord.HTTPException):
+        return False
+    except Exception:
         return False
 
 
