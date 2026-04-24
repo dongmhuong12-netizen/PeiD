@@ -135,18 +135,23 @@ def move_level_down(levels: list, index: int):
 
 
 # ==============================
-# FORMATTING UI
+# FORMATTING UI (FIXED)
 # ==============================
 
-def format_level_status(lvl_idx: int, lvl_data: dict, guild: discord.Guild):
-    """Tạo chuỗi hiển thị chuyên nghiệp cho UI (Mục 13)"""
+def format_level_status(lvl_idx: int, lvl_data: dict, guild: discord.Guild = None):
+    """Tạo chuỗi hiển thị chuyên nghiệp, an toàn tuyệt đối với Null Guild"""
     role_id = lvl_data.get("role")
     days = lvl_data.get("days", 0)
     
-    role_mention = "❌ Unknown Role"
-    if role_id:
-        role = guild.get_role(int(role_id))
-        if role:
-            role_mention = role.mention
+    if not role_id:
+        role_mention = "❌ Chưa thiết lập"
+    else:
+        # Bọc an toàn: Nếu guild là None (lúc vừa gọi lệnh), dùng chuỗi mention thô.
+        # Discord client sẽ tự động render ID thành @Role.
+        if guild:
+            role = guild.get_role(int(role_id))
+            role_mention = role.mention if role else f"<@&{role_id}>"
+        else:
+            role_mention = f"<@&{role_id}>"
             
     return f"**Level {lvl_idx + 1}**\nRole: {role_mention}\nDays: `{days}`"
