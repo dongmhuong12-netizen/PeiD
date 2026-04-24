@@ -20,7 +20,7 @@ _last_flush_time = 0
 
 
 # =========================
-# FILE HELPERS
+# FILE HELPERS (Tối ưu Thread-safe)
 # =========================
 
 def _file_path(key: str):
@@ -33,7 +33,6 @@ def _ensure_dir():
 
 def _load_file(key: str):
     path = _file_path(key)
-
     if not os.path.exists(path):
         return {}
 
@@ -45,26 +44,28 @@ def _load_file(key: str):
         return {}
 
 
-def _write_file(key: str, data: dict):
+def _write_file_sync(key: str, data: dict):
+    """Hàm ghi file đồng bộ, sẽ được chạy trong Thread riêng"""
     _ensure_dir()
-
     path = _file_path(key)
     tmp = path + ".tmp"
 
-    # Backup an toàn trước khi ghi đè
+    # Backup an toàn
     if os.path.exists(path):
         try:
-            with open(path, "r", encoding="utf-8") as src:
-                old = src.read()
-            with open(path + ".bak", "w", encoding="utf-8") as dst:
-                dst.write(old)
+            bak_path = path + ".bak"
+            # Dùng phương thức copy nhanh của hệ điều hành
+            import shutil
+            shutil.copy2(path, bak_path)
         except:
             pass
 
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
-
-    os.replace(tmp, path)
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False) # Hỗ trợ tiếng Việt tốt hơn
+        os.replace(tmp, path)
+    except Exception as e:
+        print(f"[DISK WRITE ERROR] {key}: {e}")
 
 
 # =========================
@@ -74,15 +75,7 @@ def _write_file(key: str, data: dict):
 def _init_key(key: str):
     if key in _cache:
         return
-
     _cache[key] = _load_file(key)
-
-    # Đảm bảo schema cơ bản luôn tồn tại trong RAM
-    if isinstance(_cache[key], dict):
-        _cache[key].setdefault("runtime", {})
-        _cache[key].setdefault("embeds", {})
-        _cache[key].setdefault("reactions", {})
-        _cache[key].setdefault("ui", {})
 
 
 # =========================
@@ -90,20 +83,16 @@ def _init_key(key: str):
 # =========================
 
 def load(key: str) -> dict:
-    """Trả về bản sao dữ liệu từ RAM. Đảm bảo Show thấy data mới nhất."""
+    """Trả về bản sao dữ liệu từ RAM."""
     if key not in _cache:
         _init_key(key)
-
-    # FIX 10/10: Phải deepcopy từ RAM (_cache) 
-    # vì đây là 'Source of Truth' duy nhất khi bot đang chạy.
     return copy.deepcopy(_cache[key])
 
 
 def get_raw(key: str) -> dict:
-    """Trả về bản gốc trong RAM để sửa trực tiếp (Dành cho State.py)"""
+    """Trả về bản gốc trong RAM để sửa trực tiếp (Cực nhanh)"""
     if key not in _cache:
         _init_key(key)
-
     return _cache[key]
 
 
@@ -114,70 +103,57 @@ def mark_dirty(key: str):
 
 
 def update(key: str, value: dict):
-    """Cập nhật toàn bộ data cho một key và đánh dấu dirty"""
+    """Cập nhật toàn bộ data cho một key"""
     if key not in _cache:
         _init_key(key)
-
-    # Cập nhật trực tiếp vào RAM
     _cache[key] = value
-    _dirty_keys.add(key)
-    _ensure_loop()
+    mark_dirty(key)
 
 
 # =========================
-# FLUSH ENGINE
+# FLUSH ENGINE (Async Tối ưu)
 # =========================
 
 async def _flush_worker():
     global _last_flush_time
-
     while True:
         await asyncio.sleep(FLUSH_INTERVAL)
-
         if not _dirty_keys:
             continue
 
-        try:
-            # Dùng lock để tránh việc đang ghi thì bị can thiệp
-            async with _lock:
-                keys = list(_dirty_keys)
-                _dirty_keys.clear()
+        async with _lock:
+            keys = list(_dirty_keys)
+            _dirty_keys.clear()
 
-                for key in keys:
-                    data = _cache.get(key)
-                    if data is not None:
-                        _write_file(key, data)
+            for key in keys:
+                data = _cache.get(key)
+                if data is not None:
+                    # TIÊU CHUẨN 100K+: Đẩy việc ghi file sang Thread riêng
+                    # Giúp Event Loop không bị block, Bot không bị lag.
+                    await asyncio.to_thread(_write_file_sync, key, copy.deepcopy(data))
 
-                _last_flush_time = time.time()
-
-        except Exception as e:
-            print("[CACHE FLUSH ERROR]", e)
+            _last_flush_time = time.time()
 
 
 async def _backup_worker():
     while True:
         await asyncio.sleep(BACKUP_INTERVAL)
-
-        try:
-            async with _lock:
-                for key, data in _cache.items():
-                    try:
-                        backup_path = _file_path(key) + ".auto.bak"
-                        with open(backup_path, "w", encoding="utf-8") as f:
-                            json.dump(data, f, indent=2)
-                    except:
-                        pass
-        except Exception as e:
-            print("[CACHE BACKUP ERROR]", e)
+        async with _lock:
+            for key, data in _cache.items():
+                try:
+                    backup_path = _file_path(key) + ".auto.bak"
+                    # Ghi backup cũng dùng thread để an toàn
+                    await asyncio.to_thread(_write_file_sync, f"{key}.auto", data)
+                except:
+                    pass
 
 
 # =========================
-# LOOP
+# CONTROL
 # =========================
 
 def _ensure_loop():
     global _started
-
     if _started:
         return
 
@@ -187,14 +163,13 @@ def _ensure_loop():
         loop.create_task(_backup_worker())
         _started = True
     except RuntimeError:
-        # Nếu chưa có loop (lúc khởi động cực sớm)
         pass
 
 
 def force_flush():
-    """Ép ghi toàn bộ cache xuống đĩa ngay lập tức"""
-    for key, data in list(_cache.items()):
-        _write_file(key, data)
+    """Ép ghi toàn bộ cache xuống đĩa ngay lập tức (Dùng khi shutdown)"""
+    for key, data in _cache.items():
+        _write_file_sync(key, data)
 
 
 def get_status():
