@@ -2,11 +2,11 @@ import discord
 from discord.ext import commands
 import asyncio
 import os
+import signal
 from aiohttp import web
 
-from core.voice_manager import VoiceManager
-from core.voice_service import VoiceService
 from core.state import State
+from core.cache_manager import force_flush # Chốt chặn trí nhớ cuối cùng
 
 os.makedirs("data", exist_ok=True)
 
@@ -19,23 +19,18 @@ if not TOKEN:
 # =========================
 
 async def health(request):
-    return web.Response(text="Bot is running")
+    return web.Response(text="PeiD Bot is online and healthy!")
 
 async def run_web_server():
     app = web.Application()
     app.router.add_get("/", health)
-
     runner = web.AppRunner(app)
     await runner.setup()
-
     port = int(os.getenv("PORT", 10000))
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
-
-    print(f"[WEB] Running on port {port}", flush=True)
-
-    while True:
-        await asyncio.sleep(3600)
+    print(f"[WEB] Service started on port {port}", flush=True)
+    while True: await asyncio.sleep(3600)
 
 # =========================
 # BOT SETUP
@@ -50,88 +45,96 @@ intents.voice_states = True
 
 bot = commands.AutoShardedBot(
     command_prefix=commands.when_mentioned,
-    intents=intents
+    intents=intents,
+    help_command=None # Thường Bot hiện đại dùng Slash thay vì Help text
 )
 
 # =========================
-# EXTENSIONS
+# EXTENSIONS (BẢN FULL ĐỒNG BỘ 100k+)
 # =========================
 
 EXTENSIONS = [
-    "core.root",
-    "systems.reaction_role",
-    "commands.voice_system",
-    "core.voice_listener",
+    "core.root",                 # Hệ thống gốc
+    "core.greet_leave",          # Hệ tiếp tân chính
+    "core.wellcome",             # Hệ tiếp tân phụ
+    "core.booster",              # Hệ thống quà tặng Booster
+    "systems.reaction_role",     # Hệ thống gán role tự động
+    "commands.embed.embed_group", # Group lệnh /p embed
+    "commands.embed.create",      # Lệnh /p embed create
+    # "commands.voice_system",    # Tạm ẩn theo yêu cầu của Nguyệt
+    # "core.voice_listener",      # Tạm ẩn theo yêu cầu của Nguyệt
 ]
 
 async def load_extensions():
     for ext in EXTENSIONS:
         try:
             await bot.load_extension(ext)
-            print(f"[LOAD] {ext}", flush=True)
+            print(f"[LOAD] Success: {ext}", flush=True)
         except Exception as e:
-            print(f"[ERROR LOAD] {ext}: {e}", flush=True)
-
-# =========================
-# SERVICE CONTROL (FIXED SAFE LIFECYCLE)
-# =========================
-
-bot._ready_once = False
-bot._voice_task = None
-
-def start_services():
-    # tránh duplicate task khi reconnect
-    if bot._voice_task is None or bot._voice_task.done():
-        bot._voice_task = bot.loop.create_task(VoiceService(bot).start())
-        print("[SERVICE] VoiceService started", flush=True)
+            print(f"[LOAD ERROR] {ext}: {e}", flush=True)
 
 # =========================
 # READY STATE
 # =========================
 
+bot._ready_once = False
+
 @bot.event
 async def on_ready():
     if bot._ready_once:
-        print("[RECONNECT] Bot reconnected", flush=True)
         return
-
     bot._ready_once = True
 
-    # =========================
-    # SLASH SYNC
-    # =========================
+    # 1. TRÍ NHỚ BỀN VỮNG: Khôi phục lại trạng thái cũ ngay khi tỉnh dậy
+    await State.resync()
+    print("[STATE] Trí nhớ bền vững đã được khôi phục!", flush=True)
+
+    # 2. SLASH SYNC: Đồng bộ lệnh với Discord
     try:
         synced = await bot.tree.sync()
-        print(f"[SLASH] Synced: {len(synced)}", flush=True)
+        print(f"[SLASH] Đã đồng bộ {len(synced)} lệnh Slash.", flush=True)
     except Exception as e:
         print(f"[SLASH ERROR] {e}", flush=True)
 
-    print(f"[READY] Logged in as {bot.user} ({bot.user.id})", flush=True)
+    print(f"🚀 {bot.user} đã sẵn sàng phục vụ!", flush=True)
 
-    # =========================
-    # MEMORY RESTORE LAYER
-    # =========================
-    await State.resync()
-    print("[STATE] Resynced successfully", flush=True)
+# =========================
+# SHUTDOWN PROTECTION (BẢO VỆ DỮ LIỆU)
+# =========================
 
-    # =========================
-    # START SERVICES (SAFE)
-    # =========================
-    start_services()
+async def shutdown(loop, signal=None):
+    """Đảm bảo ghi mọi dữ liệu vào đĩa trước khi app bị Render tắt"""
+    if signal:
+        print(f"[SHUTDOWN] Nhận tín hiệu {signal.name}...", flush=True)
+    
+    print("[SHUTDOWN] Đang ép ghi cache xuống đĩa...", flush=True)
+    force_flush() # Ghi file .json cuối cùng
+    
+    tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+    [task.cancel() for task in tasks]
+    await asyncio.gather(*tasks, return_exceptions=True)
+    loop.stop()
 
 # =========================
 # MAIN ENTRY
 # =========================
 
 async def main():
-    bot.voice_manager = VoiceManager(bot)
+    # Khởi tạo các thành phần hỗ trợ
+    # bot.voice_manager = VoiceManager(bot) # Tạm ẩn
 
     await load_extensions()
 
+    # Chạy song song Web server và Bot
     await asyncio.gather(
         run_web_server(),
         bot.start(TOKEN)
     )
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        # Xử lý khi nhấn Ctrl+C
+        force_flush()
+        print("[EXIT] Bot đã tắt an toàn.")
