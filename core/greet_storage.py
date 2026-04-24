@@ -1,55 +1,58 @@
 import json
 import os
+from core.cache_manager import get_raw, mark_dirty
 
-FILE_PATH = "data/greet_leave.json"
+# Sử dụng chung key với CacheManager để đồng bộ hóa
+FILE_KEY = "greet_leave"
 
+# =========================
+# INTERNAL HELPERS
+# =========================
 
-def _load_all():
-    if not os.path.exists(FILE_PATH):
-        return {}
+def _get_cache():
+    """Lấy dữ liệu trực tiếp từ RAM của CacheManager"""
+    return get_raw(FILE_KEY)
 
-    with open(FILE_PATH, "r", encoding="utf-8") as f:
-        try:
-            return json.load(f)
-        except json.JSONDecodeError:
-            return {}
-
-
-def _save_all(data: dict):
-    os.makedirs("data", exist_ok=True)
-
-    with open(FILE_PATH, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=4)
-
+# =========================
+# PUBLIC API
+# =========================
 
 def get_guild_config(guild_id: int):
-    data = _load_all()
-    return data.get(str(guild_id), {})
+    """Lấy toàn bộ cấu hình của một Guild từ RAM"""
+    cache = _get_cache()
+    return cache.get(str(guild_id), {})
 
 
 def update_guild_config(guild_id: int, section: str, key: str, value):
     """
+    Cập nhật cấu hình vào RAM và đánh dấu ghi xuống Disk sau 5 giây.
     section: "greet" hoặc "leave"
     key: "channel" | "embed" | "message"
     """
-    data = _load_all()
+    cache = _get_cache()
+    gid = str(guild_id)
 
-    guild_id = str(guild_id)
-
-    if guild_id not in data:
-        data[guild_id] = {
+    # Đảm bảo cấu trúc Guild tồn tại trong RAM
+    if gid not in cache:
+        cache[gid] = {
             "greet": {},
             "leave": {}
         }
+    
+    if not isinstance(cache[gid], dict):
+        cache[gid] = {"greet": {}, "leave": {}}
 
-    if section not in data[guild_id]:
-        data[guild_id][section] = {}
+    if section not in cache[gid]:
+        cache[gid][section] = {}
 
-    data[guild_id][section][key] = value
+    # Cập nhật giá trị trực tiếp trên reference của RAM
+    cache[gid][section][key] = value
 
-    _save_all(data)
+    # Đánh dấu "Dirty" để CacheManager tự động lưu xuống Disk ngầm
+    mark_dirty(FILE_KEY)
 
 
 def get_section(guild_id: int, section: str):
+    """Lấy một phần cấu hình (greet hoặc leave) của Guild"""
     config = get_guild_config(guild_id)
     return config.get(section, {})
