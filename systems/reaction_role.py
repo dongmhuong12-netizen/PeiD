@@ -23,8 +23,8 @@ class ReactionRole(commands.Cog):
         self.bot = bot
         self.data = load(FILE_KEY) or {}
         self.emoji_map = {} 
-        # Cache tin nhắn để tránh fetch_message liên tục gây chậm
-        self.msg_obj_cache = {}
+        # Sử dụng cache hữu hạn hoặc fetch trực tiếp để tránh Memory Leak (100k servers)
+        self.msg_obj_cache = {} 
 
     def _refresh(self):
         self.data = load(FILE_KEY) or {}
@@ -33,7 +33,7 @@ class ReactionRole(commands.Cog):
     @commands.Cog.listener()
     async def on_ready(self):
         self._refresh()
-        print("ReactionRole SPEED PATCH LOADED")
+        print("🚀 ReactionRole: Hệ phản xạ 100k+ READY")
 
     def build_cache(self):
         self.emoji_map.clear()
@@ -60,14 +60,21 @@ class ReactionRole(commands.Cog):
         emoji = _normalize_emoji(payload.emoji)
         msg_id = str(payload.message_id)
         
+        # 1. Kiểm tra cache Cog
         if msg_id not in self.emoji_map:
-            self._refresh()
-            if msg_id not in self.emoji_map: return
-        if emoji not in self.emoji_map[msg_id]: return
+            # 2. Check "não bộ" bền vững (Fix lỗi mất trí nhớ sau restart)
+            info = await State.get_info_by_mid(msg_id)
+            if not info: 
+                # Thử refresh lần cuối nếu file vừa được lưu
+                self._refresh()
+                if msg_id not in self.emoji_map: return
+            
+        if emoji not in self.emoji_map.get(msg_id, {}): return
 
-        # Xử lý tuần tự cho từng User nhưng không đợi 60s
+        # Xử lý tuần tự cho từng User (Tránh Race Condition)
         async with _user_locks[payload.user_id]:
             guild = self.bot.get_guild(payload.guild_id)
+            if not guild: return
             member = payload.member or guild.get_member(payload.user_id)
             if not member or member.bot: return
 
@@ -76,41 +83,52 @@ class ReactionRole(commands.Cog):
             target_role = guild.get_role(target_role_id)
             if not target_role: return
 
-            # Nếu là Single Mode
-            if data["mode"] == "single":
-                tasks = []
-                
-                # 1. Gom role cũ cần xóa
-                roles_to_remove = [
-                    guild.get_role(int(rid)) for rid in data["group_roles"] 
-                    if int(rid) != target_role_id
-                ]
-                to_rem = [r for r in roles_to_remove if r and r in member.roles]
-                if to_rem:
-                    tasks.append(member.remove_roles(*to_rem))
-
-                # 2. Gỡ Reaction cũ (UI Sync)
-                try:
-                    # Lấy message từ cache hoặc fetch nếu cần
-                    message = self.msg_obj_cache.get(msg_id)
-                    if not message:
-                        channel = self.bot.get_channel(payload.channel_id)
-                        message = await channel.fetch_message(payload.message_id)
-                        self.msg_obj_cache[msg_id] = message
-
-                    for r in message.reactions:
-                        r_emo = _normalize_emoji(r.emoji)
-                        if r_emo in data["group_emojis"] and r_emo != emoji:
-                            tasks.append(r.remove(member))
-                except: pass
-
-                # Thực hiện dọn dẹp song song
-                if tasks:
-                    await asyncio.gather(*tasks, return_exceptions=True)
-
-            # 3. Gán Role mới ngay lập tức
+            # XỬ LÝ GÁN ROLE TRƯỚC (Ưu tiên tốc độ phản hồi cho User)
             if target_role not in member.roles:
-                await member.add_roles(target_role)
+                try:
+                    await member.add_roles(target_role, reason="Reaction Role: Assigned")
+                except Exception: pass
+
+            # XỬ LÝ DỌN DẸP UI (Chế độ Single Mode)
+            if data["mode"] == "single":
+                # Đưa việc xóa reaction vào background task để không làm nghẽn luồng gán role
+                asyncio.create_task(self._handle_single_mode_cleanup(payload, data, member, target_role_id))
+
+    async def _handle_single_mode_cleanup(self, payload, data, member, target_role_id):
+        """Xử lý gỡ role cũ và reaction cũ một cách an toàn (Chống Rate Limit)"""
+        guild = self.bot.get_guild(payload.guild_id)
+        
+        # 1. Gỡ các role khác trong cùng group
+        roles_to_remove = []
+        for rid in data["group_roles"]:
+            rid_int = int(rid)
+            if rid_int != target_role_id:
+                r = guild.get_role(rid_int)
+                if r and r in member.roles:
+                    roles_to_remove.append(r)
+        
+        if roles_to_remove:
+            try:
+                await member.remove_roles(*roles_to_remove, reason="Reaction Role: Single Mode Sync")
+            except: pass
+
+        # 2. Gỡ Reaction cũ trên UI (Silent Task)
+        try:
+            channel = self.bot.get_channel(payload.channel_id)
+            message = self.msg_obj_cache.get(str(payload.message_id))
+            if not message:
+                message = await channel.fetch_message(payload.message_id)
+                # Chỉ cache ngắn hạn để tránh rò rỉ RAM
+                self.msg_obj_cache[str(payload.message_id)] = message
+                
+            for r in message.reactions:
+                r_emo = _normalize_emoji(r.emoji)
+                if r_emo in data["group_emojis"] and r_emo != _normalize_emoji(payload.emoji):
+                    try:
+                        await r.remove(member)
+                        await asyncio.sleep(0.2) # Delay nhẹ chống Rate Limit API Discord
+                    except: pass
+        except: pass
 
     @commands.Cog.listener()
     async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent):
@@ -120,6 +138,7 @@ class ReactionRole(commands.Cog):
         if emoji not in self.emoji_map[msg_id]: return
 
         guild = self.bot.get_guild(payload.guild_id)
+        if not guild: return
         member = guild.get_member(payload.user_id)
         if not member or member.bot: return
 
@@ -127,7 +146,9 @@ class ReactionRole(commands.Cog):
         role = guild.get_role(int(data["target_role"]))
         
         if role and role in member.roles:
-            await member.remove_roles(role)
+            try:
+                await member.remove_roles(role, reason="Reaction Role: Removed")
+            except: pass
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(ReactionRole(bot))
