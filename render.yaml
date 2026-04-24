@@ -1,7 +1,28 @@
 services:
-  - type: worker
+  - type: web
     name: pei-bot
     env: python
+    # TIÊU CHUẨN 100K+: Đảm bảo Python phiên bản mới nhất để chạy ổn định
+    plan: free 
     buildCommand: pip install -r requirements.txt
     startCommand: python main.py
     autoDeploy: true
+    
+    # 1. TRÍ NHỚ VĨNH CỬU: Gắn ổ cứng để lưu thư mục data
+    # Dù bot restart hay update code, dữ liệu trong /data vẫn còn nguyên
+    disk:
+      name: pei-data
+      mountPath: /opt/render/project/src/data
+      sizeGB: 1 # 1GB là quá đủ cho hàng triệu file JSON cấu hình
+
+    # 2. KEEP ALIVE: Cấu hình để Render ping bot, tránh bị ngủ đông
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.0
+      - key: PORT
+        value: 10000
+      - key: TOKEN
+        sync: false # Token nên được nhập thủ công trên Dashboard Render để bảo mật
+
+    # 3. HEALTH CHECK: Kết nối với Web Server trong main.py
+    healthCheckPath: /
