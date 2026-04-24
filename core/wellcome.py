@@ -13,7 +13,10 @@ from core.variable_engine import apply_variables
 # ======================
 
 async def send_wellcome(guild: discord.Guild, member: discord.Member):
-
+    """
+    Xử lý gửi tin nhắn Wellcome phụ.
+    Tối ưu: Gộp Text và Embed vào 1 request để bảo vệ API Discord ở server lớn.
+    """
     config = get_section(guild.id, "wellcome")
 
     channel_id = config.get("channel")
@@ -24,45 +27,47 @@ async def send_wellcome(guild: discord.Guild, member: discord.Member):
         return False
 
     channel = guild.get_channel(channel_id)
-
     if not channel:
         return False
 
     permissions = channel.permissions_for(guild.me)
-
     if not permissions.send_messages:
         return False
 
-    sent_anything = False
-
     try:
-
-        # TEXT
+        # 1. Chuẩn bị TEXT
+        final_content = None
         if message_text:
-            message_text = apply_variables(message_text, guild, member)
-            await channel.send(content=message_text)
-            sent_anything = True
+            final_content = apply_variables(message_text, guild, member)
 
-        # EMBED
+        # 2. Chuẩn bị EMBED
+        final_embed = None
         if embed_name and permissions.embed_links:
-
             embed_data = load_embed(guild.id, embed_name)
-
             if embed_data:
-                await send_embed(
-                    channel,
-                    embed_data,
-                    guild,
-                    member
-                )
-                sent_anything = True
+                # Xử lý biến cho toàn bộ dữ liệu Embed
+                processed_data = apply_variables(embed_data, guild, member)
+                
+                # Tạo đối tượng Embed trực tiếp để gộp vào lệnh gửi duy nhất
+                from discord import Embed
+                final_embed = Embed.from_dict(processed_data)
+                
+                # Fix Image/Thumbnail nếu có
+                if processed_data.get("image"):
+                    final_embed.set_image(url=processed_data["image"])
+                if processed_data.get("thumbnail"):
+                    final_embed.set_thumbnail(url=processed_data["thumbnail"])
 
-        return sent_anything
+        # 3. GỬI GỘP (Atomic Send - 1 Request duy nhất)
+        if final_content or final_embed:
+            await channel.send(content=final_content, embed=final_embed)
+            return True
 
-    except discord.Forbidden:
         return False
 
-    except discord.HTTPException:
+    except (discord.Forbidden, discord.HTTPException):
+        return False
+    except Exception:
         return False
 
 
@@ -147,5 +152,5 @@ class WellcomeListener(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
-
+        # Hệ phụ vẫn chạy song song với Greet nhưng giờ đã nhẹ hơn 50%
         await send_wellcome(member.guild, member)
