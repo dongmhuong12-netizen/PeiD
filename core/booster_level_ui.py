@@ -123,20 +123,17 @@ class BoosterLevelView(discord.ui.View):
             self.selected_level = self.page * LEVELS_PER_PAGE
             await self.refresh(interaction)
         else:
-            await interaction.response.send_message("Đây là trang đầu tiên!", ephemeral=True)
+            await interaction.response.send_message("Đây là trang đầu tiên!")
 
     @discord.ui.button(label="+ Page", style=discord.ButtonStyle.green, row=1)
     async def add_page(self, interaction, button):
-        # Kiểm tra giới hạn 100 levels
         if len(self.levels) >= MAX_LEVELS:
-            return await interaction.response.send_message("❌ Đã đạt giới hạn tối đa 100 Level (10 trang).", ephemeral=True)
+            return await interaction.response.send_message("❌ Đã đạt giới hạn tối đa 100 Level (10 trang).")
 
-        # LOGIC KIỂM TRA LẤP ĐẦY TRANG HIỆN TẠI
         start_idx = self.page * LEVELS_PER_PAGE
         end_idx = start_idx + LEVELS_PER_PAGE
         current_page_levels = self.levels[start_idx:end_idx]
 
-        # Kiểm tra xem có level nào chưa set role hoặc days không
         is_page_complete = all(
             lvl.get("role") is not None and lvl.get("days") is not None 
             for lvl in current_page_levels
@@ -144,17 +141,12 @@ class BoosterLevelView(discord.ui.View):
 
         if not is_page_complete:
             return await interaction.response.send_message(
-                f"⚠️ **Thông báo:** Bạn cần hoàn tất thiết lập Role và Days cho toàn bộ 10 Level của **Trang {self.page + 1}** trước khi tạo trang mới.",
-                ephemeral=True
+                f"⚠️ **Thông báo:** Bạn cần hoàn tất thiết lập Role và Days cho toàn bộ 10 Level của **Trang {self.page + 1}** trước khi tạo trang mới."
             )
 
-        # Nếu đã hoàn tất trang cũ, tiến hành tạo trang mới
         self.page += 1
-        self._fill_slots()
         self.selected_level = self.page * LEVELS_PER_PAGE
-        
-        await interaction.response.send_message(f"✅ Đã tạo thành công **Trang {self.page + 1}**!", ephemeral=True)
-        await self.refresh()
+        await self.refresh(interaction)
 
     @discord.ui.button(label=">", style=discord.ButtonStyle.gray, row=1)
     async def next_page(self, interaction, button):
@@ -163,7 +155,7 @@ class BoosterLevelView(discord.ui.View):
             self.selected_level = self.page * LEVELS_PER_PAGE
             await self.refresh(interaction)
         else:
-            await interaction.response.send_message("Đây là trang cuối cùng!", ephemeral=True)
+            await interaction.response.send_message("Đây là trang cuối cùng!")
 
     @discord.ui.button(label="Sửa Role", style=discord.ButtonStyle.blurple, row=2)
     async def edit_role_btn(self, interaction, button):
@@ -177,7 +169,7 @@ class BoosterLevelView(discord.ui.View):
     @discord.ui.button(label="Sửa Ngày", style=discord.ButtonStyle.blurple, row=2)
     async def edit_days_btn(self, interaction, button):
         if self.selected_level == 0:
-            return await interaction.response.send_message("Level 1 mặc định là 0 ngày và không thể chỉnh sửa.", ephemeral=True)
+            return await interaction.response.send_message("Level 1 mặc định là 0 ngày và không thể chỉnh sửa.")
         current = self.levels[self.selected_level].get("days")
         async def callback(it, days):
             self.levels[self.selected_level]["days"] = days
@@ -200,7 +192,7 @@ class BoosterLevelView(discord.ui.View):
     @discord.ui.button(label="Xóa Level", style=discord.ButtonStyle.red, row=3)
     async def delete_btn(self, interaction, button):
         if self.selected_level == 0:
-            return await interaction.response.send_message("Không thể xóa Level 1 mặc định.", ephemeral=True)
+            return await interaction.response.send_message("Không thể xóa Level 1 mặc định.")
         self.levels.pop(self.selected_level)
         self.selected_level = max(0, self.selected_level - 1)
         await self.refresh(interaction)
@@ -210,12 +202,23 @@ class BoosterLevelView(discord.ui.View):
         cleaned = [lvl for lvl in self.levels if lvl.get("role") is not None and lvl.get("days") is not None]
         success, error_msg = validate_levels(cleaned, self.booster_role)
         if not success:
-            return await interaction.response.send_message(f"❌ **Lưu thất bại:** {error_msg}", ephemeral=True)
+            return await interaction.response.send_message(f"❌ **Lưu thất bại:** {error_msg}")
+        
         await save_levels(interaction.guild.id, cleaned)
-        await interaction.response.send_message(f"✅ Đã lưu thành công **{len(cleaned)}** Levels!", ephemeral=True)
+        
+        # Vô hiệu hóa toàn bộ nút để chống bấm nhầm sau khi đã lưu
+        for child in self.children:
+            child.disabled = True
+        await interaction.response.edit_message(view=self)
+        
+        await interaction.followup.send(f"✅ Đã lưu thành công **{len(cleaned)}** Levels!")
         self.stop()
 
     @discord.ui.button(label="HỦY BỎ", style=discord.ButtonStyle.secondary, row=4)
     async def cancel_btn(self, interaction, button):
-        await interaction.response.send_message("Đã hủy các thay đổi.", ephemeral=True)
+        for child in self.children:
+            child.disabled = True
+        await interaction.response.edit_message(view=self)
+        
+        await interaction.followup.send("Đã hủy các thay đổi.")
         self.stop()
