@@ -48,11 +48,11 @@ intents.voice_states = True
 bot = commands.AutoShardedBot(
     command_prefix=commands.when_mentioned,
     intents=intents,
-    help_command=None # Thường Bot hiện đại dùng Slash thay vì Help text
+    help_command=None 
 )
 
 # =========================
-# EXTENSIONS (BẢN FULL ĐỒNG BỘ 100k+)
+# EXTENSIONS (ĐỒNG BỘ 100k+)
 # =========================
 
 EXTENSIONS = [
@@ -63,8 +63,6 @@ EXTENSIONS = [
     "systems.reaction_role",     # Hệ thống gán role tự động
     "commands.embed.embed_group", # Group lệnh /p embed
     "commands.embed.create",      # Lệnh /p embed create
-    # "commands.voice_system",    # Tạm ẩn theo yêu cầu của Nguyệt
-    # "core.voice_listener",      # Tạm ẩn theo yêu cầu của Nguyệt
 ]
 
 async def load_extensions():
@@ -76,9 +74,8 @@ async def load_extensions():
                 await bot.load_extension(ext)
             print(f"[LOAD] Success: {ext}", flush=True)
         except Exception as e:
-            # Bắt lỗi "already loaded" từ discord.py hoặc ClientException từ Cog
             if "already loaded" in str(e).lower():
-                print(f"[LOAD] Info: {ext} đã được nạp trước đó (Bỏ qua).", flush=True)
+                print(f"[LOAD] Info: {ext} đã được nạp trước đó.", flush=True)
             else:
                 print(f"[LOAD ERROR] {ext}: {e}", flush=True)
 
@@ -95,29 +92,29 @@ async def on_ready():
     bot._ready_once = True
 
     # 1. TRÍ NHỚ BỀN VỮNG: Khôi phục lại trạng thái cũ ngay khi tỉnh dậy
+    # Đã khớp tên với core/state.py
     await State.resync()
     print("[STATE] Trí nhớ bền vững đã được khôi phục!", flush=True)
 
     # 2. SLASH SYNC: Đồng bộ lệnh với Discord
     try:
         synced = await bot.tree.sync()
-        print(f"[SLASH] Đã đồng bộ {len(synced)} lệnh Slash.", flush=True)
+        print(f"[SLASH] ✅ Đã đồng bộ {len(synced)} lệnh Slash.", flush=True)
     except Exception as e:
         print(f"[SLASH ERROR] {e}", flush=True)
 
     print(f"🚀 {bot.user} đã sẵn sàng phục vụ!", flush=True)
 
 # =========================
-# SHUTDOWN PROTECTION (BẢO VỆ DỮ LIỆU)
+# SHUTDOWN PROTECTION
 # =========================
 
 async def shutdown(loop, signal=None):
-    """Đảm bảo ghi mọi dữ liệu vào đĩa trước khi app bị Render tắt"""
     if signal:
         print(f"[SHUTDOWN] Nhận tín hiệu {signal.name}...", flush=True)
     
     print("[SHUTDOWN] Đang ép ghi cache xuống đĩa...", flush=True)
-    force_flush() # Ghi file .json cuối cùng
+    force_flush() 
     
     tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
     [task.cancel() for task in tasks]
@@ -129,18 +126,16 @@ async def shutdown(loop, signal=None):
 # =========================
 
 async def main():
-    # BẬT MÁY X-QUANG: Ép Bot phải in ra mọi cảnh báo và lỗi kết nối mạng ẩn
+    # Bật logging để theo dõi kết nối Discord
     discord.utils.setup_logging()
 
-    # Khởi tạo các thành phần hỗ trợ
-    # bot.voice_manager = VoiceManager(bot) # Tạm ẩn
-
-    # TÁCH LUỒNG: Chạy Web Server ngầm bằng Event Loop, trả lại tài nguyên
+    # Chạy Web Server ngầm
     asyncio.create_task(run_web_server())
 
+    # Nạp các thành phần
     await load_extensions()
 
-    # Khởi động Bot an toàn với Context Manager
+    # Khởi động Bot
     async with bot:
         await bot.start(TOKEN)
 
@@ -148,6 +143,5 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        # Xử lý khi nhấn Ctrl+C
         force_flush()
         print("[EXIT] Bot đã tắt an toàn.")
