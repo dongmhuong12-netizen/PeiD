@@ -154,3 +154,12 @@ class WellcomeListener(commands.Cog):
     async def on_member_join(self, member: discord.Member):
         # Hệ phụ vẫn chạy song song với Greet nhưng giờ đã nhẹ hơn 50%
         await send_wellcome(member.guild, member)
+
+
+# ======================
+# SETUP FUNCTION
+# ======================
+async def setup(bot):
+    if not any(isinstance(c, WellcomeGroup) for c in bot.tree.get_commands()):
+        bot.tree.add_command(WellcomeGroup())
+    await bot.add_cog(WellcomeListener(bot))
