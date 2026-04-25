@@ -186,7 +186,10 @@ class State:
     # =========================
 
     @staticmethod
-    async def force_resync():
-        """Ép bot nạp lại file từ đĩa vào RAM"""
+    async def resync():
+        """
+        Đồng bộ lại trí nhớ từ đĩa cứng vào RAM.
+        Đổi tên từ force_resync thành resync để khớp với main.py
+        """
         load(FILE_KEY)
         return True
