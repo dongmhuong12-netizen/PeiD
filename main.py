@@ -129,6 +129,9 @@ async def shutdown(loop, signal=None):
 # =========================
 
 async def main():
+    # BẬT MÁY X-QUANG: Ép Bot phải in ra mọi cảnh báo và lỗi kết nối mạng ẩn
+    discord.utils.setup_logging()
+
     # Khởi tạo các thành phần hỗ trợ
     # bot.voice_manager = VoiceManager(bot) # Tạm ẩn
 
