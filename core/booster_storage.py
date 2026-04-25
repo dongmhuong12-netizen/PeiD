@@ -1,5 +1,5 @@
 import copy
-from core.cache_manager import get_raw, mark_dirty
+from core.cache_manager import get_raw, mark_dirty, save # Thêm save để ép lưu
 
 # Key đồng bộ với hệ thống Booster
 FILE_KEY = "booster_levels"
@@ -11,7 +11,6 @@ FILE_KEY = "booster_levels"
 def _normalize_levels(levels: list):
     """
     Chuẩn hóa dữ liệu Level: Lọc role hợp lệ và sắp xếp tăng dần.
-    BẢO TOÀN 100% LOGIC CỦA NGUYỆT.
     """
     if not isinstance(levels, list):
         return []
@@ -26,13 +25,12 @@ def _normalize_levels(levels: list):
         if role_id:
             try:
                 normalized.append({
-                    "role": int(role_id), 
+                    "role": str(role_id), # Lưu ID dạng String để tránh lỗi JSON
                     "days": int(days) if days is not None else 0
                 })
             except (ValueError, TypeError):
                 continue
     
-    # Sắp xếp để Engine có thể thực hiện Early Break (Tối ưu CPU)
     return sorted(normalized, key=lambda x: x["days"])
 
 # =========================
@@ -41,45 +39,43 @@ def _normalize_levels(levels: list):
 
 async def get_guild_config(guild_id: int):
     """
-    Lấy cấu hình an toàn, hỗ trợ Migrate và bảo vệ RAM gốc.
+    Lấy toàn bộ cấu hình server, đảm bảo không làm mất các key phụ (channel, embed...).
     """
     db = get_raw(FILE_KEY)
     guild_id_str = str(guild_id)
     
-    raw_config = db.get(guild_id_str, {})
-    if not isinstance(raw_config, dict): raw_config = {}
+    # Lấy toàn bộ dict hiện có thay vì chỉ lấy 2 key
+    config = db.get(guild_id_str, {})
+    if not isinstance(config, dict): config = {}
 
-    config = {
-        "booster_role": raw_config.get("booster_role"),
-        "levels": raw_config.get("levels", [])
-    }
-
-    # LOGIC MIGRATE: Chuyển đổi dữ liệu cũ nếu Admin dùng format cũ
-    if isinstance(config["levels"], dict):
-        new_levels = [v for k, v in config["levels"].items() if isinstance(v, dict)]
-        config["levels"] = new_levels
-
-    # Chuẩn hóa để đảm bảo tính nhất quán của ID và Thứ tự
-    config["levels"] = _normalize_levels(config["levels"])
+    # Đảm bảo các mảng cốt lõi luôn tồn tại và đúng định dạng
+    if "levels" not in config or not isinstance(config["levels"], list):
+        config["levels"] = []
     
-    if config["booster_role"]:
-        try: config["booster_role"] = int(config["booster_role"])
-        except: config["booster_role"] = None
-
-    # Trả về bản sao để UI/Engine không vô tình sửa hỏng RAM gốc
+    # Trả về bản sao để an toàn
     return copy.deepcopy(config)
 
 async def save_guild_config(guild_id: int, config: dict):
-    """Lọc dữ liệu sạch và kích hoạt hàng đợi ghi đĩa ngầm (CacheManager)"""
+    """
+    Lưu và ÉP GHI xuống đĩa ngay lập tức để chống Render restart.
+    """
     db = get_raw(FILE_KEY)
     guild_id_str = str(guild_id)
 
-    db[guild_id_str] = {
-        "booster_role": int(config["booster_role"]) if config.get("booster_role") else None,
-        "levels": _normalize_levels(config.get("levels", []))
-    }
+    # Cập nhật toàn bộ config vào RAM
+    # Chúng ta lưu cả channel, message, embed và levels vào đây
+    if "levels" in config:
+        config["levels"] = _normalize_levels(config["levels"])
+        
+    db[guild_id_str] = config
     
+    # 1. Đánh dấu bẩn
     mark_dirty(FILE_KEY)
+    
+    # 2. ÉP LƯU NGAY LẬP TỨC (Nút thắt dứt điểm mất trí nhớ)
+    await save(FILE_KEY)
+    
+    print(f"[STORAGE] Đã đóng đinh cấu hình Booster cho Guild {guild_id_str}", flush=True)
 
 # =========================
 # INTERFACE (DÀNH CHO UI & ENGINE)
