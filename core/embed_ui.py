@@ -136,9 +136,9 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
 # =========================
 
 class EmbedUIView(discord.ui.View):
-    def __init__(self, guild_id: int, name: str, data: dict):
-        # TIÊU CHUẨN 100K+: Giải phóng RAM sau 10 phút không tương tác
-        super().__init__(timeout=600)
+    # FIX: Thêm timeout làm tham số để khớp với lời gọi từ EmbedGroup
+    def __init__(self, guild_id: int, name: str, data: dict, timeout: float = 600.0):
+        super().__init__(timeout=timeout)
 
         self.guild_id = str(guild_id)
         self.name = name
@@ -160,7 +160,11 @@ class EmbedUIView(discord.ui.View):
                 }
 
         key = f"{self.guild_id}:{name}"
-        ACTIVE_EMBED_VIEWS.setdefault(key, []).append(self)
+        # Giữ nguyên logic quản lý View của Nguyệt
+        if key not in ACTIVE_EMBED_VIEWS:
+            ACTIVE_EMBED_VIEWS[key] = []
+        if self not in ACTIVE_EMBED_VIEWS[key]:
+            ACTIVE_EMBED_VIEWS[key].append(self)
 
     async def on_timeout(self):
         """Cleanup logic khi View hết hạn"""
@@ -171,7 +175,6 @@ class EmbedUIView(discord.ui.View):
         self.stop()
 
     def build_embed(self, guild=None, member=None):
-        # Tránh Circular Import bằng Local Import
         from core.embed_sender import _build_embed
         
         data_copy = copy.deepcopy(self.data)
@@ -217,7 +220,6 @@ class EmbedUIView(discord.ui.View):
 
     @discord.ui.button(label="Save Embed", style=discord.ButtonStyle.success)
     async def save_embed_btn(self, interaction, button):
-        # DEFER NGAY LẬP TỨC: Chống lỗi 3s
         await interaction.response.defer(ephemeral=True)
         
         guild = interaction.guild
@@ -250,7 +252,6 @@ class EmbedUIView(discord.ui.View):
                 }
                 await save_reaction_data(db)
                 
-                # Local Import để tránh Circular Import
                 from core.embed_sender import _enqueue_reaction
                 if self.message:
                     print(f"[UI] Đang đẩy reaction cho {self.name} vào hàng đợi...", flush=True)
@@ -260,7 +261,8 @@ class EmbedUIView(discord.ui.View):
         if errors:
             return await interaction.followup.send("❌ **Lỗi cấu hình:**\n- " + "\n- ".join(errors), ephemeral=True)
 
-        save_embed(interaction.guild.id, self.name, self.data)
+        # FIX: Phải await vì storage là async
+        await save_embed(interaction.guild.id, self.name, self.data)
         
         if self.message:
             await State.atomic_embed_register(interaction.guild.id, self.name, self.message.id)
@@ -270,7 +272,8 @@ class EmbedUIView(discord.ui.View):
 
     @discord.ui.button(label="Delete Embed", style=discord.ButtonStyle.danger)
     async def delete_embed_btn(self, interaction, button):
-        delete_embed(interaction.guild.id, self.name)
+        # FIX: Phải await
+        await delete_embed(interaction.guild.id, self.name)
         key = f"{self.guild_id}:{self.name}"
         ACTIVE_EMBED_VIEWS.pop(key, None)
         
