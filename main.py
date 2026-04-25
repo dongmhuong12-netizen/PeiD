@@ -30,7 +30,9 @@ async def run_web_server():
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
     print(f"[WEB] Service started on port {port}", flush=True)
-    while True: await asyncio.sleep(3600)
+    
+    # Giữ cho Web Server sống ngầm mà không block luồng chính
+    await asyncio.Event().wait()
 
 # =========================
 # BOT SETUP
@@ -68,10 +70,17 @@ EXTENSIONS = [
 async def load_extensions():
     for ext in EXTENSIONS:
         try:
-            await bot.load_extension(ext)
+            if ext in bot.extensions:
+                await bot.reload_extension(ext)
+            else:
+                await bot.load_extension(ext)
             print(f"[LOAD] Success: {ext}", flush=True)
         except Exception as e:
-            print(f"[LOAD ERROR] {ext}: {e}", flush=True)
+            # Bắt lỗi "already loaded" từ discord.py hoặc ClientException từ Cog
+            if "already loaded" in str(e).lower():
+                print(f"[LOAD] Info: {ext} đã được nạp trước đó (Bỏ qua).", flush=True)
+            else:
+                print(f"[LOAD ERROR] {ext}: {e}", flush=True)
 
 # =========================
 # READY STATE
@@ -123,13 +132,14 @@ async def main():
     # Khởi tạo các thành phần hỗ trợ
     # bot.voice_manager = VoiceManager(bot) # Tạm ẩn
 
+    # TÁCH LUỒNG: Chạy Web Server ngầm bằng Event Loop, trả lại tài nguyên
+    asyncio.create_task(run_web_server())
+
     await load_extensions()
 
-    # Chạy song song Web server và Bot
-    await asyncio.gather(
-        run_web_server(),
-        bot.start(TOKEN)
-    )
+    # Khởi động Bot an toàn với Context Manager
+    async with bot:
+        await bot.start(TOKEN)
 
 if __name__ == "__main__":
     try:
