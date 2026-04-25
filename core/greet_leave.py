@@ -13,15 +13,22 @@ from core.variable_engine import apply_variables
 
 async def send_config_message(guild: discord.Guild, member: discord.Member, section: str):
     """
-    Xử lý gửi tin nhắn Greet/Leave tập trung.
-    Tối ưu 100k+: Gộp Text và Embed vào 1 request duy nhất (Atomic Send).
+    Xử lý gửi tin nhắn Greet/Leave/Booster tập trung.
     """
+    # 1. LẤY CONFIG (Cần đồng bộ hóa kho dữ liệu)
     config = get_section(guild.id, section)
+    
+    # TRƯỜNG HỢP ĐẶC BIỆT: Nếu là booster, kiểm tra thêm kho booster_levels
+    if section == "booster" and (not config or not config.get("channel")):
+        from core.cache_manager import get_raw
+        db = get_raw("booster_levels")
+        config = db.get(str(guild.id), {})
+
     if not config: return False
 
-    channel_id = config.get("channel")
-    message_text = config.get("message")
-    embed_name = config.get("embed")
+    channel_id = config.get("channel") or config.get("booster_channel")
+    message_text = config.get("message") or config.get("booster_message")
+    embed_name = config.get("embed") or config.get("booster_embed")
 
     if not channel_id: return False
 
@@ -35,20 +42,20 @@ async def send_config_message(guild: discord.Guild, member: discord.Member, sect
         final_content = None
         final_embed = None
 
-        # 1. Xử lý TEXT (Apply biến động)
+        # 1. Xử lý TEXT
         if message_text:
             final_content = apply_variables(message_text, guild, member)
 
-        # 2. Xử lý EMBED (Đồng bộ với embed_sender)
+        # 2. Xử lý EMBED
         if embed_name and perms.embed_links:
-            embed_data = load_embed(guild.id, embed_name)
+            # FIX: BẮT BUỘC PHẢI AWAIT load_embed
+            embed_data = await load_embed(guild.id, embed_name)
             if embed_data:
-                # Sử dụng chuyên gia build Embed đã chốt ở Bước 7
                 from core.embed_sender import _build_embed
                 processed_data = apply_variables(embed_data, guild, member)
                 final_embed = _build_embed(processed_data)
 
-        # 3. GỬI GỘP (Chống Rate Limit)
+        # 3. GỬI GỘP
         if final_content or final_embed:
             await channel.send(content=final_content, embed=final_embed)
             return True
@@ -81,7 +88,8 @@ class GreetGroup(app_commands.Group):
     @app_commands.command(name="embed", description="Gán Embed cho hệ thống Greet")
     @app_commands.default_permissions(manage_guild=True)
     async def embed(self, interaction: discord.Interaction, name: str):
-        if not load_embed(interaction.guild.id, name):
+        # FIX: PHẢI AWAIT load_embed
+        if not await load_embed(interaction.guild.id, name):
             return await interaction.response.send_message(f"❌ Embed `{name}` không tồn tại.", ephemeral=True)
         update_guild_config(interaction.guild.id, "greet", "embed", name)
         await interaction.response.send_message(f"✅ Đã gán Embed `{name}` cho Greet.", ephemeral=True)
@@ -90,7 +98,7 @@ class GreetGroup(app_commands.Group):
     async def test(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
         success = await send_config_message(interaction.guild, interaction.user, "greet")
-        msg = "✅ Test Greet thành công!" if success else "❌ Thất bại: Kiểm tra cấu hình kênh/quyền."
+        msg = "✅ Test Greet thành công!" if success else "❌ Thất bại: Kiểm tra cấu hình kênh/quyền/embed."
         await interaction.followup.send(msg, ephemeral=True)
 
 class LeaveGroup(app_commands.Group):
@@ -112,7 +120,8 @@ class LeaveGroup(app_commands.Group):
     @app_commands.command(name="embed", description="Gán Embed cho hệ thống Leave")
     @app_commands.default_permissions(manage_guild=True)
     async def embed(self, interaction: discord.Interaction, name: str):
-        if not load_embed(interaction.guild.id, name):
+        # FIX: PHẢI AWAIT load_embed
+        if not await load_embed(interaction.guild.id, name):
             return await interaction.response.send_message(f"❌ Embed `{name}` không tồn tại.", ephemeral=True)
         update_guild_config(interaction.guild.id, "leave", "embed", name)
         await interaction.response.send_message(f"✅ Đã gán Embed `{name}` cho Leave.", ephemeral=True)
@@ -121,11 +130,11 @@ class LeaveGroup(app_commands.Group):
     async def test(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
         success = await send_config_message(interaction.guild, interaction.user, "leave")
-        msg = "✅ Test Leave thành công!" if success else "❌ Thất bại: Kiểm tra cấu hình kênh/quyền."
+        msg = "✅ Test Leave thành công!" if success else "❌ Thất bại: Kiểm tra cấu hình kênh/quyền/embed."
         await interaction.followup.send(msg, ephemeral=True)
 
 # ======================
-# LISTENER & SETUP (INJECTION)
+# LISTENER & SETUP
 # ======================
 
 class GreetLeaveListener(commands.Cog):
@@ -141,7 +150,6 @@ class GreetLeaveListener(commands.Cog):
         asyncio.create_task(send_config_message(member.guild, member, "leave"))
 
 async def setup(bot: commands.Bot):
-    # KỸ THUẬT TIÊM LỆNH: Tìm lệnh /p từ Root và cắm Greet/Leave vào
     p_cmd = bot.tree.get_command("p")
     if p_cmd and isinstance(p_cmd, app_commands.Group):
         if not any(c.name == "greet" for c in p_cmd.commands):
@@ -150,4 +158,3 @@ async def setup(bot: commands.Bot):
             p_cmd.add_command(LeaveGroup())
     
     await bot.add_cog(GreetLeaveListener(bot))
-    print("[LOAD] Success: core.greet_leave (Injected into /p)", flush=True)
