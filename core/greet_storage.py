@@ -1,8 +1,7 @@
-import json
-import os
+import copy
 from core.cache_manager import get_raw, mark_dirty
 
-# Sử dụng chung key với CacheManager để đồng bộ hóa
+# Sử dụng chung key để CacheManager tự động quản lý Disk I/O
 FILE_KEY = "greet_leave"
 
 # =========================
@@ -10,49 +9,61 @@ FILE_KEY = "greet_leave"
 # =========================
 
 def _get_cache():
-    """Lấy dữ liệu trực tiếp từ RAM của CacheManager"""
-    return get_raw(FILE_KEY)
+    """
+    Lấy dữ liệu trực tiếp từ RAM. 
+    Tự động sửa lỗi nếu cấu hình file bị hỏng (Self-healing).
+    """
+    cache = get_raw(FILE_KEY)
+
+    if not isinstance(cache, dict):
+        print(f"[STORAGE WARNING] Cache '{FILE_KEY}' không hợp lệ. Đang reset...", flush=True)
+        if hasattr(cache, "clear"):
+            cache.clear()
+        mark_dirty(FILE_KEY)
+
+    return cache
 
 # =========================
 # PUBLIC API
 # =========================
 
 def get_guild_config(guild_id: int):
-    """Lấy toàn bộ cấu hình của một Guild từ RAM"""
+    """
+    Lấy toàn bộ cấu hình Greet/Leave của server.
+    Trả về Deepcopy để bảo vệ dữ liệu gốc trong RAM.
+    """
     cache = _get_cache()
-    return cache.get(str(guild_id), {})
+    config = cache.get(str(guild_id), {})
+    
+    # Bảo vệ RAM gốc khỏi việc bị chỉnh sửa ngoài ý muốn ở tầng Logic
+    return copy.deepcopy(config) if config else {"greet": {}, "leave": {}}
 
 
 def update_guild_config(guild_id: int, section: str, key: str, value):
     """
-    Cập nhật cấu hình vào RAM và đánh dấu ghi xuống Disk sau 5 giây.
-    section: "greet" hoặc "leave"
+    Cập nhật cấu hình và kích hoạt hàng đợi ghi đĩa sau 5 giây.
+    section: "greet" | "leave"
     key: "channel" | "embed" | "message"
     """
     cache = _get_cache()
     gid = str(guild_id)
 
-    # Đảm bảo cấu trúc Guild tồn tại trong RAM
-    if gid not in cache:
-        cache[gid] = {
-            "greet": {},
-            "leave": {}
-        }
-    
-    if not isinstance(cache[gid], dict):
+    # Khởi tạo không gian lưu trữ cho Guild nếu chưa có
+    if gid not in cache or not isinstance(cache[gid], dict):
         cache[gid] = {"greet": {}, "leave": {}}
 
-    if section not in cache[gid]:
+    if section not in cache[gid] or not isinstance(cache[gid][section], dict):
         cache[gid][section] = {}
 
-    # Cập nhật giá trị trực tiếp trên reference của RAM
+    # Ghi trực tiếp vào reference trong RAM (Source of Truth)
     cache[gid][section][key] = value
 
-    # Đánh dấu "Dirty" để CacheManager tự động lưu xuống Disk ngầm
+    # Đánh dấu dữ liệu đã thay đổi để CacheManager xử lý ghi đĩa ngầm
     mark_dirty(FILE_KEY)
+    print(f"[STORAGE] Updated {section}.{key} for Guild {gid}", flush=True)
 
 
 def get_section(guild_id: int, section: str):
-    """Lấy một phần cấu hình (greet hoặc leave) của Guild"""
+    """Lấy riêng phần cấu hình Greet hoặc Leave (Bản sao an toàn)"""
     config = get_guild_config(guild_id)
     return config.get(section, {})
