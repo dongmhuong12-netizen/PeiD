@@ -23,8 +23,11 @@ class EmbedCreate(commands.Cog):
         interaction: discord.Interaction,
         name: str
     ):
+        # 0. CÂU GIỜ BẮT BUỘC: Báo cho Discord biết Bot đang xử lý, chống lỗi timeout 3s
+        await interaction.response.defer()
+
         if not interaction.guild:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 "Lệnh này chỉ có thể dùng trong Server.",
                 ephemeral=True
             )
@@ -51,17 +54,14 @@ class EmbedCreate(commands.Cog):
             data=data
         )
 
-        # TIÊU CHUẨN 100K+: Đăng ký View vào hệ thống Persistent của Discord
-        # Giúp các nút bấm không bị "liệt" sau khi Bot restart
-        self.bot.add_view(view)
-
         # 3. Build và Gửi bản xem trước
         embed = view.build_embed(interaction.guild, interaction.user)
         
         # Thêm Footer chỉ dẫn để Admin không bị quên tên Embed đang chỉnh
         embed.set_footer(text=f"Editor: {name} | {'Đang chỉnh sửa' if is_edit else 'Tạo mới'}")
 
-        await interaction.response.send_message(
+        # Dùng followup.send vì ở trên đã dùng defer()
+        await interaction.followup.send(
             embed=embed,
             view=view
         )
