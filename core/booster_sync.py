@@ -4,67 +4,75 @@ from .booster_engine import assign_correct_level
 from .booster_storage import get_guild_config
 from .boost_utils import get_system_role_ids
 
-# Giới hạn số lượng xử lý cùng lúc để bảo vệ API
+# Bảo vệ API: Chỉ cho phép xử lý tối đa 10 người cùng lúc trên toàn cầu
 MAX_CONCURRENT_SYNC = 10
 semaphore = asyncio.Semaphore(MAX_CONCURRENT_SYNC)
 
 # ==============================
-# SYNC ONE MEMBER (Bọc an toàn)
+# SYNC ONE MEMBER (Atomic Unit)
 # ==============================
 
 async def sync_member(member: discord.Member):
-    if member.bot:
-        return
+    """
+    Đồng bộ Role cho 1 thành viên. 
+    Gọi thẳng vào Engine để thực hiện quy tắc 1 User / 1 Role.
+    """
+    if member.bot: return
     
     async with semaphore:
         try:
-            # Engine đã được tối ưu Atomic (Gán/Gỡ trong 1 nốt nhạc)
+            # Engine sẽ tự động check mốc ngày và gán đúng 1 Role (Gốc hoặc Level)
             await assign_correct_level(member)
-        except Exception as e:
-            pass # Giảm bớt log rác để tránh nặng file log trên Render
+        except Exception:
+            pass # Giữ log sạch trên Render
 
 # ==============================
-# SYNC ONE GUILD (Radar Quét Sạch)
+# SYNC ONE GUILD (Smart Radar)
 # ==============================
 
 async def sync_guild(guild: discord.Guild):
-    # 1. Lấy danh sách Booster thực tế
+    """
+    Quét thông minh: Chỉ nhắm vào những người có khả năng liên quan.
+    """
+    # 1. Lấy danh sách Booster thực tế (VIP List từ Discord)
     boosters = set(guild.premium_subscribers)
     
-    # 2. Lấy danh sách những người đang giữ Role hệ thống (để thu hồi nếu họ unboost)
+    # 2. Lấy danh sách ID Role hệ thống (Gốc + Tất cả các Level)
     config = await get_guild_config(guild.id)
     system_role_ids = get_system_role_ids(config.get("booster_role"), config.get("levels", []))
     
-    # Tìm những người đang giữ role hệ thống
-    members_with_roles = []
+    # 3. TỐI ƯU: Chỉ tìm những người ĐANG GIỮ Role hệ thống
+    # Thay vì duyệt guild.members (100k+), ta duyệt theo từng Role (vài chục người)
+    members_with_roles = set()
     if system_role_ids:
-        for member in guild.members:
-            # Kiểm tra xem member có giữ bất kỳ role nào trong hệ thống không
-            has_role = any(str(r.id) in system_role_ids for r in member.roles)
-            if has_role:
-                members_with_roles.append(member)
+        for r_id in system_role_ids:
+            role_obj = guild.get_role(int(r_id))
+            if role_obj:
+                # Cộng dồn các member đang giữ role này vào tập hợp
+                members_with_roles.update(role_obj.members)
 
-    # Hợp nhất danh sách: Người đang boost + Người đang giữ role (để check unboost)
-    targets = boosters.union(set(members_with_roles))
+    # Hợp nhất: (Người đang Boost thật) + (Người đang giữ Role nhưng có thể đã unboost)
+    targets = boosters.union(members_with_roles)
 
     if not targets:
         return
 
-    # Quét song song để tăng tốc độ
+    # Quét song song (Tận dụng sức mạnh đa luồng của asyncio)
     tasks = [sync_member(m) for m in targets]
     await asyncio.gather(*tasks)
 
 # ==============================
-# SYNC ALL GUILDS
+# SYNC ALL GUILDS (Global Loop)
 # ==============================
 
 async def sync_all_guilds(bot):
+    """Chu kỳ quét toàn bộ các server mà Bot tham gia"""
     for guild in bot.guilds:
-        if guild.unavailable:
+        if guild.unavailable or not guild.me.guild_permissions.manage_roles:
             continue
         try:
             await sync_guild(guild)
-            # Nghỉ ngắn giữa các server để Discord không đánh dấu spam
+            # Nghỉ 1 giây để "thở" giữa các server, tránh bị Discord nghi ngờ
             await asyncio.sleep(1)
         except:
             continue
@@ -74,26 +82,27 @@ async def sync_all_guilds(bot):
 # ==============================
 
 async def daily_sync_loop(bot):
+    """Vòng lặp Radar chạy ngầm"""
     await bot.wait_until_ready()
-    await asyncio.sleep(30) # Chờ bot ổn định sau startup
+    await asyncio.sleep(30) # Chờ Bot ổn định hoàn toàn
 
     while not bot.is_closed():
-        print(f"[RADAR] Bắt đầu quét hệ thống Booster toàn server...", flush=True)
+        print(f"[RADAR] Bắt đầu quét hệ thống Booster...", flush=True)
         await sync_all_guilds(bot)
         print(f"[RADAR] Hoàn tất chu kỳ quét.", flush=True)
         
-        # Quét mỗi 6 tiếng (Tiêu chuẩn 100k+) thay vì 24 tiếng
+        # Quét mỗi 6 tiếng (Tiêu chuẩn tối ưu cho Bot lớn)
         await asyncio.sleep(21600)
 
 # ==============================
-# REALTIME EVENT HANDLER
+# REALTIME EVENT (Đánh chặn tức thì)
 # ==============================
 
 async def handle_member_update(before: discord.Member, after: discord.Member):
-    """Xử lý ngay lập tức khi có người nhấn nút Boost hoặc Unboost"""
-    if after.bot:
-        return
+    """Đảm bảo đồng bộ ngay khi trạng thái Premium thay đổi"""
+    if after.bot: return
 
-    # Nếu trạng thái boost thay đổi (Bắt đầu boost hoặc hết hạn)
+    # Nếu có biến động về việc nhấn nút Boost hoặc hết hạn
     if before.premium_since != after.premium_since:
+        # Gọi Engine để xử lý gán/gỡ và gửi Embed chúc mừng (nếu có)
         await sync_member(after)
