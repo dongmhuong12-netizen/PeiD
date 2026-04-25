@@ -2,7 +2,6 @@ import discord
 from discord.ext import commands
 import asyncio
 import os
-import signal
 from aiohttp import web
 
 from core.state import State
@@ -30,8 +29,6 @@ async def run_web_server():
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
     print(f"[WEB] Service started on port {port}", flush=True)
-    
-    # Giữ cho Web Server sống ngầm mà không block luồng chính
     await asyncio.Event().wait()
 
 # =========================
@@ -52,17 +49,17 @@ bot = commands.AutoShardedBot(
 )
 
 # =========================
-# EXTENSIONS (ĐỒNG BỘ 100k+)
+# EXTENSIONS (QUY HOẠCH CHIẾN LƯỢC)
 # =========================
 
 EXTENSIONS = [
-    "core.root",                 # Hệ thống gốc
-    "core.greet_leave",          # Hệ tiếp tân chính
-    "core.wellcome",             # Hệ tiếp tân phụ
-    "core.booster",              # Hệ thống quà tặng Booster
-    "systems.reaction_role",     # Hệ thống gán role tự động
-    "commands.embed.embed_group", # Group lệnh /p embed
-    "commands.embed.create",      # Lệnh /p embed create
+    "core.root",                 # XƯƠNG (Skeleton): Phải nạp đầu tiên để tạo lệnh /p
+    "commands.embed.embed_group", # THỊT (Logic): Chứa toàn bộ Create, Edit, Show, Delete
+    "core.greet_leave",          
+    "core.wellcome",             
+    "core.booster",              
+    "systems.reaction_role",     
+    # "commands.embed.create" -> ĐÃ LOẠI BỎ: Để tránh xung đột nạp chồng lệnh
 ]
 
 async def load_extensions():
@@ -91,51 +88,37 @@ async def on_ready():
         return
     bot._ready_once = True
 
-    # 1. TRÍ NHỚ BỀN VỮNG: Khôi phục lại trạng thái cũ ngay khi tỉnh dậy
-    # Đã khớp tên với core/state.py
-    await State.resync()
-    print("[STATE] Trí nhớ bền vững đã được khôi phục!", flush=True)
-
-    # 2. SLASH SYNC: Đồng bộ lệnh với Discord
+    # 1. TRÍ NHỚ BỀN VỮNG: Khôi phục trạng thái từ RAM/Disk
     try:
+        await State.resync()
+        print("[STATE] Trí nhớ bền vững đã được khôi phục!", flush=True)
+    except Exception as e:
+        print(f"[STATE ERROR] {e}", flush=True)
+
+    # 2. SLASH SYNC: Ép đồng bộ cây lệnh hợp nhất lên Discord
+    try:
+        print("[SLASH] Đang đồng bộ hóa toàn bộ hệ thống lệnh...", flush=True)
         synced = await bot.tree.sync()
-        print(f"[SLASH] ✅ Đã đồng bộ {len(synced)} lệnh Slash.", flush=True)
+        print(f"[SLASH] ✅ Thành công! Đã đồng bộ {len(synced)} lệnh Slash.", flush=True)
     except Exception as e:
         print(f"[SLASH ERROR] {e}", flush=True)
 
     print(f"🚀 {bot.user} đã sẵn sàng phục vụ!", flush=True)
 
 # =========================
-# SHUTDOWN PROTECTION
-# =========================
-
-async def shutdown(loop, signal=None):
-    if signal:
-        print(f"[SHUTDOWN] Nhận tín hiệu {signal.name}...", flush=True)
-    
-    print("[SHUTDOWN] Đang ép ghi cache xuống đĩa...", flush=True)
-    force_flush() 
-    
-    tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
-    [task.cancel() for task in tasks]
-    await asyncio.gather(*tasks, return_exceptions=True)
-    loop.stop()
-
-# =========================
 # MAIN ENTRY
 # =========================
 
 async def main():
-    # Bật logging để theo dõi kết nối Discord
+    # Bật X-quang soi lỗi mạng
     discord.utils.setup_logging()
 
     # Chạy Web Server ngầm
     asyncio.create_task(run_web_server())
 
-    # Nạp các thành phần
+    # Nạp các thành phần theo trình tự ưu tiên
     await load_extensions()
 
-    # Khởi động Bot
     async with bot:
         await bot.start(TOKEN)
 
