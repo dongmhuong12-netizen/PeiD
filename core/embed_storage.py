@@ -1,10 +1,11 @@
 from core.cache_manager import get_raw, mark_dirty
 import copy
+import asyncio
 
 FILE_KEY = "embeds"
 
 # =========================
-# SAFE CACHE ACCESS
+# SAFE CACHE ACCESS (INTERNAL)
 # =========================
 
 def _get_cache():
@@ -14,20 +15,16 @@ def _get_cache():
     """
     cache = get_raw(FILE_KEY)
 
-    # Đảm bảo cache luôn là dict. Nếu lỡ là list hoặc None (do file hỏng), reset về dict.
     if not isinstance(cache, dict):
         print(f"[STORAGE WARNING] Cache '{FILE_KEY}' bị sai định dạng. Đang khởi động lại...", flush=True)
-        # Xóa mọi thứ bên trong và đưa về dict (vì cache là reference đến RAM của CacheManager)
         if hasattr(cache, "clear"):
             cache.clear()
-        # Lưu ý: Không gán lại cache = {} vì sẽ làm mất reference gốc. 
-        # CacheManager đã đảm bảo get_raw trả về một object có thể mutate.
         mark_dirty(FILE_KEY)
 
     return cache
 
 # =========================
-# HELPERS
+# HELPERS (INTERNAL)
 # =========================
 
 def _gid(guild_id):
@@ -39,10 +36,10 @@ def _nid(name):
     return str(name) if name is not None else None
 
 # =========================
-# SAVE EMBED
+# SAVE EMBED (PUBLIC API)
 # =========================
 
-def save_embed(guild_id, name, data):
+async def save_embed(guild_id, name, data): # CHUYỂN SANG ASYNC
     """Lưu Embed vào RAM và kích hoạt hàng đợi ghi đĩa"""
     if not name or data is None:
         return False
@@ -51,24 +48,21 @@ def save_embed(guild_id, name, data):
     gid = _gid(guild_id)
     name = _nid(name)
 
-    # Khởi tạo Guild-space nếu chưa có
     if gid not in cache or not isinstance(cache[gid], dict):
         cache[gid] = {}
 
-    # ATOMIC COPY: Dùng deepcopy để các file logic không vô tình sửa hỏng RAM gốc
     cache[gid][name] = copy.deepcopy(data)
 
-    # Đánh dấu dữ liệu bẩn để CacheManager tự ghi xuống Disk sau 5 giây
     mark_dirty(FILE_KEY)
     
     print(f"[STORAGE] Đã lưu Embed '{name}' cho Server {gid} vào bộ nhớ tạm.", flush=True)
     return True
 
 # =========================
-# LOAD EMBED
+# LOAD EMBED (PUBLIC API)
 # =========================
 
-def load_embed(guild_id, name):
+async def load_embed(guild_id, name): # CHUYỂN SANG ASYNC
     """Tải Embed từ RAM với tốc độ cao"""
     if name is None:
         return None
@@ -83,15 +77,13 @@ def load_embed(guild_id, name):
 
     data = guild_data.get(name)
     
-    # LUÔN TRẢ VỀ DEEPCOPY: Đảm bảo tính nguyên tử (Atomic)
-    # File nhận dữ liệu có quyền sửa thoải mái mà không ảnh hưởng đến "ký ức" của Bot
     return copy.deepcopy(data) if data is not None else None
 
 # =========================
-# DELETE EMBED
+# DELETE EMBED (PUBLIC API)
 # =========================
 
-def delete_embed(guild_id, name):
+async def delete_embed(guild_id, name): # CHUYỂN SANG ASYNC
     """Xóa Embed vĩnh viễn khỏi RAM và Disk"""
     if name is None:
         return False
@@ -107,10 +99,8 @@ def delete_embed(guild_id, name):
     if not isinstance(guild_data, dict) or name not in guild_data:
         return False
 
-    # Xóa khỏi RAM
     del guild_data[name]
 
-    # Nếu guild không còn embed nào, dọn dẹp để tiết kiệm tài nguyên
     if not guild_data:
         cache.pop(gid, None)
 
@@ -119,10 +109,10 @@ def delete_embed(guild_id, name):
     return True
 
 # =========================
-# RETRIEVAL API
+# RETRIEVAL API (PUBLIC API)
 # =========================
 
-def get_all_embeds(guild_id):
+async def get_all_embeds(guild_id): # CHUYỂN SANG ASYNC
     """Lấy toàn bộ kho Embed của server (Trả về bản sao an toàn)"""
     cache = _get_cache()
     gid = _gid(guild_id)
@@ -133,7 +123,7 @@ def get_all_embeds(guild_id):
 
     return copy.deepcopy(guild_data)
 
-def get_all_embed_names(guild_id):
+async def get_all_embed_names(guild_id): # CHUYỂN SANG ASYNC
     """Lấy danh sách tên phục vụ hệ thống Autocomplete"""
     if guild_id is None:
         return []
