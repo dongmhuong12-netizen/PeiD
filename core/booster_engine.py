@@ -1,4 +1,39 @@
-import discord
+# ==============================
+# ASSIGN CORRECT LEVEL (Atomic Update)
+# ==============================
+
+async def assign_correct_level(member: discord.Member, mock_days: int = None):
+    guild = member.guild
+    config = await get_guild_config(guild.id)
+    if not config:
+        return None
+
+    bot_member = guild.me
+    if not bot_member or not bot_member.guild_permissions.manage_roles:
+        return None
+
+    # 1. Dọn dẹp dữ liệu rác (nếu có)
+    config = await clean_invalid_levels(guild, config)
+    levels = config.get("levels", [])
+
+    # 2. Lấy danh sách tất cả role liên quan đến hệ thống level
+    booster_role_objs = []
+    for lvl in levels:
+        r = guild.get_role(int(lvl["role"]))
+        if r: booster_role_objs.append(r)
+
+    # 3. Tính toán mục tiêu
+    # NẾU CÓ MOCK_DAYS THÌ ƯU TIÊN SỬ DỤNG ĐỂ TEST, NẾU KHÔNG THÌ LẤY NGÀY THỰC TẾ
+    boost_days = mock_days if mock_days is not None else calculate_boost_days(member)
+    target_lv = get_target_level(boost_days, levels)
+    
+    # Xác định role cần có
+    target_role = None
+    if target_lv > 0 and (target_lv - 1) < len(booster_role_objs):
+        target_role = booster_role_objs[target_lv - 1]
+
+    # Kiểm tra quyền hạn của Bot đối với target_role
+    import discord
 from datetime import datetime, timezone
 from .booster_storage import get_guild_config, save_guild_config
 
@@ -76,7 +111,7 @@ def get_target_level(boost_days: int, levels: list):
 # ASSIGN CORRECT LEVEL (Atomic Update)
 # ==============================
 
-async def assign_correct_level(member: discord.Member):
+async def assign_correct_level(member: discord.Member, mock_days: int = None):
     guild = member.guild
     config = await get_guild_config(guild.id)
     if not config:
@@ -97,7 +132,8 @@ async def assign_correct_level(member: discord.Member):
         if r: booster_role_objs.append(r)
 
     # 3. Tính toán mục tiêu
-    boost_days = calculate_boost_days(member)
+    # Ưu tiên mock_days nếu đang giả lập, ngược lại tính ngày thực tế
+    boost_days = mock_days if mock_days is not None else calculate_boost_days(member)
     target_lv = get_target_level(boost_days, levels)
     
     # Xác định role cần có
