@@ -39,8 +39,8 @@ class EmbedGroup(app_commands.Group):
 
     @app_commands.command(name="create", description="Tạo Embed thiết kế mới")
     async def create(self, interaction: discord.Interaction, name: str):
-        # QUY TẮC 3S: Câu giờ ngay lập tức
-        await interaction.response.defer(ephemeral=True)
+        # QUY TẮC 3S: Câu giờ ngay lập tức - CHUYỂN SANG CÔNG KHAI (ephemeral=False)
+        await interaction.response.defer(ephemeral=False)
         
         guild = interaction.guild
         
@@ -91,7 +91,8 @@ class EmbedGroup(app_commands.Group):
     @app_commands.command(name="edit", description="Chỉnh sửa Embed hiện có")
     @app_commands.autocomplete(name=embed_name_autocomplete)
     async def edit(self, interaction: discord.Interaction, name: str):
-        await interaction.response.defer(ephemeral=True)
+        # CHUYỂN SANG CÔNG KHAI
+        await interaction.response.defer(ephemeral=False)
         # FIX: Thêm await
         data = await load_embed(interaction.guild.id, name)
         if not data: return await interaction.followup.send(f"❌ Không tìm thấy `{name}`.")
@@ -117,6 +118,7 @@ class EmbedGroup(app_commands.Group):
         data = await load_embed(interaction.guild.id, name)
         if not data: return await interaction.followup.send(f"❌ Không có `{name}` để show.", ephemeral=True)
         
+        # Giữ thông báo trạng thái là ẩn để tránh rác kênh
         await interaction.response.send_message(f"⌛ Đang gửi embed `{name}`...", ephemeral=True)
         
         await send_embed(interaction.channel, data, interaction.guild, interaction.user, embed_name=name)
@@ -127,7 +129,8 @@ class EmbedGroup(app_commands.Group):
         # FIX: Thêm await
         await delete_embed(interaction.guild.id, name)
         _cleanup_views(f"{interaction.guild.id}:{name}")
-        await interaction.response.send_message(f"🗑️ Embed `{name}` đã được xoá vĩnh viễn.", ephemeral=True)
+        # CHUYỂN SANG CÔNG KHAI
+        await interaction.response.send_message(f"🗑️ Embed `{name}` đã được xoá vĩnh viễn.", ephemeral=False)
 
 # =============================
 # INJECTION
