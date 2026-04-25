@@ -2,22 +2,21 @@ import re
 from core.embed_storage import save_embed, load_embed, get_all_embeds
 
 class EmbedSystem:
-    # Hạn mức 50 Embed mỗi server - Chuẩn tối ưu cho server quy mô lớn
+    # Hạn mức 50 Embed mỗi server
     LIMIT = 50
 
     @staticmethod
-    async def create_embed(guild_id: int, name: str): # Chuyển sang async để khớp với lệnh gọi await
+    async def create_embed(guild_id: int, name: str): # CHUYỂN SANG ASYNC
         """
-        Quy trình khởi tạo Embed mới:
-        Validation -> Check Trùng -> Check Hạn mức -> Khởi tạo Schema.
+        Quy trình khởi tạo Embed mới (Bản sửa lỗi treo máy do lệch pha Async).
         """
-        # 1. VALIDATION (Giữ nguyên logic kiểm tra tên)
+        # 1. VALIDATION
         if not name or not re.match(r'^[a-zA-Z0-9\s\-_]+$', name):
             return False, "INVALID_NAME"
 
         clean_name = name.strip()
 
-        # 2. EXISTS CHECK: Phải dùng await vì load_embed trong storage là async
+        # 2. EXISTS CHECK: Phải dùng await vì storage xử lý I/O async
         if await load_embed(guild_id, clean_name):
             return False, "EXISTS"
 
@@ -26,7 +25,7 @@ class EmbedSystem:
         if len(all_embeds) >= EmbedSystem.LIMIT:
             return False, "LIMIT_REACHED"
 
-        # 4. CREATE DEFAULT (Giữ nguyên toàn bộ Schema của Nguyệt):
+        # 4. CREATE DEFAULT (Giữ nguyên 100% Schema của Nguyệt)
         default_data = {
             "title": "Tiêu đề Embed mới",
             "description": "Nội dung mô tả mặc định.",
@@ -35,10 +34,10 @@ class EmbedSystem:
             "thumbnail": None,
             "author": {"name": None, "icon_url": None, "url": None},
             "footer": {"text": None, "icon_url": None},
-            "fields": []
+            "fields": [] 
         }
 
-        # 5. SAVE: Bắt buộc await để đảm bảo dữ liệu được ghi xong trước khi phản hồi
+        # 5. SAVE: Bắt buộc await để ghi xong mới nhả Interaction
         await save_embed(guild_id, clean_name, default_data)
         print(f"[SYSTEM] Created new embed '{clean_name}' for Guild {guild_id}", flush=True)
 
