@@ -29,7 +29,8 @@ class BoostGroup(app_commands.Group):
     @app_commands.command(name="lv_create", description="Mở bảng chỉnh Booster Level")
     @app_commands.default_permissions(manage_guild=True)
     async def lv_create(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
+        # THAY ĐỔI: Chuyển sang Public (Không dùng ephemeral=True)
+        await interaction.response.defer()
 
         guild = interaction.guild
         config = await get_guild_config(guild.id)
@@ -37,8 +38,8 @@ class BoostGroup(app_commands.Group):
 
         if not booster_role:
             return await interaction.followup.send(
-                "Server chưa thiết lập booster role trước.",
-                ephemeral=True
+                "❌ Server chưa thiết lập booster role trước. Vui lòng dùng lệnh báo thiết lập trước.",
+                ephemeral=True # Giữ lỗi ẩn để chống spam kênh chat
             )
 
         # Sử dụng logic cleanup đã fix ở root.py để giải phóng RAM
@@ -60,7 +61,8 @@ class BoostGroup(app_commands.Group):
         view.timeout = 600 
 
         embed = view.build_embed()
-        await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+        # THAY ĐỔI: Gửi UI dạng Public để toàn server (hoặc các Admin khác) cùng thấy
+        await interaction.followup.send(embed=embed, view=view)
 
         try:
             msg = await interaction.original_response()
@@ -107,9 +109,10 @@ class BoostGroup(app_commands.Group):
         await State.set_ui("test_bypass", ui_data)
 
         try:
-            await assign_correct_level(interaction.user)
+            # THAY ĐỔI: Truyền tham số mock_days vào engine để giả lập số ngày
+            await assign_correct_level(interaction.user, mock_days=days)
         except Exception: pass
-        await interaction.followup.send(f"Đã test booster level với {days} ngày (Giữ role 5p).", ephemeral=True)
+        await interaction.followup.send(f"✅ Đã test booster level với **{days} ngày** (Giữ role 5p).", ephemeral=True)
 
     @app_commands.command(name="channel", description="Đặt kênh gửi thông báo khi có người boost")
     @app_commands.default_permissions(manage_guild=True)
