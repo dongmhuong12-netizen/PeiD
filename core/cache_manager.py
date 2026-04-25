@@ -13,13 +13,13 @@ _lock = asyncio.Lock()
 _started = False
 
 DATA_DIR = "data"
-FLUSH_INTERVAL = 5  # 5 giây kiểm tra dirty một lần
-BACKUP_INTERVAL = 300 # 5 phút backup một lần để tránh tốn CPU
+FLUSH_INTERVAL = 5  # Kiểm tra dirty định kỳ
+BACKUP_INTERVAL = 300 # 5 phút backup một lần
 
 _last_flush_time = 0
 
 # =========================
-# FILE HELPERS (TIÊU CHUẨN 100K+)
+# FILE HELPERS (Tiêu chuẩn an toàn cao)
 # =========================
 
 def _file_path(key: str):
@@ -43,12 +43,11 @@ def _load_file(key: str):
         return {}
 
 def _write_file_sync(key: str, data: dict):
-    """Hàm ghi file đồng bộ, chạy trong Thread riêng để không block Event Loop"""
+    """Ghi file an toàn (Atomic Write)"""
     _ensure_dir()
     path = _file_path(key)
     tmp = path + ".tmp"
 
-    # Backup an toàn trước khi ghi
     if os.path.exists(path):
         try:
             bak_path = path + ".bak"
@@ -58,42 +57,47 @@ def _write_file_sync(key: str, data: dict):
 
     try:
         with open(tmp, "w", encoding="utf-8") as f:
-            # indent=2 giúp con người dễ đọc, ensure_ascii=False hỗ trợ tiếng Việt
             json.dump(data, f, indent=2, ensure_ascii=False)
-        
-        # os.replace là thao tác nguyên tử (Atomic), cực kỳ an toàn
         os.replace(tmp, path)
     except Exception as e:
         print(f"[DISK WRITE ERROR] {key}: {e}", flush=True)
 
 # =========================
-# PUBLIC API (Giao diện điều khiển)
+# PUBLIC API
 # =========================
 
 def load(key: str) -> dict:
-    """Nạp dữ liệu vào RAM và trả về bản sao để tránh can thiệp nhầm"""
     if key not in _cache:
         _cache[key] = _load_file(key)
     return copy.deepcopy(_cache[key])
 
 def get_raw(key: str) -> dict:
-    """Lấy reference trực tiếp từ RAM (Dùng cho State để xử lý tốc độ cao)"""
     if key not in _cache:
         _cache[key] = _load_file(key)
     return _cache[key]
 
 def mark_dirty(key: str):
-    """Đánh dấu dữ liệu đã thay đổi, cần được bơm xuống đĩa"""
     _dirty_keys.add(key)
     _ensure_loop()
 
 def update(key: str, value: dict):
-    """Cập nhật toàn bộ và đánh dấu ghi đĩa"""
     _cache[key] = value
     mark_dirty(key)
 
+async def save(key: str):
+    """
+    ÉP LƯU NGAY LẬP TỨC (Dùng cho các lệnh quan trọng như Set Role).
+    Không cần chờ 5 giây của flush worker.
+    """
+    if key in _cache:
+        data = copy.deepcopy(_cache[key])
+        await asyncio.to_thread(_write_file_sync, key, data)
+        if key in _dirty_keys:
+            _dirty_keys.remove(key)
+        print(f"[CACHE] Đã ép lưu khẩn cấp: {key}.json", flush=True)
+
 # =========================
-# FLUSH ENGINE (Bơm máu dữ liệu)
+# FLUSH ENGINE
 # =========================
 
 async def _flush_worker():
@@ -110,23 +114,18 @@ async def _flush_worker():
             for key in keys_to_flush:
                 data = _cache.get(key)
                 if data is not None:
-                    # Đẩy sang Thread riêng để Bot không bị giật lag (Freeze)
                     await asyncio.to_thread(_write_file_sync, key, copy.deepcopy(data))
 
             _last_flush_time = time.time()
-            print(f"[CACHE] Đã lưu {len(keys_to_flush)} tệp xuống đĩa cứng.", flush=True)
+            print(f"[CACHE] Đã tự động lưu {len(keys_to_flush)} tệp.", flush=True)
 
 async def _backup_worker():
-    """Tự động sao lưu định kỳ để chống mất dữ liệu"""
     while True:
         await asyncio.sleep(BACKUP_INTERVAL)
         async with _lock:
-            active_keys = list(_cache.keys())
-            for key in active_keys:
-                data = _cache.get(key)
+            for key, data in _cache.items():
                 if data:
                     await asyncio.to_thread(_write_file_sync, f"{key}.auto", data)
-            print(f"[BACKUP] Đã tự động sao lưu {len(active_keys)} mô-đun.", flush=True)
 
 # =========================
 # CONTROL CENTER
@@ -136,26 +135,18 @@ def _ensure_loop():
     global _started
     if _started:
         return
-
     try:
         loop = asyncio.get_running_loop()
         loop.create_task(_flush_worker())
         loop.create_task(_backup_worker())
         _started = True
     except RuntimeError:
-        # Nếu chưa có loop đang chạy, sẽ được kích hoạt lại ở lần call sau
         pass
 
 def force_flush():
-    """Ép ghi toàn bộ ngay lập tức (Dùng khi Render tắt Bot)"""
-    print("[CACHE] Đang thực hiện ghi khẩn cấp xuống đĩa...", flush=True)
+    """Ghi đĩa khẩn cấp toàn bộ RAM (Dùng khi tắt Bot)"""
+    print("[CACHE] Bắt đầu ghi khẩn cấp toàn bộ dữ liệu...", flush=True)
+    # Ghi cả những thứ đang dirty và cả những thứ đang có trong RAM cho chắc chắn
     for key, data in _cache.items():
         _write_file_sync(key, data)
-    print("[CACHE] Ghi khẩn cấp hoàn tất.", flush=True)
-
-def get_status():
-    return {
-        "cached_keys": list(_cache.keys()),
-        "dirty_keys": list(_dirty_keys),
-        "last_flush": time.ctime(_last_flush_time) if _last_flush_time > 0 else "Never"
-    }
+    print("[CACHE] Toàn bộ dữ liệu đã được bảo vệ.", flush=True)
