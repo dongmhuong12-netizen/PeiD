@@ -3,7 +3,7 @@ import discord
 async def process_image_upload(interaction: discord.Interaction, file: discord.Attachment, bot: discord.Client):
     """
     Hệ thống Logic lõi: Upload và tạo link CDN chuẩn Mimu Style.
-    Tối ưu siêu nhẹ: Trích xuất trực tiếp URL từ slash command, không re-upload (chống x2 ảnh).
+    Link vĩnh viễn + Đầy đủ Link Xanh + Triệt tiêu x2 ảnh bằng suppress=True.
     """
     
     # 1. Kiểm tra định dạng (Hỗ trợ Ảnh, GIF và Video)
@@ -27,14 +27,16 @@ async def process_image_upload(interaction: discord.Interaction, file: discord.A
         )
 
     try:
-        # 3. IT Pro: Lấy trực tiếp URL mà Discord đã tạo khi user chạy lệnh.
-        # KHÔNG tải file về và KHÔNG gửi lại -> Loại bỏ hoàn toàn lỗi hiển thị x2 ảnh.
-        cdn_url = file.url
+        # 3. IT Pro: Chuyển file sang chuẩn discord.File
+        discord_file = await file.to_file()
 
-        # 4. Format chuẩn 100% theo đúng thứ tự Nguyệt yêu cầu:
-        # - Đoạn text hướng dẫn (trên cùng)
-        # - Link xanh công khai (ở giữa)
-        # - Code block chứa link (dưới cùng)
+        # 4. GỬI FILE RA KÊNH (Bắt buộc để Discord cấp link CDN vĩnh viễn)
+        msg = await interaction.followup.send(file=discord_file, wait=True)
+
+        # 5. Trích xuất link vĩnh viễn từ tin nhắn vừa gửi
+        cdn_url = msg.attachments[0].url
+
+        # 6. KHÔI PHỤC ĐẦY ĐỦ DNA (Text -> Link xanh -> Code Block)
         response_text = (
             "tạo link thành công, có thể sao chép link bên dưới để sử dụng\n"
             "lưu ý: **không được** xoá link hoặc kênh này, nếu không link sẽ không hợp lệ.\n\n"
@@ -42,13 +44,17 @@ async def process_image_upload(interaction: discord.Interaction, file: discord.A
             f"```{cdn_url}```"
         )
         
-        # 5. Gửi 1 khối tin nhắn duy nhất
-        await interaction.followup.send(content=response_text)
+        # 7. Edit lại tin nhắn:
+        # - suppress=True: Tắt khung xem trước của cái link xanh (Ngăn chặn triệt để x2 ảnh)
+        # - Discord tự động hiển thị link xanh thành 1 dòng gọn gàng + 1 ảnh gốc ở dưới cùng.
+        await msg.edit(content=response_text, suppress=True)
 
     except Exception as e:
-        # Giữ log rác ở Terminal, không hiện ra Discord
         print(f"[IMAGE ENGINE ERROR] {e}", flush=True)
         try:
             await interaction.followup.send("❌ **Internal Error:** Đã xảy ra lỗi trong quá trình xử lý ảnh.", ephemeral=True)
         except:
             pass
+
+
+
