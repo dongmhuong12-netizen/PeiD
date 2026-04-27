@@ -1,4 +1,3 @@
-```python
 import discord
 import datetime
 
@@ -75,4 +74,3 @@ async def process_image_upload(interaction: discord.Interaction, file: discord.A
         print(f"[IMAGE ENGINE ERROR] {e}", flush=True)
         await interaction.followup.send("❌ **Internal Error:** Đã xảy ra lỗi trong quá trình xử lý ảnh.", ephemeral=True)
 
-```
