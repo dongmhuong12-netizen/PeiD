@@ -316,5 +316,3 @@ class EmbedUIView(discord.ui.View):
     async def reaction_roles(self, interaction, button):
         await interaction.response.send_modal(ReactionRoleModal(self))
 
-
-```
