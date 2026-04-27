@@ -41,7 +41,7 @@ def _cleanup_views(key: str):
 async def p_image_cmd(interaction: discord.Interaction, file: discord.Attachment):
     """Lệnh /p image xử lý upload và tạo link CDN vĩnh viễn"""
     # Tư duy IT Pro: Defer ngay lập tức để tránh lỗi Interaction Failed khi xử lý file lớn
-    await interaction.response.defer(ephemeral=True)
+    await interaction.response.defer(ephemeral=False)
     # Gọi logic xử lý từ core engine (Chuyển tiếp interaction và client)
     await process_image_upload(interaction, file, interaction.client)
 
