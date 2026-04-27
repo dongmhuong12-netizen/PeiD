@@ -1,14 +1,11 @@
+```python
 import discord
 import datetime
 
-# ID của kênh kho lưu trữ (Nguyệt thay ID thật của cậu vào đây nhé)
-# Gợi ý: Tạo một kênh riêng tư, chỉ Bot có quyền xem và gửi tin nhắn để làm "kho".
-STORAGE_CHANNEL_ID = 000000000000000000 
-
 async def process_image_upload(interaction: discord.Interaction, file: discord.Attachment, bot: discord.Client):
     """
-    Hệ thống Logic lõi: Xử lý upload và tạo link CDN vĩnh viễn.
-    Thiết kế theo chuẩn Pro cho bot lớn (Mimu-style).
+    Hệ thống Logic lõi: Xử lý upload và tạo link CDN vĩnh viễn trực tiếp tại kênh lệnh.
+    Thiết kế theo chuẩn Pro cho bot lớn (Mimu-style) - Multi-Server (Không phụ thuộc ID cứng).
     """
     
     # 1. Kiểm tra định dạng (Hỗ trợ Ảnh, GIF và Video chất lượng cao)
@@ -33,20 +30,20 @@ async def process_image_upload(interaction: discord.Interaction, file: discord.A
         )
 
     try:
-        # 3. Kết nối kho chứa và kiểm tra quyền hạn thực tế của Bot
-        storage_channel = bot.get_channel(STORAGE_CHANNEL_ID)
-        if not storage_channel:
-            return await interaction.followup.send("❌ **Storage Error:** Không tìm thấy Storage Channel. Hãy kiểm tra lại ID cấu hình.", ephemeral=True)
+        # 3. IT PRO CHECK: Kết nối kênh hiện tại và kiểm tra quyền hạn thực tế của Bot
+        channel = interaction.channel
+        if not channel:
+            return await interaction.followup.send("❌ **Channel Error:** Không thể xác định kênh hiện tại để tạo CDN.", ephemeral=True)
         
-        perms = storage_channel.permissions_for(interaction.guild.me)
+        perms = channel.permissions_for(interaction.guild.me)
         if not perms.send_messages or not perms.attach_files:
-            return await interaction.followup.send("❌ **Permission Error:** Bot thiếu quyền đính kèm file trong kho lưu trữ.", ephemeral=True)
+            return await interaction.followup.send("❌ **Permission Error:** Bot thiếu quyền 'Gửi Tin Nhắn' hoặc 'Đính Kèm File' tại kênh này.", ephemeral=True)
 
-        # 4. Trung chuyển file và lưu Log Metadata để phục vụ tra soát sau này
+        # 4. Trung chuyển file và lưu Log Metadata trực tiếp vào kênh hiện tại
         discord_file = await file.to_file()
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
-        # Ghi log rõ ràng trong kênh kho: Biết rõ ai gửi, gửi cái gì, dung lượng bao nhiêu
+        # Ghi log rõ ràng: Biết rõ ai gửi, gửi cái gì, dung lượng bao nhiêu (DNA)
         log_content = (
             f"**─── New CDN Upload ───**\n"
             f"👤 **User:** {interaction.user} (`{interaction.user.id}`)\n"
@@ -54,12 +51,13 @@ async def process_image_upload(interaction: discord.Interaction, file: discord.A
             f"📄 **File:** `{file.filename}` ({round(file.size/1024/1024, 2)} MB)"
         )
         
-        storage_msg = await storage_channel.send(content=log_content, file=discord_file)
+        # IT Pro Logic: Gửi public ra kênh để Discord lưu trữ file vĩnh viễn
+        storage_msg = await channel.send(content=log_content, file=discord_file)
 
-        # 5. Trích xuất link CDN trực tiếp (Link này sẽ vĩnh viễn nếu tin nhắn kho không bị xóa)
+        # 5. Trích xuất link CDN trực tiếp (Link này sẽ vĩnh viễn nếu tin nhắn trên không bị xóa)
         cdn_url = storage_msg.attachments[0].url
 
-        # 6. Trả kết quả theo đúng quy tắc Nguyệt yêu cầu: Hướng dẫn -> Link xanh -> Code block copy
+        # 6. Trả kết quả ẩn cho user theo đúng quy tắc Nguyệt yêu cầu: Hướng dẫn -> Link xanh -> Code block copy
         response_text = (
             "tạo link thành công, có thể sao chép link bên dưới để sử dụng\n"
             "lưu ý: **không được** xoá link hoặc kênh này, nếu không link sẽ không hợp lệ.\n\n"
@@ -67,10 +65,12 @@ async def process_image_upload(interaction: discord.Interaction, file: discord.A
             f"```{cdn_url}```"
         )
         
-        await interaction.followup.send(content=response_text)
+        await interaction.followup.send(content=response_text, ephemeral=True)
 
     except Exception as e:
-        # Xuất log lỗi chi tiết ra Terminal kèm flush để tránh mất dữ liệu log
+        # Xuất log lỗi chi tiết ra Terminal kèm flush để tránh mất dữ liệu log (DNA)
         print(f"[IMAGE ENGINE ERROR] {e}", flush=True)
         await interaction.followup.send("❌ **Internal Error:** Đã xảy ra lỗi trong quá trình xử lý ảnh.", ephemeral=True)
 
+
+```
