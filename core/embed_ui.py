@@ -4,15 +4,15 @@ import copy
 import re
 from core.variable_engine import apply_variables
 from core.embed_storage import save_embed, delete_embed
-from core.cache_manager import load, mark_dirty, get_raw
+from core.cache_manager import load, mark_dirty, get_raw, save as force_save
 from core.state import State
 
-# Quản lý View thông minh (Sẽ tự dọn dẹp theo timeout)
+# Quản lý View thông minh (BẢO TỒN NGUYÊN VẸN)
 ACTIVE_EMBED_VIEWS = {}
 REACTION_FILE_KEY = "reaction_roles"
 
 # =========================
-# STATE WRAPPER (ATOMIC)
+# STATE WRAPPER (ATOMIC) - GIỮ NGUYÊN TỪNG CHỮ
 # =========================
 
 async def load_reaction_data():
@@ -22,61 +22,80 @@ async def save_reaction_data(data):
     mark_dirty(REACTION_FILE_KEY)
 
 # =========================
-# MODALS (ANT-TIMEOUT LAYER)
+# MODALS (GỘP & THÊM MỚI)
 # =========================
 
-class EditTitleModal(discord.ui.Modal, title="Edit Title"):
+class EditInformationModal(discord.ui.Modal, title="Edit Information"):
     def __init__(self, view):
         super().__init__()
         self.view = view
-        self.input = discord.ui.TextInput(
+        self.etitle = discord.ui.TextInput(
             label="New Title",
             required=False,
             default=self.view.data.get("title") or ""
         )
-        self.add_item(self.input)
-
-    async def on_submit(self, interaction: discord.Interaction):
-        self.view.data["title"] = self.input.value
-        await self.view.update_message(interaction)
-
-class EditDescriptionModal(discord.ui.Modal, title="Edit Description"):
-    def __init__(self, view):
-        super().__init__()
-        self.view = view
-        self.input = discord.ui.TextInput(
+        self.description = discord.ui.TextInput(
             label="New Description",
             style=discord.TextStyle.paragraph,
             required=False,
             default=self.view.data.get("description") or ""
         )
-        self.add_item(self.input)
-
-    async def on_submit(self, interaction: discord.Interaction):
-        self.view.data["description"] = self.input.value
-        await self.view.update_message(interaction)
-
-class EditColorModal(discord.ui.Modal, title="Edit Color (HEX)"):
-    def __init__(self, view):
-        super().__init__()
-        self.view = view
-        self.input = discord.ui.TextInput(
+        self.color = discord.ui.TextInput(
             label="Hex Color",
             required=True,
             default=hex(self.view.data.get("color", 0x5865F2)).replace("0x", "").upper()
         )
-        self.add_item(self.input)
+        self.add_item(self.etitle)
+        self.add_item(self.description)
+        self.add_item(self.color)
 
     async def on_submit(self, interaction: discord.Interaction):
+        self.view.data["title"] = self.etitle.value
+        self.view.data["description"] = self.description.value
         try:
-            val = self.input.value.replace("#", "")
+            val = self.color.value.replace("#", "")
             self.view.data["color"] = int(val, 16)
-            await self.view.update_message(interaction)
-        except:
-            if not interaction.response.is_done():
-                await interaction.response.send_message("❌ Color không hợp lệ", ephemeral=True)
+        except: pass
+        await self.view.update_message(interaction)
 
-class EditImageModal(discord.ui.Modal, title="Set Image URL"):
+class EditAuthorModal(discord.ui.Modal, title="Edit Author Details"):
+    def __init__(self, view):
+        super().__init__()
+        self.view = view
+        auth = self.view.data.get("author", {})
+        self.name = discord.ui.TextInput(label="Author Name", default=auth.get("name") or "", required=False)
+        self.icon = discord.ui.TextInput(label="Author Icon URL", default=auth.get("icon_url") or "", required=False)
+        self.url = discord.ui.TextInput(label="Author Link URL", default=auth.get("url") or "", required=False)
+        self.add_item(self.name)
+        self.add_item(self.icon)
+        self.add_item(self.url)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        self.view.data["author"] = {
+            "name": self.name.value,
+            "icon_url": self.icon.value,
+            "url": self.url.value
+        }
+        await self.view.update_message(interaction)
+
+class EditFooterModal(discord.ui.Modal, title="Edit Footer Details"):
+    def __init__(self, view):
+        super().__init__()
+        self.view = view
+        foot = self.view.data.get("footer", {})
+        self.text = discord.ui.TextInput(label="Footer Text", default=foot.get("text") or "", required=False)
+        self.icon = discord.ui.TextInput(label="Footer Icon URL", default=foot.get("icon_url") or "", required=False)
+        self.add_item(self.text)
+        self.add_item(self.icon)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        self.view.data["footer"] = {
+            "text": self.text.value,
+            "icon_url": self.icon.value
+        }
+        await self.view.update_message(interaction)
+
+class EditImageModal(discord.ui.Modal, title="Set Image/GIF URL"):
     def __init__(self, view):
         super().__init__()
         self.view = view
@@ -96,16 +115,13 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
         super().__init__()
         self.view = view
         current = self.view.temp_reaction_data or {}
-        
         self.emojis = discord.ui.TextInput(
             label="Emojis (Cách nhau bằng dấu phẩy)", 
-            placeholder="😀, 😎, ❤️",
             default=", ".join(current.get("emojis", [])),
             required=True
         )
         self.roles = discord.ui.TextInput(
             label="Roles (ID hoặc Mention)", 
-            placeholder="ID1, ID2...",
             default=", ".join(current.get("roles_raw", [])),
             required=True
         )
@@ -114,7 +130,6 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
             required=True, 
             default=current.get("mode", "single")
         )
-
         self.add_item(self.emojis)
         self.add_item(self.roles)
         self.add_item(self.mode)
@@ -126,27 +141,22 @@ class ReactionRoleModal(discord.ui.Modal, title="Reaction Role Setup"):
             "mode": self.mode.value.lower().strip()
         }
         if not interaction.response.is_done():
-            await interaction.response.send_message(
-                "✅ Đã ghi nhận Reaction Roles. Vui lòng nhấn **Save Embed** để áp dụng.", 
-                ephemeral=True
-            )
+            await interaction.response.send_message("✅ Đã ghi nhận Reaction Roles. Nhấn **Save Embed** để áp dụng.", ephemeral=True)
 
 # =========================
-# MAIN VIEW (MEMORY SAFE)
+# MAIN VIEW (PRO LAYOUT & FULL LOGIC)
 # =========================
 
 class EmbedUIView(discord.ui.View):
-    # FIX: Thêm timeout làm tham số để khớp với lời gọi từ EmbedGroup
     def __init__(self, guild_id: int, name: str, data: dict, timeout: float = 600.0):
         super().__init__(timeout=timeout)
-
         self.guild_id = str(guild_id)
         self.name = name
         self.data = data
         self.message = None
         self.temp_reaction_data = None
         
-        # Nạp dữ liệu cũ (Trí nhớ tuyệt đối)
+        # Logic nạp dữ liệu cũ (Bảo tồn DNA)
         db = get_raw(REACTION_FILE_KEY)
         storage_key = f"{self.guild_id}:{self.name}"
         if storage_key in db:
@@ -160,33 +170,34 @@ class EmbedUIView(discord.ui.View):
                 }
 
         key = f"{self.guild_id}:{name}"
-        # Giữ nguyên logic quản lý View của Nguyệt
         if key not in ACTIVE_EMBED_VIEWS:
             ACTIVE_EMBED_VIEWS[key] = []
         if self not in ACTIVE_EMBED_VIEWS[key]:
             ACTIVE_EMBED_VIEWS[key].append(self)
 
+        # NÚT HELP (Hàng 3)
+        self.add_item(discord.ui.Button(
+            label="❓ Need Help? Join Support Server", 
+            url="https://discord.gg/wqfYZVEjgg", 
+            row=3
+        ))
+
     async def on_timeout(self):
-        """Cleanup logic khi View hết hạn"""
         key = f"{self.guild_id}:{self.name}"
-        if key in ACTIVE_EMBED_VIEWS:
-            if self in ACTIVE_EMBED_VIEWS[key]:
-                ACTIVE_EMBED_VIEWS[key].remove(self)
+        if key in ACTIVE_EMBED_VIEWS and self in ACTIVE_EMBED_VIEWS[key]:
+            ACTIVE_EMBED_VIEWS[key].remove(self)
         self.stop()
 
     def build_embed(self, guild=None, member=None):
         from core.embed_sender import _build_embed
-        
         data_copy = copy.deepcopy(self.data)
         if guild:
             data_copy = apply_variables(data_copy, guild, member)
-
         return _build_embed(data_copy)
 
     async def update_message(self, interaction: discord.Interaction):
         embed = self.build_embed(interaction.guild, interaction.user)
         self.message = interaction.message
-        
         if interaction.response.is_done():
             await interaction.message.edit(embed=embed, view=self)
         else:
@@ -196,35 +207,35 @@ class EmbedUIView(discord.ui.View):
         match = re.search(r'\d+', raw_str)
         return match.group() if match else None
 
-    # --- BUTTONS ---
+    # --- SẮP XẾP HÀNG LỐI BUTTONS ---
     
-    @discord.ui.button(label="Edit Title", style=discord.ButtonStyle.secondary)
-    async def edit_title(self, interaction, button):
-        await interaction.response.send_modal(EditTitleModal(self))
+    @discord.ui.button(label="📝 Edit Information (Title/Description/Color)", style=discord.ButtonStyle.secondary, row=0)
+    async def edit_info(self, interaction, button):
+        await interaction.response.send_modal(EditInformationModal(self))
 
-    @discord.ui.button(label="Edit Description", style=discord.ButtonStyle.secondary)
-    async def edit_description(self, interaction, button):
-        await interaction.response.send_modal(EditDescriptionModal(self))
+    @discord.ui.button(label="👤 Edit Author", style=discord.ButtonStyle.secondary, row=1)
+    async def edit_author(self, interaction, button):
+        await interaction.response.send_modal(EditAuthorModal(self))
 
-    @discord.ui.button(label="Set Image", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="🦶 Edit Footer", style=discord.ButtonStyle.secondary, row=1)
+    async def edit_footer(self, interaction, button):
+        await interaction.response.send_modal(EditFooterModal(self))
+
+    @discord.ui.button(label="🖼️ Set Image", style=discord.ButtonStyle.secondary, row=1)
     async def set_image(self, interaction, button):
         await interaction.response.send_modal(EditImageModal(self))
 
-    @discord.ui.button(label="Edit Color", style=discord.ButtonStyle.secondary)
-    async def edit_color(self, interaction, button):
-        await interaction.response.send_modal(EditColorModal(self))
-
-    @discord.ui.button(label="Reaction Roles", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="🛡️ Thiết lập Hệ thống Phản ứng & Vai trò (Reaction Roles Setup)", style=discord.ButtonStyle.primary, row=2)
     async def reaction_roles(self, interaction, button):
         await interaction.response.send_modal(ReactionRoleModal(self))
 
-    @discord.ui.button(label="Save Embed", style=discord.ButtonStyle.success)
+    @discord.ui.button(label="💾 Save Embed", style=discord.ButtonStyle.success, row=4)
     async def save_embed_btn(self, interaction, button):
         await interaction.response.defer(ephemeral=True)
-        
         guild = interaction.guild
         errors = []
         
+        # GIỮ NGUYÊN 100% LOGIC CHECK LỖI CỦA NGUYỆT
         if self.temp_reaction_data:
             emojis = self.temp_reaction_data["emojis"]
             roles_raw = self.temp_reaction_data["roles_raw"]
@@ -251,33 +262,29 @@ class EmbedUIView(discord.ui.View):
                     "groups": [{"mode": mode, "emojis": emojis, "roles": parsed_role_ids}]
                 }
                 await save_reaction_data(db)
+                await force_save(REACTION_FILE_KEY) # ÉP LƯU
                 
                 from core.embed_sender import _enqueue_reaction
                 if self.message:
-                    print(f"[UI] Đang đẩy reaction cho {self.name} vào hàng đợi...", flush=True)
                     for e in emojis:
                         await _enqueue_reaction(self.message, e)
 
         if errors:
             return await interaction.followup.send("❌ **Lỗi cấu hình:**\n- " + "\n- ".join(errors), ephemeral=True)
 
-        # FIX: Phải await vì storage là async
         await save_embed(interaction.guild.id, self.name, self.data)
+        await force_save("embeds") # ÉP LƯU DỮ LIỆU EMBED
         
         if self.message:
             await State.atomic_embed_register(interaction.guild.id, self.name, self.message.id)
-
-        print(f"[UI] Đã lưu thành công Embed: {self.name} cho Guild: {guild.id}", flush=True)
         await interaction.followup.send(f"✅ Đã lưu Embed: **{self.name}**", ephemeral=True)
 
-    @discord.ui.button(label="Delete Embed", style=discord.ButtonStyle.danger)
+    @discord.ui.button(label="🗑️ Delete Embed", style=discord.ButtonStyle.danger, row=4)
     async def delete_embed_btn(self, interaction, button):
-        # FIX: Phải await
         await delete_embed(interaction.guild.id, self.name)
+        await force_save("embeds") # ÉP LƯU KHI XÓA
         key = f"{self.guild_id}:{self.name}"
         ACTIVE_EMBED_VIEWS.pop(key, None)
-        
         if not interaction.response.is_done():
             await interaction.response.send_message(f"🗑️ Đã xóa Embed: **{self.name}**", ephemeral=True)
-        
         self.stop()
