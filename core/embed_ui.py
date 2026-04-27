@@ -243,7 +243,7 @@ class EmbedUIView(discord.ui.View):
     async def set_image(self, interaction, button):
         await interaction.response.send_modal(EditImageModal(self))
 
-    @discord.ui.button(label="Reaction Roles (Setup emojis and roles for this embed)", style=discord.ButtonStyle.secondary, row=2)
+    @discord.ui.button(label="Reaction Roles (Setup emojis and roles)", style=discord.ButtonStyle.secondary, row=2)
     async def reaction_roles(self, interaction, button):
         await interaction.response.send_modal(ReactionRoleModal(self))
 
