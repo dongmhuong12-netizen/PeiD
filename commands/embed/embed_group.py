@@ -168,4 +168,3 @@ async def setup(bot: commands.Bot):
         # IT Standard Error Log
         print("[ERROR] Không tìm thấy khung /p! Hãy đảm bảo command /p đã được khởi tạo trước.", flush=True)
 
-```
