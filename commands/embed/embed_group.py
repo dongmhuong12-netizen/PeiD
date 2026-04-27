@@ -75,7 +75,7 @@ class EmbedGroup(app_commands.Group):
                 "• Reaction Role → Thiết lập emoji và role để người dùng react nhận role\n"
                 "• Save Embed → Lưu embed\n"
                 "• Delete Embed → Xoá embed vĩnh viễn\n\n"
-                "• Bạn có thể sử dụng embed này để tạo tin nhắn chào mừng, rời đi, "
+                "• Cậu có thể sử dụng embed này để tạo tin nhắn chào mừng, rời đi, "
                 "hoặc các banner hệ thống khi dùng lệnh `/p embed show`.\n\n"
                 "• Lưu ý: hãy Save sau khi chỉnh sửa. Nếu không embed sẽ không được lưu lại, "
                 "hoặc sẽ bị coi là không tồn tại nếu chưa từng Save.\n"
