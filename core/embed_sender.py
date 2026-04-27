@@ -62,7 +62,7 @@ async def _enqueue_reaction(message, emoji):
 # =========================
 
 def _build_embed(embed_copy: dict):
-    """Hàm xây dựng đối tượng Embed nguyên tử - Đã thêm mạch Author/Footer Icon"""
+    """Hàm xây dựng đối tượng Embed nguyên tử - Đã thêm mạch Author/Footer/Timestamp"""
     color = embed_copy.get("color")
     if isinstance(color, str):
         try:
@@ -75,6 +75,10 @@ def _build_embed(embed_copy: dict):
         description=embed_copy.get("description"),
         color=color or 0x5865F2
     )
+
+    # --- MẠCH TIMESTAMP MỚI (CHỈ KÍCH HOẠT KHI NHẬP YES) ---
+    if embed_copy.get("timestamp") == "yes":
+        embed.timestamp = discord.utils.utcnow()
 
     # Xử lý Image/Thumbnail (GIỮ NGUYÊN LOGIC GỐC)
     for attr in ["image", "thumbnail"]:
