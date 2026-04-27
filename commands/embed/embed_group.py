@@ -9,7 +9,7 @@ from core.embed_storage import load_embed, delete_embed, get_all_embed_names
 from core.embed_sender import send_embed
 from systems.embed_system import EmbedSystem
 
-# IMPORT ENGINE IMAGE MỚI
+# IMPORT ENGINE IMAGE MỚI (Xử lý CDN vĩnh viễn)
 from core.image_engine import process_image_upload
 
 # =============================
@@ -19,7 +19,7 @@ from core.image_engine import process_image_upload
 async def embed_name_autocomplete(interaction: discord.Interaction, current: str):
     guild = interaction.guild
     if not guild: return []
-    # FIX: Thêm await để lấy dữ liệu từ storage async
+    # IT Pro: Luôn await các tác vụ I/O để tránh block event loop
     names = await get_all_embed_names(guild.id)
     return [app_commands.Choice(name=name, value=name) for name in names if current.lower() in name.lower()][:25]
 
@@ -41,9 +41,9 @@ def _cleanup_views(key: str):
 @app_commands.describe(file="Select the Image, GIF or Video file to get link")
 async def p_image_cmd(interaction: discord.Interaction, file: discord.Attachment):
     """Lệnh /p image xử lý upload và tạo link CDN vĩnh viễn"""
-    # Quy tắc 3S: Defer ngay lập tức
+    # Tư duy IT Pro: Defer ngay lập tức để tránh lỗi Interaction Failed khi xử lý file lớn
     await interaction.response.defer(ephemeral=True)
-    # Gọi logic xử lý từ core engine
+    # Gọi logic xử lý từ core engine (Chuyển tiếp interaction và client)
     await process_image_upload(interaction, file, interaction.client)
 
 # =============================
@@ -56,19 +56,19 @@ class EmbedGroup(app_commands.Group):
 
     @app_commands.command(name="create", description="Tạo Embed thiết kế mới")
     async def create(self, interaction: discord.Interaction, name: str):
-        # QUY TẮC 3S: Câu giờ ngay lập tức - CHUYỂN SANG CÔNG KHAI (ephemeral=False)
+        # QUY TẮC 3S: Defer ngay lập tức - ephemeral=False để người khác có thể thấy banner đang thiết kế
         await interaction.response.defer(ephemeral=False)
         
         guild = interaction.guild
         
-        # FIX: Thêm await để check trùng tên thực tế
+        # Validation chuẩn IT Pro
         if await load_embed(guild.id, name):
             return await interaction.followup.send(f"❌ Embed `{name}` đã tồn tại. Dùng `/p embed edit` để sửa.")
 
         key = f"{guild.id}:{name}"
         _cleanup_views(key)
 
-        # FIX: Gọi hệ thống tạo mới (Phải await vì system đã async hóa)
+        # Khởi tạo bản ghi ban đầu
         success, error = await EmbedSystem.create_embed(guild.id, name)
         
         if not success:
@@ -80,7 +80,7 @@ class EmbedGroup(app_commands.Group):
         view = EmbedUIView(guild.id, name, embed_data, timeout=600.0)
         embed = view.build_embed()
 
-        # CẬP NHẬT TEXT HƯỚNG DẪN: PHÙ HỢP VỚI CHẾ ĐỘ AUTO-SAVE (ĐÃ GỌT DẸP NÚT SAVE/DELETE)
+        # CẬP NHẬT TEXT HƯỚNG DẪN: PHÙ HỢP VỚI CHẾ ĐỘ AUTO-SAVE
         msg = await interaction.followup.send(
             content=(
                 f"Đã tạo embed với tên `{name}`\n\n"
@@ -105,9 +105,9 @@ class EmbedGroup(app_commands.Group):
     @app_commands.command(name="edit", description="Chỉnh sửa Embed hiện có")
     @app_commands.autocomplete(name=embed_name_autocomplete)
     async def edit(self, interaction: discord.Interaction, name: str):
-        # CHUYỂN SANG CÔNG KHAI
+        # IT Standard Defer
         await interaction.response.defer(ephemeral=False)
-        # FIX: Thêm await
+        
         data = await load_embed(interaction.guild.id, name)
         if not data: return await interaction.followup.send(f"❌ Không tìm thấy `{name}`.")
 
@@ -117,7 +117,6 @@ class EmbedGroup(app_commands.Group):
         view = EmbedUIView(interaction.guild.id, name, data, timeout=600.0)
         embed = view.build_embed()
 
-        # TEXT THÔNG BÁO AUTO-SAVE
         msg = await interaction.followup.send(
             content=f"📝 Bạn đang chỉnh sửa embed `{name}`. Mọi thay đổi sẽ được lưu tự động.", 
             embed=embed, 
@@ -129,11 +128,11 @@ class EmbedGroup(app_commands.Group):
     @app_commands.command(name="show", description="Gửi Embed vào channel")
     @app_commands.autocomplete(name=embed_name_autocomplete)
     async def show(self, interaction: discord.Interaction, name: str):
-        # FIX: Thêm await
+        # Async fetch
         data = await load_embed(interaction.guild.id, name)
         if not data: return await interaction.followup.send(f"❌ Không có `{name}` để show.", ephemeral=True)
         
-        # Giữ thông báo trạng thái là ẩn để tránh rác kênh
+        # IT Pro: Thông báo trạng thái gửi (ephemeral)
         await interaction.response.send_message(f"⌛ Đang gửi embed `{name}`...", ephemeral=True)
         
         await send_embed(interaction.channel, data, interaction.guild, interaction.user, embed_name=name)
@@ -141,10 +140,10 @@ class EmbedGroup(app_commands.Group):
     @app_commands.command(name="delete", description="Xóa Embed vĩnh viễn")
     @app_commands.autocomplete(name=embed_name_autocomplete)
     async def delete(self, interaction: discord.Interaction, name: str):
-        # FIX: Thêm await
+        # Await delete task
         await delete_embed(interaction.guild.id, name)
         _cleanup_views(f"{interaction.guild.id}:{name}")
-        # CHUYỂN SANG CÔNG KHAI
+        # Kết quả công khai
         await interaction.response.send_message(f"🗑️ Embed `{name}` đã được xoá vĩnh viễn.", ephemeral=False)
 
 # =============================
@@ -152,21 +151,22 @@ class EmbedGroup(app_commands.Group):
 # =============================
 
 async def setup(bot: commands.Bot):
-    # Lấy lệnh cha /p
+    # Truy xuất lệnh cha /p từ command tree toàn cục
     p_cmd = bot.tree.get_command("p")
     
     if p_cmd and isinstance(p_cmd, app_commands.Group):
-        # 1. Thêm nhóm Embed (/p embed ...)
+        # 1. Khôi phục nhóm lệnh /p embed ...
         if not any(c.name == "embed" for c in p_cmd.commands):
             p_cmd.add_command(EmbedGroup())
+            # Bảo tồn DNA log của cậu
             print("[LOAD] Success: commands.embed.embed_group", flush=True)
         
-        # 2. Thêm lệnh Image (/p image) vào chung hệ /p
+        # 2. Đăng ký lệnh /p image (Hệ thống CDN)
         if not any(c.name == "image" for c in p_cmd.commands):
             p_cmd.add_command(p_image_cmd)
             print("[LOAD] Success: commands.p.image (CDN Engine)", flush=True)
     else:
-        # Giữ nguyên dòng log báo lỗi của Nguyệt
-        print("[ERROR] Không tìm thấy khung /p!", flush=True)
+        # IT Standard Error Log
+        print("[ERROR] Không tìm thấy khung /p! Hãy đảm bảo command /p đã được khởi tạo trước.", flush=True)
 
 ```
