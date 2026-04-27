@@ -18,7 +18,7 @@ _worker_task = None
 
 
 # =========================
-# QUEUE SYSTEM (CHỐNG RATE LIMIT CẤP ĐỘ BOT LỚN)
+# QUEUE SYSTEM (CHỐNG RATE LIMIT CẤP ĐỘ BOT LỚN) - GIỮ NGUYÊN 100%
 # =========================
 
 async def _reaction_worker():
@@ -58,11 +58,11 @@ async def _enqueue_reaction(message, emoji):
 
 
 # =========================
-# EMBED BUILDER
+# EMBED BUILDER (NÂNG CẤP ĐỒNG BỘ UI PRO)
 # =========================
 
 def _build_embed(embed_copy: dict):
-    """Hàm xây dựng đối tượng Embed nguyên tử"""
+    """Hàm xây dựng đối tượng Embed nguyên tử - Đã thêm mạch Author/Footer Icon"""
     color = embed_copy.get("color")
     if isinstance(color, str):
         try:
@@ -76,22 +76,35 @@ def _build_embed(embed_copy: dict):
         color=color or 0x5865F2
     )
 
-    # Xử lý Image/Thumbnail/Footer/Author
+    # Xử lý Image/Thumbnail (GIỮ NGUYÊN LOGIC GỐC)
     for attr in ["image", "thumbnail"]:
         val = embed_copy.get(attr)
         if val:
             url = val.get("url") if isinstance(val, dict) else val
-            if url and url.startswith("http"):
+            if url and str(url).startswith("http"):
                 getattr(embed, f"set_{attr}")(url=url)
 
+    # Xử lý Footer (MỞ RỘNG: Thêm Icon URL)
     footer = embed_copy.get("footer")
     if isinstance(footer, dict) and footer.get("text"):
-        embed.set_footer(text=footer["text"])
+        f_icon = footer.get("icon_url")
+        embed.set_footer(
+            text=footer["text"],
+            icon_url=f_icon if f_icon and str(f_icon).startswith("http") else None
+        )
 
+    # Xử lý Author (MỞ RỘNG: Thêm Icon URL & Link URL)
     author = embed_copy.get("author")
     if isinstance(author, dict) and author.get("name"):
-        embed.set_author(name=author["name"])
+        a_icon = author.get("icon_url")
+        a_url = author.get("url")
+        embed.set_author(
+            name=author["name"],
+            icon_url=a_icon if a_icon and str(a_icon).startswith("http") else None,
+            url=a_url if a_url and str(a_url).startswith("http") else None
+        )
 
+    # Xử lý Fields (GIỮ NGUYÊN LOGIC GỐC)
     fields = embed_copy.get("fields")
     if isinstance(fields, list):
         for field in fields:
@@ -105,7 +118,7 @@ def _build_embed(embed_copy: dict):
 
 
 # =========================
-# SEND EMBED CORE
+# SEND EMBED CORE (GIỮ NGUYÊN 100% LOGIC CỦA NGUYỆT)
 # =========================
 
 async def send_embed(
