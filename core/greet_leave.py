@@ -2,12 +2,16 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 import asyncio
+from collections import defaultdict # [VÁ LỖI]
 
 from core.greet_storage import get_section, update_guild_config
 from core.embed_storage import load_embed
 from core.variable_engine import apply_variables
 # IMPORT EMOJI HỆ THỐNG
 from utils.emojis import Emojis
+
+# [VÁ LỖI] Lock theo Guild để bảo vệ trí nhớ cấu hình khi admin setup song song
+_config_locks = defaultdict(asyncio.Lock)
 
 # ======================
 # SEND MESSAGE HANDLER (ATOMIC)
@@ -72,13 +76,21 @@ class GreetGroup(app_commands.Group):
     @app_commands.command(name="channel", description="đặt kênh gửi tin nhắn chào mừng")
     @app_commands.default_permissions(manage_guild=True)
     async def channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
-        update_guild_config(interaction.guild.id, "greet", "channel", channel.id)
+        gid = interaction.guild.id
+        lock = _config_locks[gid]
+        async with lock:
+            update_guild_config(gid, "greet", "channel", channel.id)
+        if gid in _config_locks and not lock.locked(): _config_locks.pop(gid, None)
         await interaction.response.send_message(f"đặt kênh `greet` thành công: {channel.mention}", ephemeral=False)
 
     @app_commands.command(name="message", description="đặt nội dung tin nhắn chào mừng")
     @app_commands.default_permissions(manage_guild=True)
     async def message(self, interaction: discord.Interaction, message: str):
-        update_guild_config(interaction.guild.id, "greet", "message", message)
+        gid = interaction.guild.id
+        lock = _config_locks[gid]
+        async with lock:
+            update_guild_config(gid, "greet", "message", message)
+        if gid in _config_locks and not lock.locked(): _config_locks.pop(gid, None)
         
         embed = discord.Embed(
             description=f"{Emojis.MATTRANG} cập nhật nội dung greet thành công: `{message}`",
@@ -97,7 +109,12 @@ class GreetGroup(app_commands.Group):
             )
             return await interaction.response.send_message(embed=embed_err, ephemeral=False)
         
-        update_guild_config(interaction.guild.id, "greet", "embed", name)
+        gid = interaction.guild.id
+        lock = _config_locks[gid]
+        async with lock:
+            update_guild_config(gid, "greet", "embed", name)
+        if gid in _config_locks and not lock.locked(): _config_locks.pop(gid, None)
+        
         embed_success = discord.Embed(
             description=f"{Emojis.MATTRANG} gán embed `{name}` cho hệ thống `greet` thành công",
             color=0xf8bbd0
@@ -128,13 +145,21 @@ class LeaveGroup(app_commands.Group):
     @app_commands.command(name="channel", description="đặt kênh gửi tin nhắn tạm biệt")
     @app_commands.default_permissions(manage_guild=True)
     async def channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
-        update_guild_config(interaction.guild.id, "leave", "channel", channel.id)
+        gid = interaction.guild.id
+        lock = _config_locks[gid]
+        async with lock:
+            update_guild_config(gid, "leave", "channel", channel.id)
+        if gid in _config_locks and not lock.locked(): _config_locks.pop(gid, None)
         await interaction.response.send_message(f"đặt kênh `leave` thành công: {channel.mention}", ephemeral=False)
 
     @app_commands.command(name="message", description="đặt nội dung tin nhắn tạm biệt")
     @app_commands.default_permissions(manage_guild=True)
     async def message(self, interaction: discord.Interaction, message: str):
-        update_guild_config(interaction.guild.id, "leave", "message", message)
+        gid = interaction.guild.id
+        lock = _config_locks[gid]
+        async with lock:
+            update_guild_config(gid, "leave", "message", message)
+        if gid in _config_locks and not lock.locked(): _config_locks.pop(gid, None)
         
         embed = discord.Embed(
             description=f"{Emojis.MATTRANG} cập nhật nội dung leave thành công: `{message}`",
@@ -153,7 +178,12 @@ class LeaveGroup(app_commands.Group):
             )
             return await interaction.response.send_message(embed=embed_err, ephemeral=False)
         
-        update_guild_config(interaction.guild.id, "leave", "embed", name)
+        gid = interaction.guild.id
+        lock = _config_locks[gid]
+        async with lock:
+            update_guild_config(gid, "leave", "embed", name)
+        if gid in _config_locks and not lock.locked(): _config_locks.pop(gid, None)
+        
         embed_success = discord.Embed(
             description=f"{Emojis.MATTRANG} gán embed `{name}` cho hệ thống `leave` thành công",
             color=0xf8bbd0
@@ -184,14 +214,28 @@ class LeaveGroup(app_commands.Group):
 class GreetLeaveListener(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        # [VÁ LỖI] Hệ thống quản lý tác vụ ngầm chống Zombie Task rò rỉ RAM
+        self._tasks = set()
+
+    def cog_unload(self):
+        """[VÁ LỖI] Dọn dẹp tuyệt đối các tác vụ đang chạy khi reload module"""
+        for task in self._tasks:
+            task.cancel()
+        self._tasks.clear()
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
-        asyncio.create_task(send_config_message(member.guild, member, "greet"))
+        # [VÁ LỖI] Đăng ký tác vụ vào bộ quản lý để giải phóng Member object kịp thời
+        task = asyncio.create_task(send_config_message(member.guild, member, "greet"))
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
 
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):
-        asyncio.create_task(send_config_message(member.guild, member, "leave"))
+        # [VÁ LỖI] Đăng ký tác vụ vào bộ quản lý
+        task = asyncio.create_task(send_config_message(member.guild, member, "leave"))
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
 
 async def setup(bot: commands.Bot):
     p_cmd = bot.tree.get_command("p")
