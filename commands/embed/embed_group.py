@@ -78,6 +78,7 @@ class EmbedGroup(app_commands.Group):
         # Nạp dữ liệu vừa tạo
         embed_data = await load_embed(guild.id, name)
         
+        # [VÁ LỖI] Khởi tạo View (View sẽ tự đăng ký vào ACTIVE_EMBED_VIEWS để quản lý RAM)
         view = EmbedUIView(guild.id, name, embed_data, timeout=600.0)
         embed = view.build_embed()
 
@@ -93,7 +94,6 @@ class EmbedGroup(app_commands.Group):
         )
         
         view.message = msg
-        ACTIVE_EMBED_VIEWS.setdefault(key, []).append(view)
 
     @app_commands.command(name="edit", description="chỉnh sửa embed hiện có")
     @app_commands.autocomplete(name=embed_name_autocomplete)
@@ -107,6 +107,7 @@ class EmbedGroup(app_commands.Group):
         key = f"{interaction.guild.id}:{name}"
         _cleanup_views(key)
 
+        # [VÁ LỖI] Đăng ký View vào bộ nhớ được xử lý tự động trong EmbedUIView
         view = EmbedUIView(interaction.guild.id, name, data, timeout=600.0)
         embed = view.build_embed()
 
@@ -116,7 +117,6 @@ class EmbedGroup(app_commands.Group):
             view=view
         )
         view.message = msg
-        ACTIVE_EMBED_VIEWS.setdefault(key, []).append(view)
 
     @app_commands.command(name="show", description="gửi embed vào channel")
     @app_commands.autocomplete(name=embed_name_autocomplete)
