@@ -11,7 +11,7 @@ from systems.embed_system import EmbedSystem
 # IMPORT ENGINE IMAGE MỚI (Xử lý CDN vĩnh viễn)
 from core.image_engine import process_image_upload
 # IMPORT EMOJI HỆ THỐNG
-from Utils.emojis import Emojis
+from utils.emojis import Emojis
 
 # =============================
 # HELPERS (Bổ trợ) - GIỮ NGUYÊN 100% DNA CỦA NGUYỆT
