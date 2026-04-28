@@ -132,7 +132,7 @@ class EmbedGroup(app_commands.Group):
             return await interaction.response.send_message(embed=embed_err, ephemeral=False)
         
         # IT Pro: Thông báo trạng thái gửi (ephemeral=False)
-        await interaction.response.send_message(f"đang gửi embed `{name}`", ephemeral=False)
+        await interaction.response.send_message(f"embed `{name}`gửi đi thành công", ephemeral=False)
         
         await send_embed(interaction.channel, data, interaction.guild, interaction.user, embed_name=name)
 
