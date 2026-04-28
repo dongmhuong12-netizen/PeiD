@@ -6,6 +6,8 @@ import asyncio
 from core.greet_storage import get_section, update_guild_config
 from core.embed_storage import load_embed
 from core.variable_engine import apply_variables
+# IMPORT EMOJI HỆ THỐNG
+from utils.emojis import Emojis
 
 # ======================
 # SEND MESSAGE HANDLER (ATOMIC)
@@ -13,8 +15,8 @@ from core.variable_engine import apply_variables
 
 async def send_wellcome(guild: discord.Guild, member: discord.Member):
     """
-    Xử lý gửi tin nhắn Wellcome phụ.
-    Gộp Text và Embed vào 1 request duy nhất để bảo vệ API Discord.
+    xử lý gửi tin nhắn wellcome phụ.
+    gộp text và embed vào 1 request duy nhất để bảo vệ api discord.
     """
     config = get_section(guild.id, "wellcome")
     if not config: return False
@@ -35,26 +37,26 @@ async def send_wellcome(guild: discord.Guild, member: discord.Member):
         final_content = None
         final_embed = None
 
-        # 1. Xử lý TEXT
+        # 1. xử lý text
         if message_text:
             final_content = apply_variables(message_text, guild, member)
 
-        # 2. Xử lý EMBED (Đồng bộ với chuyên gia Sender)
+        # 2. xử lý embed (đã thêm await cho load_embed)
         if embed_name and perms.embed_links:
-            embed_data = load_embed(guild.id, embed_name)
+            embed_data = await load_embed(guild.id, embed_name)
             if embed_data:
                 from core.embed_sender import _build_embed
                 processed_data = apply_variables(embed_data, guild, member)
                 final_embed = _build_embed(processed_data)
 
-        # 3. GỬI GỘP (Single Request)
+        # 3. gửi gộp
         if final_content or final_embed:
             await channel.send(content=final_content, embed=final_embed)
             return True
 
         return False
     except Exception as e:
-        print(f"[WELLCOME ERROR] Guild {guild.id} fail: {e}", flush=True)
+        print(f"[wellcome error] guild {guild.id} fail: {e}", flush=True)
         return False
 
 # ======================
@@ -63,35 +65,59 @@ async def send_wellcome(guild: discord.Guild, member: discord.Member):
 
 class WellcomeGroup(app_commands.Group):
     def __init__(self):
-        super().__init__(name="wellcome", description="Hệ thống chào mừng phụ")
+        super().__init__(name="wellcome", description="hệ thống chào mừng phụ")
 
-    @app_commands.command(name="channel", description="Đặt kênh gửi tin nhắn Wellcome")
+    @app_commands.command(name="channel", description="đặt kênh gửi tin nhắn wellcome")
     @app_commands.default_permissions(manage_guild=True)
     async def channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
         update_guild_config(interaction.guild.id, "wellcome", "channel", channel.id)
-        await interaction.response.send_message(f"✅ Đã đặt kênh Wellcome: {channel.mention}", ephemeral=True)
+        await interaction.response.send_message(f"đặt kênh `wellcome` thành công: {channel.mention}", ephemeral=False)
 
-    @app_commands.command(name="message", description="Đặt nội dung tin nhắn Wellcome")
+    @app_commands.command(name="message", description="đặt nội dung tin nhắn wellcome")
     @app_commands.default_permissions(manage_guild=True)
     async def message(self, interaction: discord.Interaction, message: str):
         update_guild_config(interaction.guild.id, "wellcome", "message", message)
-        await interaction.response.send_message(f"✅ Đã cập nhật nội dung Wellcome.", ephemeral=True)
+        
+        embed = discord.Embed(
+            description=f"{Emojis.MATTRANG} cập nhật nội dung wellcome thành công: `{message}`",
+            color=0xf8bbd0
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=False)
 
-    @app_commands.command(name="embed", description="Gán Embed cho hệ thống Wellcome")
+    @app_commands.command(name="embed", description="gán embed cho hệ thống wellcome")
     @app_commands.default_permissions(manage_guild=True)
     async def embed(self, interaction: discord.Interaction, name: str):
-        if not load_embed(interaction.guild.id, name):
-            return await interaction.response.send_message(f"❌ Embed `{name}` không tồn tại.", ephemeral=True)
+        # FIX: PHẢI AWAIT load_embed
+        if not await load_embed(interaction.guild.id, name):
+            embed_err = discord.Embed(
+                description=f"{Emojis.HOICHAM} aree...hãy thử lại lần nữa nhé. yiyi không tìm thấy embed có tên `{name}`. xin hãy kiểm tra embed cậu muốn dùng cho wellcome bằng `/p embed edit`",
+                color=0xf8bbd0
+            )
+            return await interaction.response.send_message(embed=embed_err, ephemeral=False)
         
         update_guild_config(interaction.guild.id, "wellcome", "embed", name)
-        await interaction.response.send_message(f"✅ Đã gán Embed `{name}` cho Wellcome.", ephemeral=True)
+        embed_success = discord.Embed(
+            description=f"{Emojis.MATTRANG} gán embed `{name}` cho hệ thống `wellcome` thành công",
+            color=0xf8bbd0
+        )
+        await interaction.response.send_message(embed=embed_success, ephemeral=False)
 
-    @app_commands.command(name="test", description="Gửi thử tin nhắn Wellcome")
+    @app_commands.command(name="test", description="gửi thử tin nhắn wellcome")
     async def test(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer(ephemeral=False)
         success = await send_wellcome(interaction.guild, interaction.user)
-        msg = "✅ Test Wellcome thành công!" if success else "❌ Thất bại: Kiểm tra cấu hình/quyền hạn."
-        await interaction.followup.send(msg, ephemeral=True)
+        
+        if success:
+            embed = discord.Embed(
+                description=f"{Emojis.MATTRANG} test `wellcome` thành công, hãy kiểm tra tại kênh được setup nhé. nếu không thấy, hãy kiểm tra lại quyền của bot hoặc quyền của kênh",
+                color=0xf8bbd0
+            )
+        else:
+            embed = discord.Embed(
+                description=f"{Emojis.HOICHAM} hmm..? có vẻ có lỗi về cấu hình kênh hoặc embed. hãy kiểm tra lại khi đã đầy đủ `channel` `embed` `message` trước khi test nhé",
+                color=0xf8bbd0
+            )
+        await interaction.followup.send(embed=embed, ephemeral=False)
 
 # ======================
 # LISTENER & INJECTION
@@ -103,15 +129,13 @@ class WellcomeListener(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
-        # Hệ phụ chạy trong task riêng để bảo vệ Event Loop
         asyncio.create_task(send_wellcome(member.guild, member))
 
 async def setup(bot: commands.Bot):
-    # Tiêm lệnh vào /p
     p_cmd = bot.tree.get_command("p")
     if p_cmd and isinstance(p_cmd, app_commands.Group):
         if not any(c.name == "wellcome" for c in p_cmd.commands):
             p_cmd.add_command(WellcomeGroup())
     
     await bot.add_cog(WellcomeListener(bot))
-    print("[LOAD] Success: core.wellcome (Injected into /p)", flush=True)
+    print("[load] success: core.wellcome (injected into /p)", flush=True)
