@@ -6,6 +6,8 @@ import asyncio
 from core.greet_storage import get_section, update_guild_config
 from core.embed_storage import load_embed
 from core.variable_engine import apply_variables
+# IMPORT EMOJI HỆ THỐNG
+from utils.emojis import Emojis
 
 # ======================
 # SEND MESSAGE HANDLER (ATOMIC)
@@ -13,12 +15,10 @@ from core.variable_engine import apply_variables
 
 async def send_config_message(guild: discord.Guild, member: discord.Member, section: str):
     """
-    Xử lý gửi tin nhắn Greet/Leave/Booster tập trung.
+    xử lý gửi tin nhắn greet/leave/booster tập trung.
     """
-    # 1. LẤY CONFIG (Cần đồng bộ hóa kho dữ liệu)
     config = get_section(guild.id, section)
     
-    # TRƯỜNG HỢP ĐẶC BIỆT: Nếu là booster, kiểm tra thêm kho booster_levels
     if section == "booster" and (not config or not config.get("channel")):
         from core.cache_manager import get_raw
         db = get_raw("booster_levels")
@@ -42,27 +42,23 @@ async def send_config_message(guild: discord.Guild, member: discord.Member, sect
         final_content = None
         final_embed = None
 
-        # 1. Xử lý TEXT
         if message_text:
             final_content = apply_variables(message_text, guild, member)
 
-        # 2. Xử lý EMBED
         if embed_name and perms.embed_links:
-            # FIX: BẮT BUỘC PHẢI AWAIT load_embed
             embed_data = await load_embed(guild.id, embed_name)
             if embed_data:
                 from core.embed_sender import _build_embed
                 processed_data = apply_variables(embed_data, guild, member)
                 final_embed = _build_embed(processed_data)
 
-        # 3. GỬI GỘP
         if final_content or final_embed:
             await channel.send(content=final_content, embed=final_embed)
             return True
 
         return False
     except Exception as e:
-        print(f"[GREET/LEAVE ERROR] {section} fail in {guild.id}: {e}", flush=True)
+        print(f"[greet/leave error] {section} fail in {guild.id}: {e}", flush=True)
         return False
 
 # ======================
@@ -71,67 +67,115 @@ async def send_config_message(guild: discord.Guild, member: discord.Member, sect
 
 class GreetGroup(app_commands.Group):
     def __init__(self):
-        super().__init__(name="greet", description="Cấu hình hệ thống chào mừng")
+        super().__init__(name="greet", description="cấu hình hệ thống chào mừng")
 
-    @app_commands.command(name="channel", description="Đặt kênh gửi tin nhắn chào mừng")
+    @app_commands.command(name="channel", description="đặt kênh gửi tin nhắn chào mừng")
     @app_commands.default_permissions(manage_guild=True)
     async def channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
         update_guild_config(interaction.guild.id, "greet", "channel", channel.id)
-        await interaction.response.send_message(f"✅ Đã đặt kênh Greet: {channel.mention}", ephemeral=True)
+        await interaction.response.send_message(f"đặt kênh `greet` thành công: {channel.mention}", ephemeral=False)
 
-    @app_commands.command(name="message", description="Đặt nội dung tin nhắn chào mừng")
+    @app_commands.command(name="message", description="đặt nội dung tin nhắn chào mừng")
     @app_commands.default_permissions(manage_guild=True)
     async def message(self, interaction: discord.Interaction, message: str):
         update_guild_config(interaction.guild.id, "greet", "message", message)
-        await interaction.response.send_message(f"✅ Đã cập nhật nội dung Greet.", ephemeral=True)
+        
+        embed = discord.Embed(
+            description=f"{Emojis.MATTRANG} cập nhật nội dung greet thành công: `{message}`",
+            color=0xf8bbd0
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=False)
 
-    @app_commands.command(name="embed", description="Gán Embed cho hệ thống Greet")
+    @app_commands.command(name="embed", description="gán embed cho hệ thống greet")
     @app_commands.default_permissions(manage_guild=True)
     async def embed(self, interaction: discord.Interaction, name: str):
-        # FIX: PHẢI AWAIT load_embed
         if not await load_embed(interaction.guild.id, name):
-            return await interaction.response.send_message(f"❌ Embed `{name}` không tồn tại.", ephemeral=True)
+            # SỬA THEO TÁC DỤNG: GREET
+            embed_err = discord.Embed(
+                description=f"{Emojis.HOICHAM} aree...hãy thử lại lần nữa nhé. yiyi không tìm thấy embed có tên `{name}`. xin hãy kiểm tra embed cậu muốn dùng cho greet bằng `/p embed edit`.",
+                color=0xf8bbd0
+            )
+            return await interaction.response.send_message(embed=embed_err, ephemeral=False)
+        
         update_guild_config(interaction.guild.id, "greet", "embed", name)
-        await interaction.response.send_message(f"✅ Đã gán Embed `{name}` cho Greet.", ephemeral=True)
+        embed_success = discord.Embed(
+            description=f"{Emojis.MATTRANG} gán embed `{name}` cho hệ thống `greet` thành công",
+            color=0xf8bbd0
+        )
+        await interaction.response.send_message(embed=embed_success, ephemeral=False)
 
-    @app_commands.command(name="test", description="Gửi thử tin nhắn chào mừng")
+    @app_commands.command(name="test", description="gửi thử tin nhắn chào mừng")
     async def test(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer(ephemeral=False)
         success = await send_config_message(interaction.guild, interaction.user, "greet")
-        msg = "✅ Test Greet thành công!" if success else "❌ Thất bại: Kiểm tra cấu hình kênh/quyền/embed."
-        await interaction.followup.send(msg, ephemeral=True)
+        
+        if success:
+            embed = discord.Embed(
+                description=f"{Emojis.MATTRANG} test `greet` thành công, hãy kiểm tra tại kênh được setup nhé. nếu không thấy, hãy kiểm tra lại quyền của bot hoặc quyền của kênh",
+                color=0xf8bbd0
+            )
+        else:
+            embed = discord.Embed(
+                description=f"{Emojis.HOICHAM} hmm..? có vẻ có lỗi về cấu hình kênh hoặc embed. hãy kiểm tra lại khi đã đầy đủ `channel` `embed` `message` trước khi test nhé",
+                color=0xf8bbd0
+            )
+        await interaction.followup.send(embed=embed, ephemeral=False)
 
 class LeaveGroup(app_commands.Group):
     def __init__(self):
-        super().__init__(name="leave", description="Cấu hình hệ thống tạm biệt")
+        super().__init__(name="leave", description="cấu hình hệ thống tạm biệt")
 
-    @app_commands.command(name="channel", description="Đặt kênh gửi tin nhắn tạm biệt")
+    @app_commands.command(name="channel", description="đặt kênh gửi tin nhắn tạm biệt")
     @app_commands.default_permissions(manage_guild=True)
     async def channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
         update_guild_config(interaction.guild.id, "leave", "channel", channel.id)
-        await interaction.response.send_message(f"✅ Đã đặt kênh Leave: {channel.mention}", ephemeral=True)
+        await interaction.response.send_message(f"đặt kênh `leave` thành công: {channel.mention}", ephemeral=False)
 
-    @app_commands.command(name="message", description="Đặt nội dung tin nhắn tạm biệt")
+    @app_commands.command(name="message", description="đặt nội dung tin nhắn tạm biệt")
     @app_commands.default_permissions(manage_guild=True)
     async def message(self, interaction: discord.Interaction, message: str):
         update_guild_config(interaction.guild.id, "leave", "message", message)
-        await interaction.response.send_message(f"✅ Đã cập nhật nội dung Leave.", ephemeral=True)
+        
+        embed = discord.Embed(
+            description=f"{Emojis.MATTRANG} cập nhật nội dung leave thành công: `{message}`",
+            color=0xf8bbd0
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=False)
 
-    @app_commands.command(name="embed", description="Gán Embed cho hệ thống Leave")
+    @app_commands.command(name="embed", description="gán embed cho hệ thống leave")
     @app_commands.default_permissions(manage_guild=True)
     async def embed(self, interaction: discord.Interaction, name: str):
-        # FIX: PHẢI AWAIT load_embed
         if not await load_embed(interaction.guild.id, name):
-            return await interaction.response.send_message(f"❌ Embed `{name}` không tồn tại.", ephemeral=True)
+            # SỬA THEO TÁC DỤNG: LEAVE
+            embed_err = discord.Embed(
+                description=f"{Emojis.HOICHAM} aree...hãy thử lại lần nữa nhé. yiyi không tìm thấy embed có tên `{name}`. xin hãy kiểm tra embed cậu muốn dùng cho leave bằng `/p embed edit`.",
+                color=0xf8bbd0
+            )
+            return await interaction.response.send_message(embed=embed_err, ephemeral=False)
+        
         update_guild_config(interaction.guild.id, "leave", "embed", name)
-        await interaction.response.send_message(f"✅ Đã gán Embed `{name}` cho Leave.", ephemeral=True)
+        embed_success = discord.Embed(
+            description=f"{Emojis.MATTRANG} gán embed `{name}` cho hệ thống `leave` thành công",
+            color=0xf8bbd0
+        )
+        await interaction.response.send_message(embed=embed_success, ephemeral=False)
 
-    @app_commands.command(name="test", description="Gửi thử tin nhắn tạm biệt")
+    @app_commands.command(name="test", description="gửi thử tin nhắn tạm biệt")
     async def test(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer(ephemeral=False)
         success = await send_config_message(interaction.guild, interaction.user, "leave")
-        msg = "✅ Test Leave thành công!" if success else "❌ Thất bại: Kiểm tra cấu hình kênh/quyền/embed."
-        await interaction.followup.send(msg, ephemeral=True)
+        
+        if success:
+            embed = discord.Embed(
+                description=f"{Emojis.MATTRANG} test `leave` thành công, hãy kiểm tra tại kênh được setup nhé. nếu không thấy, hãy kiểm tra lại quyền của bot hoặc quyền của kênh",
+                color=0xf8bbd0
+            )
+        else:
+            embed = discord.Embed(
+                description=f"{Emojis.HOICHAM} hmm..? có vẻ có lỗi về cấu hình kênh hoặc embed. hãy kiểm tra lại khi đã đầy đủ `channel` `embed` `message` trước khi test nhé",
+                color=0xf8bbd0
+            )
+        await interaction.followup.send(embed=embed, ephemeral=False)
 
 # ======================
 # LISTENER & SETUP
