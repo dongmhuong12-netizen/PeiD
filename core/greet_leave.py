@@ -23,6 +23,7 @@ async def send_config_message(guild: discord.Guild, member: discord.Member, sect
     """
     config = get_section(guild.id, section)
     
+    # [LOGIC GIỮ LẠI]: Fallback cho Booster thường (không phải level)
     if section == "booster" and (not config or not config.get("channel")):
         from core.cache_manager import get_raw
         db = get_raw("booster_levels")
@@ -102,7 +103,6 @@ class GreetGroup(app_commands.Group):
     @app_commands.default_permissions(manage_guild=True)
     async def embed(self, interaction: discord.Interaction, name: str):
         if not await load_embed(interaction.guild.id, name):
-            # SỬA THEO TÁC DỤNG: GREET
             embed_err = discord.Embed(
                 description=f"{Emojis.HOICHAM} aree...hãy thử lại lần nữa nhé. yiyi không tìm thấy embed có tên `{name}`. xin hãy kiểm tra embed cậu muốn dùng cho greet bằng `/p embed edit`.",
                 color=0xf8bbd0
@@ -171,7 +171,6 @@ class LeaveGroup(app_commands.Group):
     @app_commands.default_permissions(manage_guild=True)
     async def embed(self, interaction: discord.Interaction, name: str):
         if not await load_embed(interaction.guild.id, name):
-            # SỬA THEO TÁC DỤNG: LEAVE
             embed_err = discord.Embed(
                 description=f"{Emojis.HOICHAM} aree...hãy thử lại lần nữa nhé. yiyi không tìm thấy embed có tên `{name}`. xin hãy kiểm tra embed cậu muốn dùng cho leave bằng `/p embed edit`.",
                 color=0xf8bbd0
