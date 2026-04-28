@@ -55,7 +55,7 @@ bot = commands.AutoShardedBot(
 # =========================
 
 EXTENSIONS = [
-    "core.root",                  # XƯƠNG: Tạo lệnh /p
+    "core.root",                  # XƯƠNG: Tạo lệnh /p (Phải nạp đầu tiên)
     "commands.embed.embed_group",  # THỊT: Create, Edit, Show...
     "core.greet_leave",          
     "core.wellcome",             
