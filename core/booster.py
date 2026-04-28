@@ -1,9 +1,11 @@
 import asyncio
 import discord
+import time
 from discord import app_commands
 from discord.ext import commands
 
 # Import các công cụ quản lý bộ nhớ
+from core.state import State
 from core.cache_manager import get_raw, mark_dirty, save
 from core.embed_storage import load_embed
 from core.greet_leave import send_config_message
@@ -71,21 +73,41 @@ class BoostGroup(app_commands.Group):
         )
         await interaction.response.send_message(embed=embed_success, ephemeral=False)
 
-    @app_commands.command(name="test", description="gửi thử tin nhắn chúc mừng boost")
+    @app_commands.command(name="test", description="gửi thử tin nhắn chúc mừng boost và bảo vệ role 5p")
     @app_commands.default_permissions(manage_guild=True)
     async def test(self, interaction: discord.Interaction):
+        """kích hoạt chế độ test: giả lập gán role và cấp kim bài miễn tử 5 phút."""
         await interaction.response.defer(ephemeral=False)
         
+        # 1. KIỂM TRA VÀ GÁN ROLE THẬT ĐỂ TEST /P BOOSTER ROLE
+        config = await get_guild_config(interaction.guild.id)
+        role_id = config.get("booster_role")
+        role_status = "không tìm thấy role"
+        
+        if role_id:
+            role = interaction.guild.get_role(role_id)
+            if role:
+                try:
+                    await interaction.user.add_roles(role)
+                    role_status = role.mention
+                except:
+                    role_status = "thiếu quyền gán role"
+
+        # 2. [BYPASS LOGIC] Ghi đè thời gian bảo vệ vào RAM (300s = 5 phút)
+        bypass_key = f"boost_test_{interaction.user.id}"
+        await State.set_ui(bypass_key, {"expiry": time.time() + 300})
+        
+        # 3. GỬI EMBED CHÚC MỪNG
         success = await send_config_message(interaction.guild, interaction.user, "booster")
         
         if success:
             embed = discord.Embed(
-                description=f"{Emojis.MATTRANG} kiểm tra hệ thống `boost` thành công",
+                description=f"{Emojis.MATTRANG} hệ thống `boost` đã được giả lập thành công.\n{Emojis.MATTRANG} booster role: {role_status}\n{Emojis.MATTRANG} lưu ý: cậu có 5 phút bảo vệ role để kiểm tra.",
                 color=0xf8bbd0
             )
         else:
             embed = discord.Embed(
-                description=f"{Emojis.HOICHAM} kiểm tra thất bại, hãy xem lại cấu hình kênh hoặc embed của hệ thống `boost` nhé",
+                description=f"{Emojis.HOICHAM} kiểm tra thất bại, hãy xem lại cấu hình kênh hoặc embed nhé",
                 color=0xf8bbd0
             )
         await interaction.followup.send(embed=embed, ephemeral=False)
@@ -97,33 +119,33 @@ class BoostGroup(app_commands.Group):
 class BoosterListener(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        # [XOÁ BỎ] Radar quét ngầm 5 phút đã bị loại bỏ để tối ưu tài nguyên
         self._tasks = set()
 
     def cog_unload(self):
-        """dọn dẹp các tác vụ ngầm khi reload module"""
         for task in self._tasks:
             task.cancel()
         self._tasks.clear()
 
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member):
-        """chỉ xử lý khi có biến động trạng thái boost thực tế"""
         if after.bot: return
         
-        # kiểm tra xem họ vừa nhấn nút boost (premium_since từ None thành có giá trị)
-        # hoặc vừa hết hạn boost (premium_since từ có giá trị thành None)
+        # [CHỐT CHẶN BYPASS] Kiểm tra xem thành viên có đang trong 5 phút test không
+        bypass_key = f"boost_test_{after.id}"
+        state_data = await State.get_ui(bypass_key)
+        if state_data and time.time() < state_data.get("expiry", 0):
+            return
+
         is_boost_changed = (before.premium_since is None and after.premium_since is not None) or \
                           (before.premium_since is not None and after.premium_since is None)
         
         if is_boost_changed:
-            # gửi tin nhắn chào mừng nếu là boost mới
             if before.premium_since is None and after.premium_since is not None:
                 task_welcome = asyncio.create_task(send_config_message(after.guild, after, "booster"))
                 self._tasks.add(task_welcome)
                 task_welcome.add_done_callback(self._tasks.discard)
             
-            # gọi engine để gán hoặc gỡ role booster gốc
+            # Đồng bộ role thực tế
             task_sync = asyncio.create_task(assign_correct_level(after))
             self._tasks.add(task_sync)
             task_sync.add_done_callback(self._tasks.discard)
@@ -134,4 +156,4 @@ async def setup(bot: commands.Bot):
         if not any(c.name == "boost" for c in p_cmd.commands):
             p_cmd.add_command(BoostGroup())
     await bot.add_cog(BoosterListener(bot))
-    print("[load] success: core.booster (level system removed)", flush=True)
+    print("[load] success: core.booster (test logic fixed)", flush=True)
