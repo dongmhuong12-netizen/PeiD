@@ -1,160 +1,60 @@
 import discord
-from datetime import datetime, timezone
 import asyncio
 from collections import defaultdict # [VÁ LỖI]
 
-# Import từ storage (Đảm bảo các hàm này là async)
-from .booster_storage import get_guild_config, save_guild_config
+# Import từ storage (Chỉ lấy config để check role gốc)
+from .booster_storage import get_guild_config
 
-# [VÁ LỖI] Lock theo Guild để tránh việc nhiều luồng cùng lúc "dọn dẹp" và ghi đè cấu hình
+# [VÁ LỖI] Khóa Guild để bảo toàn tính nhất quán, tránh tranh chấp khi gán/gỡ role
 _engine_locks = defaultdict(asyncio.Lock)
 
 # ==============================
-# CALCULATE BOOST DAYS
+# ASSIGN CORRECT ROLE (Atomic Sync)
 # ==============================
 
-def calculate_boost_days(member: discord.Member):
-    if not member.premium_since:
-        return 0
-    now = datetime.now(timezone.utc)
-    diff = now - member.premium_since
-    return max(0, diff.days)
-
-# ==============================
-# CLEAN INVALID LEVELS
-# ==============================
-
-async def clean_invalid_levels(guild: discord.Guild, config: dict):
-    levels = config.get("levels", [])
-    if not levels: return config
-    new_levels = []
-    changed = False
-    for lvl in levels:
-        role = guild.get_role(int(lvl.get("role")))
-        if role: new_levels.append(lvl)
-        else: changed = True
-    
-    # [VÁ LỖI] Không tự ý save_guild_config ở đây để tránh nghẽn I/O 
-    # Việc save sẽ do hàm gọi (caller) quyết định sau khi hoàn tất logic.
-    if changed:
-        config["levels"] = new_levels
-        config["_dirty"] = True # Đánh dấu để hàm chính biết cần lưu
-    return config
-
-# ==============================
-# GET TARGET LEVEL
-# ==============================
-
-def get_target_level(boost_days: int, levels: list):
-    if not levels: return 0
-    target_idx = -1
-    # Chỉ tính Level nếu số ngày boost > 0 (Tránh nhận nhầm người không boost)
-    if boost_days < 0: return 0
-    
-    for index, lvl in enumerate(levels):
-        if boost_days >= lvl.get("days", 0):
-            target_idx = index
-        else: break
-    return target_idx + 1
-
-# ==============================
-# ASSIGN CORRECT LEVEL (Atomic Sync)
-# ==============================
-
-async def assign_correct_level(member: discord.Member, mock_days: int = None):
+async def assign_correct_level(member: discord.Member):
     """
-    HÀM CỐT LÕI: Đã sửa lỗi không gỡ role cho người hết Boost.
+    hàm cốt lõi: xử lý gán/gỡ booster role gốc.
+    đã loại bỏ hoàn toàn hệ thống mốc level và tính toán ngày.
     """
     guild = member.guild
     
-    # [VÁ LỖI] Khóa Guild để bảo toàn tính nhất quán của trí nhớ
+    # [VÁ LỖI] Khóa Guild để bảo vệ tiến trình thực thi duy nhất
     lock = _engine_locks[guild.id]
     async with lock:
         try:
             config = await get_guild_config(guild.id)
-            if not config: return None
+            if not config: return
 
             bot_member = guild.me
             if not bot_member or not bot_member.guild_permissions.manage_roles:
-                return None
+                return
 
-            # 1. Dọn dẹp dữ liệu và xác định trạng thái Boost thực tế
-            config = await clean_invalid_levels(guild, config)
-            levels = config.get("levels", [])
-            
-            # [VÁ LỖI] Lưu lại cấu hình sạch nếu clean_invalid_levels phát hiện role hỏng
-            if config.get("_dirty"):
-                config.pop("_dirty")
-                await save_guild_config(guild.id, config)
-
-            # XÁC ĐỊNH: Họ có thực sự đang Boost không?
-            is_actually_boosting = (member.premium_since is not None) or (mock_days is not None and mock_days > 0)
-
-            # 2. Lấy danh sách Role liên quan để quét sạch
+            # lấy booster role gốc từ cấu hình
             base_role_id = config.get("booster_role")
-            base_role = guild.get_role(int(base_role_id)) if base_role_id else None
+            if not base_role_id: return
 
-            all_booster_related_roles = []
-            if base_role: all_booster_related_roles.append(base_role)
-            for lvl in levels:
-                r = guild.get_role(int(lvl["role"]))
-                if r: all_booster_related_roles.append(r)
+            base_role = guild.get_role(int(base_role_id))
+            if not base_role: return
 
-            # 3. Xác định Role Đích (Target)
-            final_target_role = None
-            target_lv = 0
+            # xác định trạng thái boost thực tế từ discord
+            is_boosting = member.premium_since is not None
+            has_role = base_role in member.roles
 
-            if is_actually_boosting:
-                boost_days = mock_days if mock_days is not None else calculate_boost_days(member)
-                target_lv = get_target_level(boost_days, levels)
-                
-                # Nếu đạt Level nào đó
-                if target_lv > 0 and (target_lv - 1) < len(levels):
-                    final_target_role = guild.get_role(int(levels[target_lv-1]["role"]))
-                else:
-                    # Nếu đang boost nhưng chưa đạt level nào thì giữ Role gốc
-                    final_target_role = base_role
-
-            # Check Hierarchy: Bot không gán được role cao hơn nó
-            if final_target_role and final_target_role >= bot_member.top_role:
-                final_target_role = None
-
-            # 4. THỰC THI ATOMIC (Gỡ sạch, giữ 1)
-            new_roles = set(member.roles)
-            changed = False
-            gained_new_level = False
-
-            # Gỡ sạch toàn bộ role booster nếu không phải role đích
-            for r in all_booster_related_roles:
-                if r in new_roles and r != final_target_role:
-                    if r < bot_member.top_role:
-                        new_roles.remove(r)
-                        changed = True
-
-            # Cắm Role Đích (Nếu có)
-            if final_target_role and final_target_role not in new_roles:
-                new_roles.add(final_target_role)
-                changed = True
-                if target_lv > 0: gained_new_level = True
-
-            # Chỉ gọi API nếu thực sự có biến động
-            if changed:
-                try:
-                    await member.edit(
-                        roles=list(new_roles), 
-                        reason=f"Booster Sync: Days {calculate_boost_days(member) if mock_days is None else mock_days} (Lv {target_lv})"
-                    )
+            # thực thi logic gán/gỡ atomic
+            if is_boosting and not has_role:
+                # kiểm tra hierarchy trước khi gán
+                if base_role < bot_member.top_role:
+                    await member.add_roles(base_role, reason="Booster Sync: Active")
                     
-                    # Gửi tin nhắn thông báo (Phải có await)
-                    if gained_new_level:
-                        from core.greet_leave import send_config_message
-                        await send_config_message(guild, member, "booster_level")
-                        
-                except Exception as e:
-                    print(f"[ENGINE ERROR] Fail to edit roles for {member.id}: {e}", flush=True)
+            elif not is_boosting and has_role:
+                # kiểm tra hierarchy trước khi gỡ
+                if base_role < bot_member.top_role:
+                    await member.remove_roles(base_role, reason="Booster Sync: Ended")
 
-            return target_lv
+        except Exception as e:
+            print(f"[engine error] fail to sync role for {member.id}: {e}", flush=True)
         finally:
-            # [VÁ LỖI] Dọn dẹp RAM Lock
+            # [VÁ LỖI] Giải phóng RAM Lock
             if guild.id in _engine_locks and not lock.locked():
                 _engine_locks.pop(guild.id, None)
