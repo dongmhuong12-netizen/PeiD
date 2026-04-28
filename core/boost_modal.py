@@ -1,19 +1,21 @@
 import discord
 import re
+# IMPORT EMOJI HỆ THỐNG
+from utils.emojis import Emojis
 
 # ==============================
 # ROLE INPUT MODAL
 # ==============================
 
-class RoleInputModal(discord.ui.Modal, title="Thiết lập Role cho Level"):
+class RoleInputModal(discord.ui.Modal, title="thiết lập role cho level"):
     def __init__(self, current_val: str, callback):
         super().__init__()
         self.callback = callback
         
-        # TextInput động hiển thị giá trị hiện tại để Admin dễ sửa
+        # TextInput động hiển thị giá trị hiện tại
         self.role_input = discord.ui.TextInput(
-            label="Role ID hoặc Role Mention",
-            placeholder="Ví dụ: 123456789 hoặc @Role_Booster",
+            label="role id hoặc role mention",
+            placeholder="ví dụ: 123456789 hoặc @role_booster",
             default=str(current_val) if current_val else "",
             required=True,
             max_length=50
@@ -23,47 +25,52 @@ class RoleInputModal(discord.ui.Modal, title="Thiết lập Role cho Level"):
     async def on_submit(self, interaction: discord.Interaction):
         value = self.role_input.value.strip()
         
-        # GIỮ NGUYÊN LOGIC: Dùng Regex để tách ID từ <@&ID> hoặc lấy ID thuần
+        # GIỮ NGUYÊN LOGIC: Dùng Regex để tách ID
         role_id_match = re.search(r'\d+', value)
         if not role_id_match:
-            return await interaction.response.send_message("❌ Role không hợp lệ (Không tìm thấy ID số).", ephemeral=True)
+            # 1. TEXT THUẦN
+            return await interaction.response.send_message("role không hợp lệ. hãy đảm bảo rằng cậu nhập id đúng của server", ephemeral=True)
             
         try:
             role_id = int(role_id_match.group())
             role = interaction.guild.get_role(role_id)
 
             if not role:
-                return await interaction.response.send_message("❌ Không tìm thấy role này trong server hiện tại.", ephemeral=True)
+                # 2. EMOJI HOICHAM
+                return await interaction.response.send_message(f"{Emojis.HOICHAM} có vẻ role này đã bị tác động bởi manager hoặc đã bị xoá khỏi server, xin hãy nhập lại id khác", ephemeral=True)
 
             # KIỂM TRA HIERARCHY (QUAN TRỌNG): Bot phải đủ quyền quản lý Role này
             bot_member = interaction.guild.me
             if not bot_member.guild_permissions.manage_roles:
-                return await interaction.response.send_message("❌ Bot thiếu quyền 'Manage Roles'. Hãy cấp quyền cho Bot!", ephemeral=True)
+                # 3. EMOJI HOICHAM + KHUNG CODE QUYỀN
+                return await interaction.response.send_message(f"{Emojis.HOICHAM} yiyi vẫn chưa có `quyền quản lí vai trò` để có thể setup, hãy cấp quyền cho yiyi trước khi setup nhé", ephemeral=True)
                 
             if role >= bot_member.top_role:
+                # 4. EMOJI HOICHAM
                 return await interaction.response.send_message(
-                    f"❌ Role **{role.name}** cao hơn cấp bậc của Bot. Hãy kéo Role của Bot lên trên Role này!", 
+                    f"{Emojis.HOICHAM} hmm..? có một lỗi nhỏ ở đây. hãy đảm bảo role của yiyi phải luôn cao hơn role setup nhé", 
                     ephemeral=True
                 )
 
-            # Trả kết quả về cho View xử lý tập trung (Refresh UI)
+            # Trả kết quả về cho View xử lý tập trung
             await self.callback(interaction, role_id)
             
         except Exception as e:
-            await interaction.response.send_message(f"❌ Có lỗi xảy ra: {str(e)}", ephemeral=True)
+            # 7. THEO ĐỀ XUẤT
+            await interaction.response.send_message(f"{Emojis.HOICHAM} phát sinh lỗi: `{str(e)}`", ephemeral=True)
 
 # ==============================
 # DAYS INPUT MODAL
 # ==============================
 
-class DaysInputModal(discord.ui.Modal, title="Thiết lập Ngày yêu cầu"):
+class DaysInputModal(discord.ui.Modal, title="thiết lập ngày yêu cầu"):
     def __init__(self, current_val: int, callback):
         super().__init__()
         self.callback = callback
         
         self.days_input = discord.ui.TextInput(
-            label="Số ngày boost yêu cầu",
-            placeholder="Ví dụ: 30",
+            label="số ngày boost yêu cầu",
+            placeholder="ví dụ: 30",
             default=str(current_val) if current_val is not None else "",
             required=True,
             max_length=10
@@ -74,13 +81,15 @@ class DaysInputModal(discord.ui.Modal, title="Thiết lập Ngày yêu cầu"):
         value = self.days_input.value.strip()
 
         if not value.isdigit():
-            return await interaction.response.send_message("❌ Vui lòng chỉ nhập số nguyên dương.", ephemeral=True)
+            # 5. TEXT THUẦN + VÍ DỤ TRONG KHUNG CODE
+            return await interaction.response.send_message("hãy chỉ nhập số nguyên dương. ví dụ :`30`", ephemeral=True)
 
         days = int(value)
         
         # Chặn số âm để tránh làm hỏng logic so sánh trong Engine
         if days < 0:
-            return await interaction.response.send_message("❌ Số ngày không được là số âm.", ephemeral=True)
+            # 6. TEXT THUẦN
+            return await interaction.response.send_message("số ngày không được phép là số âm", ephemeral=True)
 
         # Trả kết quả về cho View
         await self.callback(interaction, days)
