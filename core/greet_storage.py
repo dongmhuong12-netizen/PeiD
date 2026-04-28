@@ -1,5 +1,5 @@
 import copy
-from core.cache_manager import get_raw, mark_dirty
+from core.cache_manager import get_raw, mark_dirty, update
 
 # Sử dụng chung key để CacheManager tự động quản lý Disk I/O
 FILE_KEY = "greet_leave"
@@ -17,8 +17,9 @@ def _get_cache():
 
     if not isinstance(cache, dict):
         print(f"[STORAGE WARNING] Cache '{FILE_KEY}' không hợp lệ. Đang reset...", flush=True)
-        if hasattr(cache, "clear"):
-            cache.clear()
+        # [VÁ LỖI] Ép khởi tạo lại dict sạch và đồng bộ với CacheManager
+        cache = {}
+        update(FILE_KEY, cache)
         mark_dirty(FILE_KEY)
 
     return cache
