@@ -1,18 +1,20 @@
 import discord
 from datetime import datetime, timezone
 from core.greet_storage import get_section
+# IMPORT EMOJI HỆ THỐNG
+from utils.emojis import Emojis
 
 # ==============================
 # CALCULATE BOOST DAYS
 # ==============================
 
 def get_boost_days(member: discord.Member) -> int:
-    """Tính toán số ngày boost chính xác. Đảm bảo tính nhất quán cho Engine."""
+    """tính toán số ngày boost chính xác. đảm bảo tính nhất quán cho engine."""
     if not member.premium_since:
         return 0
 
     now = datetime.now(timezone.utc)
-    # Sử dụng hiệu số thời gian thực tế để tránh sai lệch khi Render restart
+    # sử dụng hiệu số thời gian thực tế để tránh sai lệch khi render restart
     diff = now - member.premium_since
     return max(0, diff.days)
 
@@ -23,8 +25,8 @@ def get_boost_days(member: discord.Member) -> int:
 
 def get_system_role_ids(booster_role_id: any, levels: list) -> set:
     """
-    Cung cấp danh sách ID cho Radar quét 2 chiều.
-    Hỗ trợ Radar tự động tìm người boost và thu hồi role lậu.
+    cung cấp danh sách id cho radar quét 2 chiều.
+    hỗ trợ radar tự động tìm người boost và thu hồi role lậu.
     """
     role_ids = set()
     
@@ -44,7 +46,7 @@ def get_system_role_ids(booster_role_id: any, levels: list) -> set:
 # ==============================
 
 def cleanup_deleted_roles(guild: discord.Guild, levels: list):
-    """Tự động dọn dẹp cấu hình nếu Admin lỡ tay xóa Role trong Settings Server"""
+    """tự động dọn dẹp cấu hình nếu admin lỡ tay xóa role trong settings server"""
     changed = False
     new_levels = []
 
@@ -70,10 +72,10 @@ def cleanup_deleted_roles(guild: discord.Guild, levels: list):
 
 def validate_levels(levels: list, booster_role_id: any):
     """
-    Kiểm tra logic hệ thống:
-    - Mục 2: Level 1 mặc định 0 ngày.
-    - Mục 22: Ngày phải tăng dần qua các Level.
-    - Mục 23: Không được trùng Role giữa các mốc.
+    kiểm tra logic hệ thống:
+    - mốc 1 bắt buộc 0 ngày.
+    - ngày phải tăng dần qua các level.
+    - không được trùng role giữa các mốc.
     """
     if not levels:
         return True, None
@@ -89,25 +91,26 @@ def validate_levels(levels: list, booster_role_id: any):
         days = lvl.get("days")
 
         if role_id is None or days is None:
-            return False, f"Level {i+1} đang bị trống thông tin."
+            return False, f"level {i+1} đang bị trống thông tin"
 
         r_id_str = str(role_id)
 
-        # Kiểm tra Level 1 (Nền tảng)
+        # kiểm tra level 1 (nền tảng)
         if i == 0:
             if int(days) != 0:
-                return False, "Level 1 (Booster Role) bắt buộc phải là 0 ngày."
+                return False, "level 1 (booster role) bắt buộc phải là 0 ngày"
         else:
-            # Kiểm tra tính tăng dần (Mục 22)
+            # kiểm tra tính tăng dần
             if int(days) <= prev_days:
-                return False, f"Cấp {i+1} ({days} ngày) không thể thấp hơn cấp trước ({prev_days} ngày)."
+                return False, f"cấp {i+1} (`{days}` ngày) không thể thấp hơn cấp trước (`{prev_days}` ngày)"
 
-        # Kiểm tra trùng Role (Mục 23)
+        # kiểm tra trùng role với booster role gốc
         if i > 0 and r_id_str == str(booster_role_id):
-            return False, f"Role của Level {i+1} không được là Booster Role gốc."
+            return False, f"role của level {i+1} không được là booster role gốc"
             
+        # kiểm tra trùng role với các mốc khác trong kho set
         if i > 0 and r_id_str in role_set:
-            return False, f"Role ở Level {i+1} đã bị trùng với mốc khác."
+            return False, f"role ở level {i+1} đã bị trùng với mốc khác"
 
         role_set.add(r_id_str)
         prev_days = int(days)
@@ -120,14 +123,14 @@ def validate_levels(levels: list, booster_role_id: any):
 # ==============================
 
 def move_level_up(levels: list, index: int):
-    """Di chuyển Level lên trên (Giữ nguyên mốc 1)"""
+    """di chuyển level lên trên (giữ nguyên mốc 1)"""
     if index <= 1: return levels
     levels[index - 1], levels[index] = levels[index], levels[index - 1]
     return levels
 
 
 def move_level_down(levels: list, index: int):
-    """Di chuyển Level xuống dưới"""
+    """di chuyển level xuống dưới"""
     if index == 0 or index >= len(levels) - 1: return levels
     levels[index + 1], levels[index] = levels[index], levels[index + 1]
     return levels
@@ -138,30 +141,27 @@ def move_level_down(levels: list, index: int):
 # ==============================
 
 def format_level_status(lvl_idx: int, lvl_data: dict, guild: discord.Guild = None):
-    """
-    Tạo UI hiển thị cho Admin. 
-    Đã đồng bộ để hiển thị trạng thái Embed từ hệ thống Greet/Leave.
-    """
+    """tạo ui hiển thị cho admin quản lý các mốc booster."""
     role_id = lvl_data.get("role")
     days = lvl_data.get("days", 0)
     
-    # Lấy thông tin Embed đang gán cho hệ thống Level từ Greet Storage
+    # lấy thông tin embed đang gán
     embed_info = ""
     if guild:
         config = get_section(guild.id, "booster_level")
         embed_name = config.get("embed")
         if embed_name:
-            embed_info = f"\n🎁 Embed: `{embed_name}`"
+            embed_info = f"\nembed: `{embed_name}`"
         else:
-            embed_info = f"\n⚠️ *Chưa gán Embed chúc mừng*"
+            embed_info = f"\n{Emojis.HOICHAM} chưa gán embed chúc mừng booster, hãy đảm bảo cậu setup đầy đủ cấu hình"
 
     if not role_id:
-        role_status = "❌ Chưa thiết lập"
+        role_status = "chưa thiết lập"
     else:
         if guild:
             role = guild.get_role(int(role_id))
-            role_status = role.mention if role else f"ID: `{role_id}` (Lỗi)"
+            role_status = role.mention if role else f"id: `{role_id}` (lỗi)"
         else:
             role_status = f"<@&{role_id}>"
             
-    return f"**Level {lvl_idx + 1}**\nRole: {role_status}\nDays: `{days}`{embed_info}"
+    return f"**level {lvl_idx + 1}**\nrole: {role_status}\ndays: `{days}`{embed_info}"
