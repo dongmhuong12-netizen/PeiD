@@ -81,14 +81,12 @@ class EmbedGroup(app_commands.Group):
         view = EmbedUIView(guild.id, name, embed_data, timeout=600.0)
         embed = view.build_embed()
 
-        # CẬP NHẬT TEXT HƯỚNG DẪN: PHẢI CÓ DẤU BACKTICK ` TRONG TEXT
+        # TEXT ĐÃ ĐƯỢC XOÁ KHOẢNG CÁCH DÒNG (Dùng \n đơn) VÀ ĐÓNG KHUNG BIẾN/LỆNH
         msg = await interaction.followup.send(
             content=(
-                f"• đã tạo embed với tên `{name}`\n\n"
-                "• sử dụng các nút bên dưới để chỉnh sửa embed\n\n"
-                f"• cậu có thể sử dụng embed này để tạo tin nhắn tiếp tân (greet/leave - wellcome), "
-                f"tạo embed chúc mừng cho booster, các banner hệ thống khi dùng lệnh `/p embed show` "
-                "hoặc setup pick role"
+                f"• đã tạo embed với tên `{name}`\n"
+                "• sử dụng các nút bên dưới để chỉnh sửa embed\n"
+                f"• cậu có thể sử dụng embed này để tạo tin nhắn tiếp tân (greet/leave - wellcome), tạo embed chúc mừng cho booster, các banner hệ thống khi dùng lệnh `/p embed show` hoặc setup pick role"
             ),
             embed=embed,
             view=view
