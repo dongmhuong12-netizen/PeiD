@@ -86,9 +86,7 @@ class EmbedGroup(app_commands.Group):
             content=(
                 f"• đã tạo embed với tên `{name}`\n\n"
                 "• sử dụng các nút bên dưới để chỉnh sửa embed\n\n"
-                "• cậu có thể sử dụng embed này để tạo tin nhắn tiếp tân (greet/leave - wellcome), "
-                "tạo embed chúc mừng cho booster, các banner hệ thống khi dùng lệnh `/p embed show` "
-                "hoặc setup pick role"
+                f"• cậu có thể sử dụng embed này để tạo tin nhắn tiếp tân (greet/leave - wellcome), tạo embed chúc mừng cho booster, các banner hệ thống khi dùng lệnh `/p embed show` hoặc setup pick role"
             ),
             embed=embed,
             view=view
@@ -126,13 +124,14 @@ class EmbedGroup(app_commands.Group):
         # Async fetch
         data = await load_embed(interaction.guild.id, name)
         if not data: 
+            # PHẢN HỒI BẰNG EMBED MÀU f8bbd0 THEO YÊU CẦU
             embed_err = discord.Embed(
                 description=f"{Emojis.HOICHAM} aree...hãy thử lại lần nữa nhé. yiyi không tìm thấy embed có tên `{name}`. xin hãy kiểm tra embed cậu muốn show bằng `/p embed edit`",
                 color=0xf8bbd0
             )
             return await interaction.response.send_message(embed=embed_err, ephemeral=False)
         
-        # IT Pro: Thông báo trạng thái gửi (ephemeral=False theo yêu cầu)
+        # IT Pro: Thông báo trạng thái gửi (ephemeral=False)
         await interaction.response.send_message(f"đang gửi embed `{name}`", ephemeral=False)
         
         await send_embed(interaction.channel, data, interaction.guild, interaction.user, embed_name=name)
