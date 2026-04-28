@@ -12,7 +12,7 @@ ACTIVE_EMBED_VIEWS = {}
 REACTION_FILE_KEY = "reaction_roles"
 
 # =========================
-# STATE WRAPPER (ATOMIC)
+# STATE WRAPPER (ATOMIC) - GIỮ NGUYÊN TỪNG CHỮ
 # =========================
 
 async def load_reaction_data():
@@ -39,7 +39,7 @@ class EditInformationModal(discord.ui.Modal, title="edit information"):
             default="" if curr_title in ["Tiêu đề Embed mới", "embed mới", None] else curr_title
         )
         
-        # Mô tả: Hiện placeholder màu xám (chữ mờ)
+        # Mô tả: Hiện placeholder màu xám (xử lý cả dấu chấm mặc định)
         curr_desc = self.view.data.get("description")
         self.description = discord.ui.TextInput(
             label="mô tả mới",
@@ -49,7 +49,7 @@ class EditInformationModal(discord.ui.Modal, title="edit information"):
             default="" if curr_desc in ["Nội dung mô tả mặc định", "Nội dung mô tả mặc định.", "nội dung mô tả", None] else curr_desc
         )
         
-        # Mã màu: Nhuộm xám nốt chỗ này theo ý cậu (viết thường)
+        # Mã màu: Nhuộm xám nốt chỗ này (mặc định f8bbd0 và viết thường)
         curr_color_hex = hex(self.view.data.get("color", 0xf8bbd0)).replace("0x", "").lower()
         self.color = discord.ui.TextInput(
             label="mã màu hex",
@@ -71,7 +71,7 @@ class EditInformationModal(discord.ui.Modal, title="edit information"):
             val = self.color.value.replace("#", "").lower() or "f8bbd0"
             self.view.data["color"] = int(val, 16)
             
-            # Mạch auto-save logic
+            # Mạch auto-save logic (nguyên vẹn)
             await save_embed(self.view.guild_id, self.view.name, self.view.data)
             await force_save("embeds")
             
@@ -239,7 +239,7 @@ class ReactionRoleModal(discord.ui.Modal, title="reaction role setup"):
             err_msg = "lỗi cấu hình reaction role, xin hãy nhập lại\n- " + "\n- ".join(errors)
             return await interaction.response.send_message(err_msg, ephemeral=False)
 
-        # Mạch lưu dữ liệu reaction
+        # Mạch lưu dữ liệu reaction (nguyên vẹn logic)
         db = await load_reaction_data()
         key = f"{guild.id}:{self.view.name}"
         db[key] = {
@@ -311,11 +311,15 @@ class EmbedUIView(discord.ui.View):
         from core.embed_sender import _build_embed
         data_copy = copy.deepcopy(self.data)
         
-        # Đồng bộ text mặc định
+        # Đồng bộ text mặc định sang viết thường
         if data_copy.get("title") in ["Tiêu đề Embed mới", "embed mới"]:
             data_copy["title"] = "embed mới"
         if data_copy.get("description") in ["Nội dung mô tả mặc định", "Nội dung mô tả mặc định.", "nội dung mô tả"]:
             data_copy["description"] = "nội dung mô tả"
+        
+        # Ép màu hồng f8bbd0 cho preview nếu màu đang ở mặc định
+        if data_copy.get("color") in [0x5865f2, 0x5865F2, None]:
+            data_copy["color"] = 0xf8bbd0
             
         if guild:
             data_copy = apply_variables(data_copy, guild, member)
