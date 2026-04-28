@@ -4,6 +4,7 @@ import os
 import time
 import copy
 import shutil
+import aiofiles # [VÁ LỖI] Bổ sung thư viện đã khai báo ở requirements.txt
 from typing import Dict, Any
 
 _cache: Dict[str, Dict[str, Any]] = {}
@@ -43,7 +44,7 @@ def _load_file(key: str):
         return {}
 
 def _write_file_sync(key: str, data: dict):
-    """Ghi file an toàn (Atomic Write)"""
+    """Ghi file an toàn (Atomic Write) - Dùng cho force_flush đồng bộ"""
     _ensure_dir()
     path = _file_path(key)
     tmp = path + ".tmp"
@@ -59,6 +60,28 @@ def _write_file_sync(key: str, data: dict):
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
         os.replace(tmp, path)
+    except Exception as e:
+        print(f"[DISK WRITE ERROR] {key}: {e}", flush=True)
+
+async def _write_file_async(key: str, data: dict):
+    """[VÁ LỖI] Ghi file bất đồng bộ bằng aiofiles để chống nghẽn RAM"""
+    await asyncio.to_thread(_ensure_dir)
+    path = _file_path(key)
+    tmp = path + ".tmp"
+
+    if os.path.exists(path):
+        try:
+            bak_path = path + ".bak"
+            await asyncio.to_thread(shutil.copy2, path, bak_path)
+        except:
+            pass
+
+    try:
+        async with aiofiles.open(tmp, "w", encoding="utf-8") as f:
+            # json.dumps chạy trên thread để không block async loop
+            json_str = await asyncio.to_thread(json.dumps, data, indent=2, ensure_ascii=False)
+            await f.write(json_str)
+        await asyncio.to_thread(os.replace, tmp, path)
     except Exception as e:
         print(f"[DISK WRITE ERROR] {key}: {e}", flush=True)
 
@@ -91,7 +114,9 @@ async def save(key: str):
     """
     if key in _cache:
         data = copy.deepcopy(_cache[key])
-        await asyncio.to_thread(_write_file_sync, key, data)
+        # [VÁ LỖI] Khóa Luồng (Lock) để chống Race Condition với _flush_worker
+        async with _lock:
+            await _write_file_async(key, data)
         if key in _dirty_keys:
             _dirty_keys.remove(key)
         print(f"[CACHE] Đã ép lưu khẩn cấp: {key}.json", flush=True)
@@ -114,7 +139,8 @@ async def _flush_worker():
             for key in keys_to_flush:
                 data = _cache.get(key)
                 if data is not None:
-                    await asyncio.to_thread(_write_file_sync, key, copy.deepcopy(data))
+                    # [VÁ LỖI] Dùng aiofiles thay vì open() sync
+                    await _write_file_async(key, copy.deepcopy(data))
 
             _last_flush_time = time.time()
             print(f"[CACHE] Đã tự động lưu {len(keys_to_flush)} tệp.", flush=True)
@@ -125,7 +151,8 @@ async def _backup_worker():
         async with _lock:
             for key, data in _cache.items():
                 if data:
-                    await asyncio.to_thread(_write_file_sync, f"{key}.auto", data)
+                    # [VÁ LỖI] copy.deepcopy data để tránh RuntimeError khi dict bị thay đổi trên RAM
+                    await _write_file_async(f"{key}.auto", copy.deepcopy(data))
 
 # =========================
 # CONTROL CENTER
