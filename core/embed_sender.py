@@ -23,27 +23,31 @@ _worker_task = None
 
 async def _reaction_worker():
     """worker duy nhất xử lý hàng đợi reaction toàn cục"""
-    while True:
-        if not _reaction_queue:
-            await asyncio.sleep(0.5)
-            continue
+    try:
+        while True:
+            if not _reaction_queue:
+                await asyncio.sleep(0.5)
+                continue
 
-        try:
-            message, emoji = _reaction_queue.popleft()
-            # kiểm tra quyền hạn trước khi add để tránh lỗi rác log
-            await message.add_reaction(emoji)
-            
-            # nghỉ 0.3s chuẩn discord api (an toàn tuyệt đối cho bot lớn)
-            await asyncio.sleep(0.3)
-        except discord.Forbidden:
-            print(f"[queue error] thiếu quyền add reaction tại channel {message.channel.id}", flush=True)
-        except discord.HTTPException as e:
-            if e.status == 429: # dính rate limit
-                retry_after = e.retry_after if hasattr(e, 'retry_after') else 5
-                print(f"[rate limit] nghỉ {retry_after}s theo yêu cầu discord...", flush=True)
-                await asyncio.sleep(retry_after)
-        except Exception:
-            pass
+            try:
+                message, emoji = _reaction_queue.popleft()
+                # kiểm tra quyền hạn trước khi add để tránh lỗi rác log
+                await message.add_reaction(emoji)
+                
+                # nghỉ 0.3s chuẩn discord api (an toàn tuyệt đối cho bot lớn)
+                await asyncio.sleep(0.3)
+            except discord.Forbidden:
+                print(f"[queue error] thiếu quyền add reaction tại channel {message.channel.id}", flush=True)
+            except discord.HTTPException as e:
+                if e.status == 429: # dính rate limit
+                    retry_after = e.retry_after if hasattr(e, 'retry_after') else 5
+                    print(f"[rate limit] nghỉ {retry_after}s theo yêu cầu discord...", flush=True)
+                    await asyncio.sleep(retry_after)
+            except Exception:
+                pass
+    except asyncio.CancelledError:
+        # dừng worker êm ái khi module bị unload
+        pass
 
 
 async def _enqueue_reaction(message, emoji):
@@ -193,3 +197,15 @@ async def send_embed(
     except Exception as e:
         print(f"[embed send error] {e}", flush=True)
         return False
+
+# [VÁ LỖI] Giải phóng RAM và tác vụ ngầm khi reload
+async def teardown(bot):
+    """dọn dẹp worker khi module bị unload/reload để tránh rò rỉ tác vụ"""
+    global _worker_task
+    if _worker_task and not _worker_task.done():
+        _worker_task.cancel()
+        try:
+            await _worker_task
+        except asyncio.CancelledError:
+            pass
+    print("[unload] success: core.embed_sender", flush=True)
