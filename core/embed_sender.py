@@ -11,7 +11,7 @@ from core.cache_manager import get_raw, mark_dirty
 # Key chuẩn cho hệ thống phản xạ 100k+
 REACTION_FILE_KEY = "reaction_roles"
 
-# Hàng đợi reaction toàn cục (Thread-safe với Lock)
+# Hàng đợi reaction toàn cục (thread-safe với lock)
 _reaction_queue = deque()
 _queue_lock = asyncio.Lock()
 _worker_task = None
@@ -22,7 +22,7 @@ _worker_task = None
 # =========================
 
 async def _reaction_worker():
-    """Worker duy nhất xử lý hàng đợi reaction toàn cục"""
+    """worker duy nhất xử lý hàng đợi reaction toàn cục"""
     while True:
         if not _reaction_queue:
             await asyncio.sleep(0.5)
@@ -30,30 +30,30 @@ async def _reaction_worker():
 
         try:
             message, emoji = _reaction_queue.popleft()
-            # Kiểm tra quyền hạn trước khi add để tránh lỗi rác Log
+            # kiểm tra quyền hạn trước khi add để tránh lỗi rác log
             await message.add_reaction(emoji)
             
-            # Nghỉ 0.3s chuẩn Discord API (An toàn tuyệt đối cho Bot lớn)
+            # nghỉ 0.3s chuẩn discord api (an toàn tuyệt đối cho bot lớn)
             await asyncio.sleep(0.3)
         except discord.Forbidden:
-            print(f"[QUEUE ERROR] Thiếu quyền Add Reaction tại channel {message.channel.id}", flush=True)
+            print(f"[queue error] thiếu quyền add reaction tại channel {message.channel.id}", flush=True)
         except discord.HTTPException as e:
-            if e.status == 429: # Dính Rate Limit
+            if e.status == 429: # dính rate limit
                 retry_after = e.retry_after if hasattr(e, 'retry_after') else 5
-                print(f"[RATE LIMIT] Nghỉ {retry_after}s theo yêu cầu Discord...", flush=True)
+                print(f"[rate limit] nghỉ {retry_after}s theo yêu cầu discord...", flush=True)
                 await asyncio.sleep(retry_after)
         except Exception:
             pass
 
 
 async def _enqueue_reaction(message, emoji):
-    """Đẩy reaction vào hàng đợi an toàn"""
+    """đẩy reaction vào hàng đợi an toàn"""
     async with _queue_lock:
         _reaction_queue.append((message, emoji))
 
     global _worker_task
     if _worker_task is None or _worker_task.done():
-        # Khởi tạo worker nếu chưa có hoặc đã chết
+        # khởi tạo worker nếu chưa có hoặc đã chết
         _worker_task = asyncio.create_task(_reaction_worker())
 
 
@@ -62,25 +62,26 @@ async def _enqueue_reaction(message, emoji):
 # =========================
 
 def _build_embed(embed_copy: dict):
-    """Hàm xây dựng đối tượng Embed nguyên tử - Đã thêm mạch Author/Footer/Timestamp"""
+    """hàm xây dựng đối tượng embed nguyên tử - đã đồng bộ tông màu f8bbd0"""
     color = embed_copy.get("color")
     if isinstance(color, str):
         try:
             color = int(color.replace("#", "").replace("0x", ""), 16)
         except:
-            color = 0x5865F2
+            color = 0xf8bbd0
     
+    # mặc định về màu hồng f8bbd0 nếu không có màu cụ thể
     embed = discord.Embed(
         title=embed_copy.get("title"),
         description=embed_copy.get("description"),
-        color=color or 0x5865F2
+        color=color if color not in [0x5865F2, None] else 0xf8bbd0
     )
 
-    # --- MẠCH TIMESTAMP MỚI (CHỈ KÍCH HOẠT KHI NHẬP YES) ---
+    # --- mạch timestamp (chỉ kích hoạt khi nhập yes) ---
     if embed_copy.get("timestamp") == "yes":
         embed.timestamp = discord.utils.utcnow()
 
-    # Xử lý Image/Thumbnail (GIỮ NGUYÊN LOGIC GỐC)
+    # xử lý image/thumbnail (giữ nguyên logic gốc)
     for attr in ["image", "thumbnail"]:
         val = embed_copy.get(attr)
         if val:
@@ -88,7 +89,7 @@ def _build_embed(embed_copy: dict):
             if url and str(url).startswith("http"):
                 getattr(embed, f"set_{attr}")(url=url)
 
-    # Xử lý Footer (MỞ RỘNG: Thêm Icon URL)
+    # xử lý footer (thêm icon url)
     footer = embed_copy.get("footer")
     if isinstance(footer, dict) and footer.get("text"):
         f_icon = footer.get("icon_url")
@@ -97,7 +98,7 @@ def _build_embed(embed_copy: dict):
             icon_url=f_icon if f_icon and str(f_icon).startswith("http") else None
         )
 
-    # Xử lý Author (MỞ RỘNG: Thêm Icon URL & Link URL)
+    # xử lý author (thêm icon url & link url)
     author = embed_copy.get("author")
     if isinstance(author, dict) and author.get("name"):
         a_icon = author.get("icon_url")
@@ -108,7 +109,7 @@ def _build_embed(embed_copy: dict):
             url=a_url if a_url and str(a_url).startswith("http") else None
         )
 
-    # Xử lý Fields (GIỮ NGUYÊN LOGIC GỐC)
+    # xử lý fields (giữ nguyên logic gốc)
     fields = embed_copy.get("fields")
     if isinstance(fields, list):
         for field in fields:
@@ -122,7 +123,7 @@ def _build_embed(embed_copy: dict):
 
 
 # =========================
-# SEND EMBED CORE (GIỮ NGUYÊN 100% LOGIC CỦA NGUYỆT)
+# SEND EMBED CORE (GIỮ NGUYÊN 100% LOGIC)
 # =========================
 
 async def send_embed(
@@ -134,22 +135,22 @@ async def send_embed(
     only_build: bool = False
 ):
     """
-    Xử lý gửi Embed và đăng ký liên kết vào não bộ State.
+    xử lý gửi embed và đăng ký liên kết vào não bộ state.
     """
     if not isinstance(embed_data, dict) or not embed_data:
         return None
 
     try:
-        # 1. Apply biến động (User/Server variables)
+        # 1. apply biến động (user/server variables)
         embed_copy = copy.deepcopy(embed_data)
         embed_copy = apply_variables(embed_copy, guild, member)
 
-        # 2. Build đối tượng Embed
+        # 2. build đối tượng embed
         embed = _build_embed(embed_copy)
         if only_build:
             return embed
 
-        # 3. Gửi tin nhắn an toàn
+        # 3. gửi tin nhắn an toàn
         message = None
         if isinstance(destination, discord.Interaction):
             if destination.response.is_done():
@@ -158,31 +159,31 @@ async def send_embed(
                 await destination.response.send_message(embed=embed)
                 message = await destination.original_response()
         else:
-            # Check quyền gửi Embed trước khi gửi
+            # check quyền gửi embed trước khi gửi
             perms = destination.permissions_for(guild.me)
             if not perms.send_messages or not perms.embed_links:
-                print(f"[SEND ERROR] Bot thiếu quyền gửi Embed tại channel {destination.id}", flush=True)
+                print(f"[send error] bot thiếu quyền gửi embed tại channel {destination.id}", flush=True)
                 return False
             message = await destination.send(embed=embed)
 
         if not message:
             return False
 
-        # 4. ĐĂNG KÝ TRÍ NHỚ (Bắt buộc để Reaction Role hoạt động)
+        # 4. đăng ký trí nhớ (bắt buộc để reaction role hoạt động)
         if embed_name:
             await State.atomic_embed_register(guild.id, embed_name, message.id)
 
-        # 5. XỬ LÝ REACTION ROLES (Nếu có cấu hình)
+        # 5. xử lý reaction roles (nếu có cấu hình)
         reaction_db = get_raw(REACTION_FILE_KEY)
         storage_key = f"{guild.id}:{embed_name}"
         config = reaction_db.get(storage_key)
 
         if config:
-            # Chép cấu hình sang ID tin nhắn để Listener tra cứu thần tốc
+            # chép cấu hình sang id tin nhắn để listener tra cứu thần tốc
             reaction_db[str(message.id)] = config
             mark_dirty(REACTION_FILE_KEY)
 
-            # Thả reaction vào hàng đợi
+            # thả reaction vào hàng đợi
             for group in config.get("groups", []):
                 for emoji in group.get("emojis", []):
                     await _enqueue_reaction(message, emoji)
@@ -190,5 +191,5 @@ async def send_embed(
         return True
 
     except Exception as e:
-        print(f"[EMBED SEND ERROR] {e}", flush=True)
+        print(f"[embed send error] {e}", flush=True)
         return False
