@@ -128,6 +128,9 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
+        # Bỏ qua để nhường luồng xử lý cuối cùng cho finally
+        pass
+    finally:
         # Chốt chặn cuối cùng để bảo vệ dữ liệu JSON
         force_flush()
         print("[EXIT] Bot đã tắt an toàn và đã lưu dữ liệu.")
