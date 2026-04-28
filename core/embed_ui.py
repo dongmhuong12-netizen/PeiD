@@ -46,14 +46,16 @@ class EditInformationModal(discord.ui.Modal, title="edit information"):
             style=discord.TextStyle.paragraph,
             placeholder="nội dung mô tả",
             required=False,
-            default="" if curr_desc in ["Nội dung mô tả mặc định", "nội dung mô tả", None] else curr_desc
+            default="" if curr_desc in ["Nội dung mô tả mặc định", "Nội dung mô tả mặc định.", "nội dung mô tả", None] else curr_desc
         )
         
+        # Mã màu: Nhuộm xám nốt chỗ này theo ý cậu (viết thường)
+        curr_color_hex = hex(self.view.data.get("color", 0xf8bbd0)).replace("0x", "").lower()
         self.color = discord.ui.TextInput(
             label="mã màu hex",
-            placeholder="ví dụ: f8bbd0",
+            placeholder="f8bbd0",
             required=True,
-            default=hex(self.view.data.get("color", 0x5865F2)).replace("0x", "").upper()
+            default="" if curr_color_hex in ["f8bbd0", "5865f2", "5865F2"] else curr_color_hex
         )
         
         self.add_item(self.etitle)
@@ -65,7 +67,8 @@ class EditInformationModal(discord.ui.Modal, title="edit information"):
         self.view.data["description"] = self.description.value or "nội dung mô tả"
         
         try:
-            val = self.color.value.replace("#", "")
+            # Nếu để trống (hiện chữ xám) thì lấy mặc định f8bbd0
+            val = self.color.value.replace("#", "").lower() or "f8bbd0"
             self.view.data["color"] = int(val, 16)
             
             # Mạch auto-save logic
@@ -308,12 +311,12 @@ class EmbedUIView(discord.ui.View):
         from core.embed_sender import _build_embed
         data_copy = copy.deepcopy(self.data)
         
-        # Đồng bộ text mặc định thành viết thường
+        # Đồng bộ text mặc định
         if data_copy.get("title") in ["Tiêu đề Embed mới", "embed mới"]:
             data_copy["title"] = "embed mới"
-        if data_copy.get("description") in ["Nội dung mô tả mặc định", "nội dung mô tả"]:
+        if data_copy.get("description") in ["Nội dung mô tả mặc định", "Nội dung mô tả mặc định.", "nội dung mô tả"]:
             data_copy["description"] = "nội dung mô tả"
-        
+            
         if guild:
             data_copy = apply_variables(data_copy, guild, member)
         return _build_embed(data_copy)
