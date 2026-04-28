@@ -30,7 +30,6 @@ class EditInformationModal(discord.ui.Modal, title="edit information"):
         super().__init__()
         self.view = view
         
-        # SỬA LỖI Ở ĐÂY: Thêm đúng chuỗi "tiêu đề embed mới" vào danh sách kiểm tra
         curr_title = self.view.data.get("title")
         is_default_title = curr_title in ["Tiêu đề Embed mới", "tiêu đề embed mới", "embed mới", None]
         
@@ -41,7 +40,6 @@ class EditInformationModal(discord.ui.Modal, title="edit information"):
             default=None if is_default_title else curr_title
         )
         
-        # SỬA LỖI Ở ĐÂY: Thêm đúng chuỗi "nội dung mô tả mặc định" vào danh sách kiểm tra
         curr_desc = self.view.data.get("description")
         is_default_desc = curr_desc in ["Nội dung mô tả mặc định", "Nội dung mô tả mặc định.", "nội dung mô tả mặc định", "nội dung mô tả", None]
         
@@ -53,12 +51,14 @@ class EditInformationModal(discord.ui.Modal, title="edit information"):
             default=None if is_default_desc else curr_desc
         )
         
+        # ĐÃ SỬA LỖI: Bỏ logic ép None, trả lại default=curr_color_hex
         curr_color_hex = hex(self.view.data.get("color", 0xf8bbd0)).replace("0x", "").lower()
+        
         self.color = discord.ui.TextInput(
             label="mã màu hex",
             placeholder="f8bbd0",
             required=True,
-            default="" if curr_color_hex in ["f8bbd0", "5865f2", "5865F2"] else curr_color_hex
+            default=curr_color_hex 
         )
         
         self.add_item(self.etitle)
@@ -66,7 +66,6 @@ class EditInformationModal(discord.ui.Modal, title="edit information"):
         self.add_item(self.color)
 
     async def on_submit(self, interaction: discord.Interaction):
-        # SỬA LỖI Ở ĐÂY: Lấy giá trị từ placeholder nếu TextInput bị bỏ trống (chữ xám)
         self.view.data["title"] = self.etitle.value or self.etitle.placeholder
         self.view.data["description"] = self.description.value or self.description.placeholder
         
@@ -320,7 +319,6 @@ class EmbedUIView(discord.ui.View):
         from core.embed_sender import _build_embed
         data_copy = copy.deepcopy(self.data)
         
-        # SỬA LỖI Ở ĐÂY: Thêm chuỗi chuẩn xác để bot ghi đè lên preview đúng
         if data_copy.get("title") in ["Tiêu đề Embed mới", "tiêu đề embed mới", "embed mới"]:
             data_copy["title"] = "tiêu đề embed mới"
         if data_copy.get("description") in ["Nội dung mô tả mặc định", "Nội dung mô tả mặc định.", "nội dung mô tả mặc định", "nội dung mô tả"]:
