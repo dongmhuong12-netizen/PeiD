@@ -10,6 +10,8 @@ FILE_KEY = "reaction_roles"
 
 # Lock theo User để tránh Race Condition khi nhấn liên tục (Tiêu chuẩn 100k+)
 _user_locks = defaultdict(asyncio.Lock)
+# [VÁ LỖI] Lock bảo vệ quá trình nạp cache tránh nạp chồng (Overlapping)
+_refresh_lock = asyncio.Lock()
 
 def _normalize_emoji(e) -> str:
     return str(e).strip()
@@ -24,33 +26,36 @@ class ReactionRole(commands.Cog):
         self.emoji_map = {} 
         # Không dùng cache message vĩnh viễn để bảo vệ RAM
 
-    def _refresh_cache(self):
-        """Đồng bộ dữ liệu từ RAM CacheManager vào bản đồ Emoji"""
-        data = get_raw(FILE_KEY) or {}
-        self.emoji_map.clear()
-        
-        for msg_id, config in data.items():
-            # Chỉ xử lý các key là ID tin nhắn (đã được sender/ui đăng ký)
-            if not msg_id.isdigit(): continue
+    async def _refresh_cache(self):
+        """[VÁ LỖI] Đồng bộ dữ liệu bất đồng bộ và có Lock bảo vệ"""
+        async with _refresh_lock:
+            data = get_raw(FILE_KEY) or {}
+            # Tạo map tạm để tránh làm trống emoji_map trong lúc đang xử lý
+            new_map = {}
             
-            self.emoji_map[msg_id] = {}
-            for group in config.get("groups", []):
-                mode = group.get("mode", "multi")
-                emojis = [_normalize_emoji(e) for e in group.get("emojis", [])]
-                roles = [str(r) for r in group.get("roles", [])]
+            for msg_id, config in data.items():
+                # Chỉ xử lý các key là ID tin nhắn (đã được sender/ui đăng ký)
+                if not msg_id.isdigit(): continue
                 
-                for i in range(len(emojis)):
-                    if i < len(roles):
-                        self.emoji_map[msg_id][emojis[i]] = {
-                            "target_role": roles[i],
-                            "mode": mode,
-                            "group_roles": roles,
-                            "group_emojis": emojis
-                        }
+                new_map[msg_id] = {}
+                for group in config.get("groups", []):
+                    mode = group.get("mode", "multi")
+                    emojis = [_normalize_emoji(e) for e in group.get("emojis", [])]
+                    roles = [str(r) for r in group.get("roles", [])]
+                    
+                    for i in range(len(emojis)):
+                        if i < len(roles):
+                            new_map[msg_id][emojis[i]] = {
+                                "target_role": roles[i],
+                                "mode": mode,
+                                "group_roles": roles,
+                                "group_emojis": emojis
+                            }
+            self.emoji_map = new_map
 
     @commands.Cog.listener()
     async def on_ready(self):
-        self._refresh_cache()
+        await self._refresh_cache()
         print(f"🚀 [SYSTEM] ReactionRole: Đã nạp {len(self.emoji_map)} bản đồ phản xạ.", flush=True)
 
     @commands.Cog.listener()
@@ -64,34 +69,40 @@ class ReactionRole(commands.Cog):
         if msg_id not in self.emoji_map:
             # Kiểm tra xem ID này có trong não bộ State không
             if await State.get_info_by_mid(msg_id):
-                self._refresh_cache() # Nạp lại toàn bộ để cập nhật tin nhắn mới
+                await self._refresh_cache() # Nạp lại toàn bộ để cập nhật tin nhắn mới
             
         if msg_id not in self.emoji_map or emoji not in self.emoji_map[msg_id]:
             return
 
         # 2. Xử lý tuần tự cho từng User
-        async with _user_locks[payload.user_id]:
-            guild = self.bot.get_guild(payload.guild_id)
-            if not guild: return
-            
-            member = payload.member or guild.get_member(payload.user_id)
-            if not member or member.bot: return
+        lock = _user_locks[payload.user_id]
+        async with lock:
+            try:
+                guild = self.bot.get_guild(payload.guild_id)
+                if not guild: return
+                
+                member = payload.member or guild.get_member(payload.user_id)
+                if not member or member.bot: return
 
-            config = self.emoji_map[msg_id][emoji]
-            target_role = guild.get_role(int(config["target_role"]))
-            if not target_role: return
+                config = self.emoji_map[msg_id][emoji]
+                target_role = guild.get_role(int(config["target_role"]))
+                if not target_role: return
 
-            # THỰC THI GÁN ROLE
-            if target_role not in member.roles:
-                try:
-                    await member.add_roles(target_role, reason="PeiD Reaction Role: Added")
-                except discord.Forbidden:
-                    print(f"[ERROR] Thiếu quyền gán role tại Guild {guild.id}", flush=True)
-                except Exception: pass
+                # THỰC THI GÁN ROLE
+                if target_role not in member.roles:
+                    try:
+                        await member.add_roles(target_role, reason="PeiD Reaction Role: Added")
+                    except discord.Forbidden:
+                        print(f"[ERROR] Thiếu quyền gán role tại Guild {guild.id}", flush=True)
+                    except Exception: pass
 
-            # Xử lý Single Mode (Chỉ được chọn 1)
-            if config["mode"] == "single":
-                asyncio.create_task(self._handle_single_mode(payload, config, member, target_role.id))
+                # Xử lý Single Mode (Chỉ được chọn 1)
+                if config["mode"] == "single":
+                    asyncio.create_task(self._handle_single_mode(payload, config, member, target_role.id))
+            finally:
+                # [VÁ LỖI] Dọn dẹp RAM: Xóa Lock khỏi bộ nhớ nếu không còn tác vụ nào chờ
+                if payload.user_id in _user_locks and not lock.locked():
+                    _user_locks.pop(payload.user_id, None)
 
     async def _handle_single_mode(self, payload, config, member, current_role_id):
         """Dọn dẹp các role và reaction thừa (Background Task)"""
@@ -141,7 +152,9 @@ class ReactionRole(commands.Cog):
         
         if role and role in member.roles:
             try:
-                await member.remove_roles(role, reason="PeiD Reaction Role: Removed")
+                role_obj = guild.get_role(role.id)
+                if role_obj:
+                    await member.remove_roles(role_obj, reason="PeiD Reaction Role: Removed")
             except: pass
 
 async def setup(bot: commands.Bot):
