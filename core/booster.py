@@ -102,7 +102,8 @@ class BoostGroup(app_commands.Group):
         
         if success:
             embed = discord.Embed(
-                description=f"{Emojis.MATTRANG} hệ thống `boost` đã được giả lập thành công.\n{Emojis.MATTRANG} booster role: {role_status}\n{Emojis.MATTRANG} lưu ý: cậu có 5 phút bảo vệ role để kiểm tra.",
+                title=f"{Emojis.MATTRANG} hệ thống `boost` đã được giả lập thành công",
+                description=f"yiyi sẽ cho phép cậu giữ role booster trong 5 phút tới. sau 5 phút, yiyi sẽ gỡ role nếu cậu không có boost nhé {Emojis.YIYITIM}\n\n{Emojis.MATTRANG} booster role: {role_status}",
                 color=0xf8bbd0
             )
         else:
