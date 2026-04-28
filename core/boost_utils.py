@@ -56,8 +56,13 @@ def cleanup_deleted_roles(guild: discord.Guild, levels: list):
             changed = True
             continue
 
-        role = guild.get_role(int(role_id))
-        if not role:
+        try:
+            # [VÁ LỖI] Ép kiểu an toàn để tránh sập luồng khi dữ liệu rác
+            role = guild.get_role(int(role_id))
+            if not role:
+                changed = True
+                continue
+        except (ValueError, TypeError):
             changed = True
             continue
 
@@ -93,27 +98,31 @@ def validate_levels(levels: list, booster_role_id: any):
         if role_id is None or days is None:
             return False, f"level {i+1} đang bị trống thông tin"
 
-        r_id_str = str(role_id)
+        try:
+            r_id_str = str(role_id)
+            current_days = int(days)
 
-        # kiểm tra level 1 (nền tảng)
-        if i == 0:
-            if int(days) != 0:
-                return False, "level 1 (booster role) bắt buộc phải là 0 ngày"
-        else:
-            # kiểm tra tính tăng dần
-            if int(days) <= prev_days:
-                return False, f"cấp {i+1} (`{days}` ngày) không thể thấp hơn cấp trước (`{prev_days}` ngày)"
+            # kiểm tra level 1 (nền tảng)
+            if i == 0:
+                if current_days != 0:
+                    return False, "level 1 (booster role) bắt buộc phải là 0 ngày"
+            else:
+                # kiểm tra tính tăng dần
+                if current_days <= prev_days:
+                    return False, f"cấp {i+1} (`{current_days}` ngày) không thể thấp hơn cấp trước (`{prev_days}` ngày)"
 
-        # kiểm tra trùng role với booster role gốc
-        if i > 0 and r_id_str == str(booster_role_id):
-            return False, f"role của level {i+1} không được là booster role gốc"
-            
-        # kiểm tra trùng role với các mốc khác trong kho set
-        if i > 0 and r_id_str in role_set:
-            return False, f"role ở level {i+1} đã bị trùng với mốc khác"
+            # kiểm tra trùng role với booster role gốc
+            if i > 0 and r_id_str == str(booster_role_id):
+                return False, f"role của level {i+1} không được là booster role gốc"
+                
+            # kiểm tra trùng role với các mốc khác trong kho set
+            if i > 0 and r_id_str in role_set:
+                return False, f"role ở level {i+1} đã bị trùng với mốc khác"
 
-        role_set.add(r_id_str)
-        prev_days = int(days)
+            role_set.add(r_id_str)
+            prev_days = current_days
+        except (ValueError, TypeError):
+            return False, f"dữ liệu tại level {i+1} không hợp lệ (phải là số)"
 
     return True, None
 
@@ -140,15 +149,15 @@ def move_level_down(levels: list, index: int):
 # FORMATTING UI (ĐỒNG BỘ EMBED)
 # ==============================
 
-def format_level_status(lvl_idx: int, lvl_data: dict, guild: discord.Guild = None):
+def format_level_status(lvl_idx: int, lvl_data: dict, guild: discord.Guild = None, cached_config: dict = None):
     """tạo ui hiển thị cho admin quản lý các mốc booster."""
     role_id = lvl_data.get("role")
     days = lvl_data.get("days", 0)
     
-    # lấy thông tin embed đang gán
+    # [VÁ LỖI] Tối ưu hóa RAM: Sử dụng config đã cache thay vì gọi deepcopy liên tục
     embed_info = ""
     if guild:
-        config = get_section(guild.id, "booster_level")
+        config = cached_config if cached_config is not None else get_section(guild.id, "booster_level")
         embed_name = config.get("embed")
         if embed_name:
             embed_info = f"\nembed: `{embed_name}`"
@@ -159,8 +168,11 @@ def format_level_status(lvl_idx: int, lvl_data: dict, guild: discord.Guild = Non
         role_status = "chưa thiết lập"
     else:
         if guild:
-            role = guild.get_role(int(role_id))
-            role_status = role.mention if role else f"id: `{role_id}` (lỗi)"
+            try:
+                role = guild.get_role(int(role_id))
+                role_status = role.mention if role else f"id: `{role_id}` (lỗi)"
+            except (ValueError, TypeError):
+                role_status = f"id: `{role_id}` (sai định dạng)"
         else:
             role_status = f"<@&{role_id}>"
             
