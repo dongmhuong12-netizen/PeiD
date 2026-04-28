@@ -1,11 +1,14 @@
 import discord
 import asyncio
-from collections import defaultdict # [VÁ LỖI]
+import time # [QUAN TRỌNG] để check thời gian hết hạn test
+from collections import defaultdict
 
-# Import từ storage (Chỉ lấy config để check role gốc)
+# Import trí nhớ State để check bypass
+from core.state import State
+# Import từ storage
 from .booster_storage import get_guild_config
 
-# [VÁ LỖI] Khóa Guild để bảo toàn tính nhất quán, tránh tranh chấp khi gán/gỡ role
+# [VÁ LỖI] Khóa Guild để bảo toàn tính nhất quán
 _engine_locks = defaultdict(asyncio.Lock)
 
 # ==============================
@@ -15,10 +18,18 @@ _engine_locks = defaultdict(asyncio.Lock)
 async def assign_correct_level(member: discord.Member):
     """
     hàm cốt lõi: xử lý gán/gỡ booster role gốc.
-    đã loại bỏ hoàn toàn hệ thống mốc level và tính toán ngày.
+    đã tích hợp chốt chặn bypass 5 phút để bảo vệ người test.
     """
     guild = member.guild
     
+    # [BẢO VỆ 1] KIỂM TRA TRẠNG THÁI TEST (BYPASS)
+    # tớ check ngay từ đầu để tránh tốn tài nguyên chạy lock
+    bypass_key = f"boost_test_{member.id}"
+    state_data = await State.get_ui(bypass_key)
+    if state_data and time.time() < state_data.get("expiry", 0):
+        # nếu đang trong thời gian test, dừng mọi hoạt động gỡ role
+        return
+
     # [VÁ LỖI] Khóa Guild để bảo vệ tiến trình thực thi duy nhất
     lock = _engine_locks[guild.id]
     async with lock:
