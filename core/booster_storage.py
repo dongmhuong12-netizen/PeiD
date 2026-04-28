@@ -1,12 +1,29 @@
 import copy
-from core.cache_manager import get_raw, mark_dirty, save # Thêm save để ép lưu
+import asyncio
+from collections import defaultdict
+from core.cache_manager import get_raw, mark_dirty, save, update # Thêm update
 
 # Key đồng bộ với hệ thống Booster
 FILE_KEY = "booster_levels"
 
+# [VÁ LỖI] Khóa theo Guild để tránh Race Condition khi Read-Modify-Write
+_guild_locks = defaultdict(asyncio.Lock)
+
 # =========================
 # INTERNAL HELPERS
 # =========================
+
+def _get_cache():
+    """
+    Lấy reference gốc từ RAM. Tự sửa lỗi định dạng.
+    """
+    cache = get_raw(FILE_KEY)
+    if not isinstance(cache, dict):
+        print(f"[STORAGE WARNING] Cache '{FILE_KEY}' bị hỏng. Đang reset...", flush=True)
+        cache = {}
+        update(FILE_KEY, cache)
+        mark_dirty(FILE_KEY)
+    return cache
 
 def _normalize_levels(levels: list):
     """
@@ -41,7 +58,7 @@ async def get_guild_config(guild_id: int):
     """
     Lấy toàn bộ cấu hình server, đảm bảo không làm mất các key phụ (channel, embed...).
     """
-    db = get_raw(FILE_KEY)
+    db = _get_cache()
     guild_id_str = str(guild_id)
     
     # Lấy toàn bộ dict hiện có thay vì chỉ lấy 2 key
@@ -59,11 +76,10 @@ async def save_guild_config(guild_id: int, config: dict):
     """
     Lưu và ÉP GHI xuống đĩa ngay lập tức để chống Render restart.
     """
-    db = get_raw(FILE_KEY)
+    db = _get_cache()
     guild_id_str = str(guild_id)
 
     # Cập nhật toàn bộ config vào RAM
-    # Chúng ta lưu cả channel, message, embed và levels vào đây
     if "levels" in config:
         config["levels"] = _normalize_levels(config["levels"])
         
@@ -82,15 +98,23 @@ async def save_guild_config(guild_id: int, config: dict):
 # =========================
 
 async def set_booster_role(guild_id: int, role_id: int):
-    config = await get_guild_config(guild_id)
-    config["booster_role"] = role_id
-    await save_guild_config(guild_id, config)
+    # [VÁ LỖI] Dùng Lock để đảm bảo quá trình Đọc-Sửa-Ghi không bị xen ngang
+    lock = _guild_locks[guild_id]
+    async with lock:
+        config = await get_guild_config(guild_id)
+        config["booster_role"] = role_id
+        await save_guild_config(guild_id, config)
+    if guild_id in _guild_locks and not lock.locked(): _guild_locks.pop(guild_id, None)
 
 async def get_levels(guild_id: int):
     config = await get_guild_config(guild_id)
     return config.get("levels", [])
 
 async def save_levels(guild_id: int, levels: list):
-    config = await get_guild_config(guild_id)
-    config["levels"] = levels
-    await save_guild_config(guild_id, config)
+    # [VÁ LỖI] Dùng Lock bảo vệ mốc Level
+    lock = _guild_locks[guild_id]
+    async with lock:
+        config = await get_guild_config(guild_id)
+        config["levels"] = levels
+        await save_guild_config(guild_id, config)
+    if guild_id in _guild_locks and not lock.locked(): _guild_locks.pop(guild_id, None)
