@@ -6,13 +6,13 @@ from core.variable_engine import apply_variables
 from core.embed_storage import save_embed, delete_embed
 from core.cache_manager import load, mark_dirty, get_raw, save as force_save
 from core.state import State
+from utils.emojis import Emojis
 
-# Quản lý View thông minh (BẢO TỒN NGUYÊN VẸN 100%)
 ACTIVE_EMBED_VIEWS = {}
 REACTION_FILE_KEY = "reaction_roles"
 
 # =========================
-# STATE WRAPPER (ATOMIC) - GIỮ NGUYÊN TỪNG CHỮ
+# STATE WRAPPER (ATOMIC)
 # =========================
 
 async def load_reaction_data():
@@ -22,7 +22,7 @@ async def save_reaction_data(data):
     mark_dirty(REACTION_FILE_KEY)
 
 # =========================
-# MODALS (BASIC STYLE - CHỮ MỜ & VIẾT THƯỜNG)
+# MODALS
 # =========================
 
 class EditInformationModal(discord.ui.Modal, title="edit information"):
@@ -30,26 +30,29 @@ class EditInformationModal(discord.ui.Modal, title="edit information"):
         super().__init__()
         self.view = view
         
-        # Tiêu đề: Nếu là mặc định thì để trống để hiện placeholder (chữ mờ)
+        # SỬA LỖI Ở ĐÂY: Thêm đúng chuỗi "tiêu đề embed mới" vào danh sách kiểm tra
         curr_title = self.view.data.get("title")
+        is_default_title = curr_title in ["Tiêu đề Embed mới", "tiêu đề embed mới", "embed mới", None]
+        
         self.etitle = discord.ui.TextInput(
             label="tiêu đề mới",
-            placeholder="embed mới",
+            placeholder="tiêu đề embed mới",
             required=False,
-            default="" if curr_title in ["Tiêu đề Embed mới", "embed mới", None] else curr_title
+            default=None if is_default_title else curr_title
         )
         
-        # Mô tả: Hiện placeholder màu xám (xử lý cả dấu chấm mặc định)
+        # SỬA LỖI Ở ĐÂY: Thêm đúng chuỗi "nội dung mô tả mặc định" vào danh sách kiểm tra
         curr_desc = self.view.data.get("description")
+        is_default_desc = curr_desc in ["Nội dung mô tả mặc định", "Nội dung mô tả mặc định.", "nội dung mô tả mặc định", "nội dung mô tả", None]
+        
         self.description = discord.ui.TextInput(
             label="mô tả mới",
             style=discord.TextStyle.paragraph,
-            placeholder="nội dung mô tả",
+            placeholder="nội dung mô tả mặc định",
             required=False,
-            default="" if curr_desc in ["Nội dung mô tả mặc định", "Nội dung mô tả mặc định.", "nội dung mô tả", None] else curr_desc
+            default=None if is_default_desc else curr_desc
         )
         
-        # Mã màu: Nhuộm xám nốt chỗ này (mặc định f8bbd0 và viết thường)
         curr_color_hex = hex(self.view.data.get("color", 0xf8bbd0)).replace("0x", "").lower()
         self.color = discord.ui.TextInput(
             label="mã màu hex",
@@ -63,22 +66,25 @@ class EditInformationModal(discord.ui.Modal, title="edit information"):
         self.add_item(self.color)
 
     async def on_submit(self, interaction: discord.Interaction):
-        self.view.data["title"] = self.etitle.value or "embed mới"
-        self.view.data["description"] = self.description.value or "nội dung mô tả"
+        # SỬA LỖI Ở ĐÂY: Lấy giá trị từ placeholder nếu TextInput bị bỏ trống (chữ xám)
+        self.view.data["title"] = self.etitle.value or self.etitle.placeholder
+        self.view.data["description"] = self.description.value or self.description.placeholder
         
         try:
-            # Nếu để trống (hiện chữ xám) thì lấy mặc định f8bbd0
             val = self.color.value.replace("#", "").lower() or "f8bbd0"
             self.view.data["color"] = int(val, 16)
             
-            # Mạch auto-save logic (nguyên vẹn)
             await save_embed(self.view.guild_id, self.view.name, self.view.data)
             await force_save("embeds")
             
             await self.view.update_message(interaction)
         except:
             if not interaction.response.is_done():
-                await interaction.response.send_message("sai mã màu, xin hãy nhập lại", ephemeral=False)
+                embed_err = discord.Embed(
+                    description=f"{Emojis.HOICHAM} sai mã màu, xin hãy nhập lại",
+                    color=0xf8bbd0
+                )
+                await interaction.response.send_message(embed=embed_err, ephemeral=True)
 
 class EditAuthorModal(discord.ui.Modal, title="edit author details"):
     def __init__(self, view):
@@ -203,7 +209,6 @@ class ReactionRoleModal(discord.ui.Modal, title="reaction role setup"):
             required=True
         )
         
-        # Chế độ: Chuyển về màu xám (placeholder) nếu đang ở mặc định
         curr_mode = current.get("mode")
         self.mode = discord.ui.TextInput(
             label="chế độ (single/multi)", 
@@ -236,10 +241,10 @@ class ReactionRoleModal(discord.ui.Modal, title="reaction role setup"):
                 parsed_role_ids.append(str(role.id))
 
         if errors:
-            err_msg = "lỗi cấu hình reaction role, xin hãy nhập lại\n- " + "\n- ".join(errors)
-            return await interaction.response.send_message(err_msg, ephemeral=False)
+            err_desc = f"{Emojis.HOICHAM} lỗi cấu hình reaction role, xin hãy nhập lại\n- " + "\n- ".join(errors)
+            embed_err = discord.Embed(description=err_desc, color=0xf8bbd0)
+            return await interaction.response.send_message(embed=embed_err, ephemeral=True)
 
-        # Mạch lưu dữ liệu reaction (nguyên vẹn logic)
         db = await load_reaction_data()
         key = f"{guild.id}:{self.view.name}"
         db[key] = {
@@ -261,10 +266,14 @@ class ReactionRoleModal(discord.ui.Modal, title="reaction role setup"):
             await State.atomic_embed_register(guild.id, self.view.name, self.view.message.id)
 
         if not interaction.response.is_done():
-            await interaction.response.send_message(f"reaction role cho `{self.view.name}` lưu thành công", ephemeral=False)
+            embed_success = discord.Embed(
+                description=f"{Emojis.MATTRANG} reaction role cho `{self.view.name}` lưu thành công",
+                color=0xf8bbd0
+            )
+            await interaction.response.send_message(embed=embed_success, ephemeral=False)
 
 # =========================
-# MAIN VIEW (BẢO TỒN LOGIC)
+# MAIN VIEW
 # =========================
 
 class EmbedUIView(discord.ui.View):
@@ -311,13 +320,12 @@ class EmbedUIView(discord.ui.View):
         from core.embed_sender import _build_embed
         data_copy = copy.deepcopy(self.data)
         
-        # Đồng bộ text mặc định sang viết thường
-        if data_copy.get("title") in ["Tiêu đề Embed mới", "embed mới"]:
-            data_copy["title"] = "embed mới"
-        if data_copy.get("description") in ["Nội dung mô tả mặc định", "Nội dung mô tả mặc định.", "nội dung mô tả"]:
-            data_copy["description"] = "nội dung mô tả"
+        # SỬA LỖI Ở ĐÂY: Thêm chuỗi chuẩn xác để bot ghi đè lên preview đúng
+        if data_copy.get("title") in ["Tiêu đề Embed mới", "tiêu đề embed mới", "embed mới"]:
+            data_copy["title"] = "tiêu đề embed mới"
+        if data_copy.get("description") in ["Nội dung mô tả mặc định", "Nội dung mô tả mặc định.", "nội dung mô tả mặc định", "nội dung mô tả"]:
+            data_copy["description"] = "nội dung mô tả mặc định"
         
-        # Ép màu hồng f8bbd0 cho preview nếu màu đang ở mặc định
         if data_copy.get("color") in [0x5865f2, 0x5865F2, None]:
             data_copy["color"] = 0xf8bbd0
             
