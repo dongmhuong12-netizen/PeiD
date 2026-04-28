@@ -3,3 +3,4 @@ aiohttp
 PyNaCl
 pytz
 uvloop; sys_platform == 'linux'
+aiofiles
