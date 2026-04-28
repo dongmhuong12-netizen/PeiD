@@ -126,7 +126,7 @@ class EmbedGroup(app_commands.Group):
         if not data: 
             # PHẢN HỒI BẰNG EMBED MÀU f8bbd0 THEO YÊU CẦU
             embed_err = discord.Embed(
-                description=f"{Emojis.HOICHAM} aree...hãy thử lại lần nữa nhé. yiyi không tìm thấy embed có tên `{name}`. xin hãy kiểm tra embed cậu muốn show bằng `/p embed edit` strip",
+                description=f"{Emojis.HOICHAM} aree...hãy thử lại lần nữa nhé. yiyi không tìm thấy embed có tên `{name}`. xin hãy kiểm tra embed cậu muốn show bằng `/p embed edit`",
                 color=0xf8bbd0
             )
             return await interaction.response.send_message(embed=embed_err, ephemeral=False)
