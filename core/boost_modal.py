@@ -65,12 +65,15 @@ class RoleInputModal(discord.ui.Modal, title="thiết lập role cho level"):
             await self.callback(interaction, role_id)
             
         except Exception as e:
-            # 7. CHUYỂN SANG EMBED
-            embed = discord.Embed(
-                description=f"{Emojis.HOICHAM} phát sinh lỗi: `{str(e)}`",
-                color=0xf8bbd0
-            )
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            # [VÁ LỖI] Kiểm tra trạng thái interaction để tránh crash task ngầm
+            if not interaction.response.is_done():
+                embed = discord.Embed(
+                    description=f"{Emojis.HOICHAM} phát sinh lỗi: `{str(e)}`",
+                    color=0xf8bbd0
+                )
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+            else:
+                print(f"[MODAL ERROR] {e}", flush=True)
 
 # ==============================
 # DAYS INPUT MODAL
@@ -104,5 +107,9 @@ class DaysInputModal(discord.ui.Modal, title="thiết lập ngày yêu cầu"):
             # 6. TEXT THUẦN (Theo yêu cầu)
             return await interaction.response.send_message("số ngày không được phép là số âm", ephemeral=True)
 
-        # Trả kết quả về cho View
-        await self.callback(interaction, days)
+        try:
+            # Trả kết quả về cho View
+            await self.callback(interaction, days)
+        except Exception as e:
+            if not interaction.response.is_done():
+                await interaction.response.send_message(f"phát sinh lỗi: `{str(e)}`", ephemeral=True)
