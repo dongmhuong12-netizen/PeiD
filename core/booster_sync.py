@@ -8,6 +8,9 @@ from .boost_utils import get_system_role_ids
 MAX_CONCURRENT_SYNC = 10
 semaphore = asyncio.Semaphore(MAX_CONCURRENT_SYNC)
 
+# [VÁ LỖI] Biến toàn cục để quản lý vòng lặp ngầm chống rò rỉ tác vụ
+_radar_task = None
+
 # ==============================
 # SYNC ONE MEMBER (Atomic Unit)
 # ==============================
@@ -57,9 +60,14 @@ async def sync_guild(guild: discord.Guild):
     if not targets:
         return
 
-    # Quét song song (Tận dụng sức mạnh đa luồng của asyncio)
-    tasks = [sync_member(m) for m in targets]
-    await asyncio.gather(*tasks)
+    # [VÁ LỖI] Xử lý tuần tự có kiểm soát để tránh Memory Spike khi server quá lớn
+    # Vẫn đảm bảo tính đa luồng nhờ semaphore bên trong sync_member
+    tasks = []
+    for m in targets:
+        tasks.append(asyncio.create_task(sync_member(m)))
+    
+    if tasks:
+        await asyncio.gather(*tasks)
 
 # ==============================
 # SYNC ALL GUILDS (Global Loop)
@@ -83,16 +91,20 @@ async def sync_all_guilds(bot):
 
 async def daily_sync_loop(bot):
     """Vòng lặp Radar chạy ngầm"""
-    await bot.wait_until_ready()
-    await asyncio.sleep(30) # Chờ Bot ổn định hoàn toàn
+    try:
+        await bot.wait_until_ready()
+        await asyncio.sleep(30) # Chờ Bot ổn định hoàn toàn
 
-    while not bot.is_closed():
-        print(f"[RADAR] Bắt đầu quét hệ thống Booster...", flush=True)
-        await sync_all_guilds(bot)
-        print(f"[RADAR] Hoàn tất chu kỳ quét.", flush=True)
-        
-        # Quét mỗi 6 tiếng (Tiêu chuẩn tối ưu cho Bot lớn)
-        await asyncio.sleep(21600)
+        while not bot.is_closed():
+            print(f"[RADAR] Bắt đầu quét hệ thống Booster...", flush=True)
+            await sync_all_guilds(bot)
+            print(f"[RADAR] Hoàn tất chu kỳ quét.", flush=True)
+            
+            # Quét mỗi 6 tiếng (Tiêu chuẩn tối ưu cho Bot lớn)
+            await asyncio.sleep(21600)
+    except asyncio.CancelledError:
+        # Giải phóng trí nhớ khi vòng lặp bị dừng
+        pass
 
 # ==============================
 # REALTIME EVENT (Đánh chặn tức thì)
@@ -106,3 +118,19 @@ async def handle_member_update(before: discord.Member, after: discord.Member):
     if before.premium_since != after.premium_since:
         # Gọi Engine để xử lý gán/gỡ và gửi Embed chúc mừng (nếu có)
         await sync_member(after)
+
+# [VÁ LỖI] Cơ chế giải phóng tài nguyên khi nạp lại module (Teardown)
+async def teardown(bot):
+    global _radar_task
+    if _radar_task and not _radar_task.done():
+        _radar_task.cancel()
+        try:
+            await _radar_task
+        except asyncio.CancelledError:
+            pass
+    print("[unload] success: core.booster_sync", flush=True)
+
+def start_radar(bot):
+    global _radar_task
+    if _radar_task is None or _radar_task.done():
+        _radar_task = asyncio.create_task(daily_sync_loop(bot))
