@@ -1,8 +1,11 @@
-from core.cache_manager import get_raw, mark_dirty
+from core.cache_manager import get_raw, mark_dirty, update
 import copy
 import asyncio
 
 FILE_KEY = "embeds"
+
+# [VÁ LỖI] Bổ sung Lock để chống Race Condition (mất dữ liệu khi lưu đồng thời)
+_lock = asyncio.Lock()
 
 # =========================
 # SAFE CACHE ACCESS (INTERNAL)
@@ -17,8 +20,9 @@ def _get_cache():
 
     if not isinstance(cache, dict):
         print(f"[storage warning] cache '{FILE_KEY}' bị sai định dạng. đang khởi động lại...", flush=True)
-        if hasattr(cache, "clear"):
-            cache.clear()
+        # [VÁ LỖI] Ép khởi tạo vùng nhớ mới và đồng bộ ngược về cache_manager
+        cache = {}
+        update(FILE_KEY, cache)
         mark_dirty(FILE_KEY)
 
     return cache
@@ -44,16 +48,18 @@ async def save_embed(guild_id, name, data):
     if not name or data is None:
         return False
 
-    cache = _get_cache()
-    gid = _gid(guild_id)
-    name = _nid(name)
+    # [VÁ LỖI] Khóa bộ nhớ tạm để thao tác khởi tạo key không bị đè nhau
+    async with _lock:
+        cache = _get_cache()
+        gid = _gid(guild_id)
+        name = _nid(name)
 
-    if gid not in cache or not isinstance(cache[gid], dict):
-        cache[gid] = {}
+        if gid not in cache or not isinstance(cache[gid], dict):
+            cache[gid] = {}
 
-    cache[gid][name] = copy.deepcopy(data)
+        cache[gid][name] = copy.deepcopy(data)
 
-    mark_dirty(FILE_KEY)
+        mark_dirty(FILE_KEY)
     
     print(f"[storage] đã lưu embed '{name}' cho server {gid} vào bộ nhớ tạm.", flush=True)
     return True
@@ -88,23 +94,26 @@ async def delete_embed(guild_id, name):
     if name is None:
         return False
 
-    cache = _get_cache()
-    gid = _gid(guild_id)
-    name = _nid(name)
+    # [VÁ LỖI] Khóa bộ nhớ khi thao tác xóa nhánh
+    async with _lock:
+        cache = _get_cache()
+        gid = _gid(guild_id)
+        name = _nid(name)
 
-    if gid not in cache:
-        return False
+        if gid not in cache:
+            return False
 
-    guild_data = cache[gid]
-    if not isinstance(guild_data, dict) or name not in guild_data:
-        return False
+        guild_data = cache[gid]
+        if not isinstance(guild_data, dict) or name not in guild_data:
+            return False
 
-    del guild_data[name]
+        del guild_data[name]
 
-    if not guild_data:
-        cache.pop(gid, None)
+        if not guild_data:
+            cache.pop(gid, None)
 
-    mark_dirty(FILE_KEY)
+        mark_dirty(FILE_KEY)
+        
     print(f"[storage] đã xóa embed '{name}' khỏi server {gid}.", flush=True)
     return True
 
