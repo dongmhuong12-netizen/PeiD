@@ -11,6 +11,9 @@ from utils.emojis import Emojis
 ACTIVE_EMBED_VIEWS = {}
 REACTION_FILE_KEY = "reaction_roles"
 
+# [VÁ LỖI] Lock để bảo vệ dữ liệu reaction role khi ghi đĩa
+_reaction_lock = asyncio.Lock()
+
 # =========================
 # STATE WRAPPER (ATOMIC)
 # =========================
@@ -244,15 +247,17 @@ class ReactionRoleModal(discord.ui.Modal, title="reaction role setup"):
             embed_err = discord.Embed(description=err_desc, color=0xf8bbd0)
             return await interaction.response.send_message(embed=embed_err, ephemeral=True)
 
-        db = await load_reaction_data()
-        key = f"{guild.id}:{self.view.name}"
-        db[key] = {
-            "guild_id": str(guild.id),
-            "embed_name": self.view.name,
-            "groups": [{"mode": mode, "emojis": emojis, "roles": parsed_role_ids}]
-        }
-        await save_reaction_data(db)
-        await force_save(REACTION_FILE_KEY)
+        # [VÁ LỖI] Sử dụng Lock để tránh tranh chấp khi lưu reaction role
+        async with _reaction_lock:
+            db = await load_reaction_data()
+            key = f"{guild.id}:{self.view.name}"
+            db[key] = {
+                "guild_id": str(guild.id),
+                "embed_name": self.view.name,
+                "groups": [{"mode": mode, "emojis": emojis, "roles": parsed_role_ids}]
+            }
+            await save_reaction_data(db)
+            await force_save(REACTION_FILE_KEY)
         
         self.view.temp_reaction_data = {"emojis": emojis, "roles_raw": roles_raw, "mode": mode}
         await save_embed(self.view.guild_id, self.view.name, self.view.data)
@@ -296,11 +301,15 @@ class EmbedUIView(discord.ui.View):
                     "mode": group.get("mode", "single")
                 }
 
+        # [VÁ LỖI] Cơ chế giải phóng RAM: Dọn dẹp các view cũ cùng key trước khi nạp mới
         key = f"{self.guild_id}:{name}"
-        if key not in ACTIVE_EMBED_VIEWS:
-            ACTIVE_EMBED_VIEWS[key] = []
-        if self not in ACTIVE_EMBED_VIEWS[key]:
-            ACTIVE_EMBED_VIEWS[key].append(self)
+        if key in ACTIVE_EMBED_VIEWS:
+            for old_view in ACTIVE_EMBED_VIEWS[key]:
+                try:
+                    old_view.stop() # Dừng tiến trình lắng nghe của view cũ
+                except:
+                    pass
+        ACTIVE_EMBED_VIEWS[key] = [self]
 
         self.add_item(discord.ui.Button(
             label="need help? join support server", 
