@@ -72,10 +72,22 @@ class State:
         async with _lock:
             def op(cache):
                 gid_s = str(gid)
+                # 1. Xóa Embed gốc
                 if gid_s in cache["embeds"]:
                     cache["embeds"][gid_s].pop(name, None)
                     if not cache["embeds"][gid_s]:
                         cache["embeds"].pop(gid_s, None)
+                
+                # [VÁ LỖI LEAK] 2. Garbage Collection: Dọn sạch rác mồ côi trong mapping và reaction
+                if "mapping" in cache:
+                    mid_s = cache["mapping"]["name_to_mid"].get(gid_s, {}).pop(name, None)
+                    if mid_s:
+                        if not cache["mapping"]["name_to_mid"].get(gid_s):
+                            cache["mapping"]["name_to_mid"].pop(gid_s, None)
+                        
+                        cache["mapping"]["mid_to_info"].pop(mid_s, None)
+                        cache.get("reactions", {}).pop(mid_s, None)
+                        cache.get("runtime", {}).get("reaction_cache", {}).pop(mid_s, None)
             _write(op)
 
     # =========================
