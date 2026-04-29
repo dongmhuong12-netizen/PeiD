@@ -120,33 +120,38 @@ class BoostGroup(app_commands.Group):
 class BoosterListener(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        # [XOÁ BỎ] Radar quét ngầm 5 phút đã bị loại bỏ để tối ưu tài nguyên
         self._tasks = set()
 
     def cog_unload(self):
+        """dọn dẹp các tác vụ ngầm khi reload module"""
         for task in self._tasks:
             task.cancel()
         self._tasks.clear()
 
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member):
+        """chỉ xử lý khi có biến động trạng thái boost thực tế hoặc hết hạn test"""
         if after.bot: return
         
         # [CHỐT CHẶN BYPASS] Kiểm tra xem thành viên có đang trong 5 phút test không
         bypass_key = f"boost_test_{after.id}"
         state_data = await State.get_ui(bypass_key)
         if state_data and time.time() < state_data.get("expiry", 0):
-            return
+            return # Đang trong thời gian bảo vệ, không gỡ role
 
-        is_boost_changed = (before.premium_since is None and after.premium_since is not None) or \
-                          (before.premium_since is not None and after.premium_since is None)
+        # [LOGIC ĐA ĐIỀM] Kiểm tra thay đổi boost hoặc thay đổi role sau khi hết hạn test
+        boost_changed = before.premium_since != after.premium_since
+        role_changed = before.roles != after.roles
         
-        if is_boost_changed:
+        if boost_changed or role_changed:
+            # gửi tin nhắn chào mừng nếu là boost mới
             if before.premium_since is None and after.premium_since is not None:
                 task_welcome = asyncio.create_task(send_config_message(after.guild, after, "booster"))
                 self._tasks.add(task_welcome)
                 task_welcome.add_done_callback(self._tasks.discard)
             
-            # Đồng bộ role thực tế
+            # gọi engine để gán hoặc gỡ role booster gốc
             task_sync = asyncio.create_task(assign_correct_level(after))
             self._tasks.add(task_sync)
             task_sync.add_done_callback(self._tasks.discard)
@@ -157,4 +162,4 @@ async def setup(bot: commands.Bot):
         if not any(c.name == "boost" for c in p_cmd.commands):
             p_cmd.add_command(BoostGroup())
     await bot.add_cog(BoosterListener(bot))
-    print("[load] success: core.booster (test logic fixed)", flush=True)
+    print("[load] success: core.booster (check boost logic fixed)", flush=True)
