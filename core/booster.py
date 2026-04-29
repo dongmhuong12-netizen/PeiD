@@ -32,10 +32,9 @@ class BoostGroup(app_commands.Group):
         config["booster_role"] = role.id
         await save_guild_config(interaction.guild.id, config)
         
-        # Sửa lỗi hiển thị: Title & Description chuẩn Mimu
+        # CHỈ GIỮ TITLE - Đã thêm khoảng cách sau Emoji và fix mention
         embed = discord.Embed(
-            title=f"{Emojis.MATTRANG} cập nhật role `booster` thành công",
-            description=f"hiện tại **yiyi** sẽ sử dụng {role.mention} làm role quà tặng cho các booster nhé.",
+            title=f"{Emojis.MATTRANG} cập nhật role `booster` thành công: {role.mention}",
             color=0xf8bbd0
         )
         await interaction.response.send_message(embed=embed, ephemeral=False)
@@ -65,8 +64,10 @@ class BoostGroup(app_commands.Group):
         config["message"] = text
         await save_guild_config(interaction.guild.id, config)
         
+        # FIX: Hiển thị biến {user} thành mention thực tế trong thông báo thành công
+        display_text = text.replace("{user}", interaction.user.mention)
         embed = discord.Embed(
-            title=f"{Emojis.MATTRANG} cập nhật tin nhắn `boost` thành công: {text}",
+            title=f"{Emojis.MATTRANG} cập nhật tin nhắn `boost` thành công: {display_text}",
             color=0xf8bbd0
         )
         await interaction.response.send_message(embed=embed, ephemeral=False)
@@ -185,4 +186,4 @@ async def setup(bot: commands.Bot):
         if not any(c.name == "boost" for c in p_cmd.commands):
             p_cmd.add_command(BoostGroup())
     await bot.add_cog(BoosterListener(bot))
-    print("[load] success: core.booster (reconciliation loop & bypass active)", flush=True)
+    print("[load] success: core.booster (fixed text & mention variables)", flush=True)
