@@ -26,7 +26,7 @@ def build_variables(
             "{user_display}": member.display_name,
             "{user_tag}": str(member),
             "{user_id}": str(member.id),
-            "{user_avatar}": member.display_avatar.url,
+            "{user_avatar}": member.display_avatar.url if member.display_avatar else "",
             "{user_bot}": "Có" if member.bot else "Không",
             "{user_created}": created_at,
             "{user_joined}": joined_at,
@@ -37,12 +37,14 @@ def build_variables(
     # =========================
     # SERVER VARIABLES (Atomic Data)
     # =========================
-    # Dùng các thuộc tính có sẵn của discord.py để tránh duyệt list
+    # [VÁ LỖI] Luôn dùng Owner ID để tạo mention, tránh trả về "Không rõ" ở server lớn
+    server_owner_mention = guild.owner.mention if guild.owner else f"<@{guild.owner_id}>"
+
     variables.update({
         "{server}": guild.name,
         "{server_name}": guild.name,
         "{server_id}": str(guild.id),
-        "{server_owner}": guild.owner.mention if guild.owner else "Không rõ",
+        "{server_owner}": server_owner_mention,
         "{server_owner_id}": str(guild.owner_id),
         "{server_created}": guild.created_at.strftime("%d/%m/%Y"),
         "{server_icon}": guild.icon.url if guild.icon else "",
@@ -57,10 +59,10 @@ def build_variables(
     # =========================
     # HEAVY CALCULATIONS (Cơ chế bảo vệ CPU)
     # =========================
-    # Chỉ tính toán online/bot count nếu server dưới 10k người hoặc cache đã sẵn sàng
-    if guild.member_count and guild.member_count < 10000:
+    # [TỐI ƯU] Chỉ đếm nếu server thực sự nhỏ và đã nạp đủ cache
+    if guild.member_count and guild.member_count < 5000:
         members = guild.members
-        if len(members) >= guild.member_count * 0.8: # Cache phải đủ 80% mới đếm
+        if len(members) >= guild.member_count * 0.9: 
             bot_count = sum(1 for m in members if m.bot)
             variables.update({
                 "{bot_count}": str(bot_count),
@@ -68,13 +70,13 @@ def build_variables(
                 "{online_count}": str(sum(1 for m in members if m.status != discord.Status.offline)),
             })
         else:
-            variables.update({"{bot_count}": "Đang nạp...", "{human_count}": "Đang nạp...", "{online_count}": "Đang nạp..."})
+            variables.update({"{bot_count}": "...", "{human_count}": "...", "{online_count}": "..."})
     else:
-        # Với server cực lớn, dùng số liệu tổng quát để tránh treo Bot
+        # Với server > 5k, dùng số liệu tổng quát để bảo vệ tài nguyên
         variables.update({
-            "{bot_count}": "N/A (Server lớn)",
+            "{bot_count}": "N/A",
             "{human_count}": str(guild.member_count or 0),
-            "{online_count}": "N/A (Server lớn)",
+            "{online_count}": "N/A",
         })
 
     # =========================
@@ -104,22 +106,22 @@ def apply_variables(
     if data is None:
         return data
 
-    # Chỉ build variables 1 lần duy nhất cho mỗi đợt apply
     variables = build_variables(guild, member)
     
-    # Tạo Pattern Regex an toàn (re.escape cực kỳ quan trọng)
+    # [PHÒNG THỦ] Tránh compile rỗng nếu variables gặp sự cố
+    if not variables:
+        return data
+        
     pattern = re.compile("|".join(re.escape(k) for k in variables.keys()))
 
     def replace_value(value):
         if isinstance(value, str):
-            # Check nhanh để bỏ qua chuỗi không chứa biến
             if "{" not in value:
                 return value
             # Thay thế thần tốc bằng Regex
-            return pattern.sub(lambda m: variables[m.group(0)], value)
+            return pattern.sub(lambda m: variables.get(m.group(0), m.group(0)), value)
 
         if isinstance(value, dict):
-            # Dùng dict comprehension cho tốc độ Atomic
             return {k: replace_value(v) for k, v in value.items()}
 
         if isinstance(value, list):
