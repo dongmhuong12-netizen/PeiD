@@ -1,5 +1,6 @@
 import asyncio
 import discord
+import time # [THÊM] để check thời gian hết hạn test
 from core.cache_manager import load, mark_dirty, get_raw
 
 FILE_KEY = "state"
@@ -96,26 +97,19 @@ class State:
 
     @staticmethod
     async def atomic_embed_register(gid: int, name: str, message_id: int, reaction_data: dict | None = None):
-        """
-        Lưu liên kết Message ID vào database bền vững thay vì runtime.
-        Giúp Bot biết chính xác tin nhắn nào đang chứa Embed nào.
-        """
         async with _tx_lock:
             def op(cache):
                 gid_s = str(gid)
                 mid_s = str(message_id)
 
-                # NAME -> MESSAGE
                 cache["mapping"]["name_to_mid"].setdefault(gid_s, {})
                 cache["mapping"]["name_to_mid"][gid_s][name] = mid_s
 
-                # MESSAGE -> INFO (Truy xuất ngược khi nhận Reaction)
                 cache["mapping"]["mid_to_info"][mid_s] = {
                     "guild_id": gid_s,
                     "name": name
                 }
 
-                # Đồng bộ cấu hình Reaction nếu có
                 if reaction_data:
                     cache["reactions"][mid_s] = reaction_data
                     cache["runtime"]["reaction_cache"][mid_s] = reaction_data
@@ -130,7 +124,6 @@ class State:
 
     @staticmethod
     async def get_info_by_mid(mid: int):
-        """Truy xuất ngược: Message ID này thuộc về Embed nào, Server nào?"""
         cache = _get()
         return cache["mapping"]["mid_to_info"].get(str(mid))
 
@@ -151,7 +144,6 @@ class State:
     async def get_reaction(mid: int):
         cache = _get()
         mid_s = str(mid)
-        # Check đệm RAM trước (Tốc độ cao), hụt mới check dữ liệu bền vững
         return cache["runtime"]["reaction_cache"].get(mid_s) or cache["reactions"].get(mid_s)
 
     @staticmethod
@@ -163,8 +155,29 @@ class State:
 
     @staticmethod
     async def get_ui(key: str):
+        """
+        Lấy dữ liệu UI và tự động dọn dẹp dữ liệu quá hạn.
+        """
         cache = _get()
-        return cache["ui"].get(key)
+        data = cache["ui"].get(key)
+        
+        # [FIX] Tự động xóa rác nếu phát hiện đã hết hạn test
+        if data and isinstance(data, dict) and "expiry" in data:
+            if time.time() > data["expiry"]:
+                async with _lock:
+                    def op(cache):
+                        cache["ui"].pop(key, None)
+                    _write(op)
+                return None
+        return data
+
+    @staticmethod
+    async def del_ui(key: str):
+        """Xóa UI state thủ công"""
+        async with _lock:
+            def op(cache):
+                cache["ui"].pop(key, None)
+            _write(op)
 
     # =========================
     # SYSTEM OPS
@@ -172,7 +185,6 @@ class State:
 
     @staticmethod
     async def clear_rt():
-        """Reset dữ liệu tạm thời (Dọn dẹp RAM định kỳ)"""
         async with _lock:
             def op(cache):
                 cache["runtime"] = {"reaction_cache": {}}
@@ -181,12 +193,8 @@ class State:
 
     @staticmethod
     async def resync():
-        """
-        Nạp lại toàn bộ trí nhớ từ Disk vào RAM lúc khởi động.
-        """
         try:
             load(FILE_KEY)
-            # Khởi tạo lại cấu trúc sau khi load để đảm bảo không lỗi Key
             _get() 
             print(f"[STATE] Trí nhớ '{FILE_KEY}' đã được khôi phục thành công.", flush=True)
             return True
