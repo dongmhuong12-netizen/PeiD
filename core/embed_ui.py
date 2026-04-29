@@ -82,11 +82,8 @@ class EditInformationModal(discord.ui.Modal, title="edit information"):
             await self.view.update_message(interaction)
         except:
             if not interaction.response.is_done():
-                embed_err = discord.Embed(
-                    description=f"{Emojis.HOICHAM} sai mã màu, xin hãy nhập lại",
-                    color=0xf8bbd0
-                )
-                await interaction.response.send_message(embed=embed_err, ephemeral=True)
+                # VĂN PHONG MỚI: TEXT THUẦN
+                await interaction.response.send_message("sai mã màu, xin hãy nhập lại", ephemeral=True)
 
 class EditAuthorModal(discord.ui.Modal, title="edit author details"):
     def __init__(self, view):
@@ -243,8 +240,12 @@ class ReactionRoleModal(discord.ui.Modal, title="reaction role setup"):
                 parsed_role_ids.append(str(role.id))
 
         if errors:
-            err_desc = f"{Emojis.HOICHAM} lỗi cấu hình reaction role, xin hãy nhập lại\n- " + "\n- ".join(errors)
-            embed_err = discord.Embed(description=err_desc, color=0xf8bbd0)
+            # VĂN PHONG MỚI: EMBED TITLE & DESCRIPTION
+            embed_err = discord.Embed(
+                title=f"{Emojis.HOICHAM} lỗi cấu hình reaction role",
+                description="xin hãy nhập lại\n- " + "\n- ".join(errors),
+                color=0xf8bbd0
+            )
             return await interaction.response.send_message(embed=embed_err, ephemeral=True)
 
         # [VÁ LỖI] Sử dụng Lock để tránh tranh chấp khi lưu reaction role
@@ -270,8 +271,9 @@ class ReactionRoleModal(discord.ui.Modal, title="reaction role setup"):
             await State.atomic_embed_register(guild.id, self.view.name, self.view.message.id)
 
         if not interaction.response.is_done():
+            # VĂN PHONG MỚI: EMBED TITLE
             embed_success = discord.Embed(
-                description=f"{Emojis.MATTRANG} reaction role cho `{self.view.name}` lưu thành công",
+                title=f"{Emojis.MATTRANG} cập nhật reaction role cho `{self.view.name}` thành công",
                 color=0xf8bbd0
             )
             await interaction.response.send_message(embed=embed_success, ephemeral=False)
