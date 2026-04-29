@@ -99,9 +99,11 @@ class GreetGroup(app_commands.Group):
             update_guild_config(gid, "greet", "message", message)
         if gid in _config_locks and not lock.locked(): _config_locks.pop(gid, None)
         
+        # [FIX] Dùng apply_variables để render biến ngay trong phản hồi cho Admin
+        display_msg = apply_variables(message, interaction.guild, interaction.user)
         # Văn phong (2)
         embed = discord.Embed(
-            title=f"{Emojis.MATTRANG} cập nhật tin nhắn `greet` thành công: {message}",
+            title=f"{Emojis.MATTRANG} cập nhật tin nhắn `greet` thành công: {display_msg}",
             color=0xf8bbd0
         )
         await interaction.response.send_message(embed=embed, ephemeral=False)
@@ -181,9 +183,11 @@ class LeaveGroup(app_commands.Group):
             update_guild_config(gid, "leave", "message", message)
         if gid in _config_locks and not lock.locked(): _config_locks.pop(gid, None)
         
+        # [FIX] Dịch biến cho Admin xem preview
+        display_msg = apply_variables(message, interaction.guild, interaction.user)
         # Mirror Greet Style
         embed = discord.Embed(
-            title=f"{Emojis.MATTRANG} cập nhật tin nhắn `leave` thành công: {message}",
+            title=f"{Emojis.MATTRANG} cập nhật tin nhắn `leave` thành công: {display_msg}",
             color=0xf8bbd0
         )
         await interaction.response.send_message(embed=embed, ephemeral=False)
