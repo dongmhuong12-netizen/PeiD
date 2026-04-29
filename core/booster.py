@@ -11,6 +11,7 @@ from core.embed_storage import load_embed
 from core.greet_leave import send_config_message
 from core.booster_engine import assign_correct_level, sync_all_boosters
 from core.booster_storage import get_guild_config, save_guild_config
+from core.variable_engine import apply_variables # FIX: Nạp engine để xử lý toàn bộ biến mention
 # IMPORT EMOJI HỆ THỐNG
 from utils.emojis import Emojis
 
@@ -64,8 +65,8 @@ class BoostGroup(app_commands.Group):
         config["message"] = text
         await save_guild_config(interaction.guild.id, config)
         
-        # FIX: Hiển thị biến {user} thành mention thực tế trong thông báo thành công
-        display_text = text.replace("{user}", interaction.user.mention)
+        # FIX: Sử dụng apply_variables để hiển thị đầy đủ các biến mention thay vì chỉ mỗi {user}
+        display_text = apply_variables(text, interaction.guild, interaction.user)
         embed = discord.Embed(
             title=f"{Emojis.MATTRANG} cập nhật tin nhắn `boost` thành công: {display_text}",
             color=0xf8bbd0
@@ -186,4 +187,4 @@ async def setup(bot: commands.Bot):
         if not any(c.name == "boost" for c in p_cmd.commands):
             p_cmd.add_command(BoostGroup())
     await bot.add_cog(BoosterListener(bot))
-    print("[load] success: core.booster (fixed text & mention variables)", flush=True)
+    print("[load] success: core.booster (fixed variables and mention formatting)", flush=True)
