@@ -33,9 +33,9 @@ class BoostGroup(app_commands.Group):
         config["booster_role"] = role.id
         await save_guild_config(interaction.guild.id, config)
         
-        # CHỈ GIỮ TITLE - Đã thêm khoảng cách sau Emoji và fix mention
+        # [FIX] Dùng .name để tránh lộ mã ID thô trong Title
         embed = discord.Embed(
-            title=f"{Emojis.MATTRANG} cập nhật role `booster` thành công: {role.mention}",
+            title=f"{Emojis.MATTRANG} cập nhật role `booster` thành công: {role.name}",
             color=0xf8bbd0
         )
         await interaction.response.send_message(embed=embed, ephemeral=False)
@@ -49,10 +49,11 @@ class BoostGroup(app_commands.Group):
         """(2) cập nhật kênh thông báo"""
         config = await get_guild_config(interaction.guild.id)
         config["channel"] = channel.id
-        await save_guild_config(interaction.guild.id, config)
+        await save_guild_config(interaction.guild.id, channel)
         
+        # [FIX] Title Embed dùng .name
         embed = discord.Embed(
-            title=f"{Emojis.MATTRANG} cập nhật kênh `boost` thành công: {channel.mention}",
+            title=f"{Emojis.MATTRANG} cập nhật kênh `boost` thành công: {channel.name}",
             color=0xf8bbd0
         )
         await interaction.response.send_message(embed=embed, ephemeral=False)
@@ -104,7 +105,8 @@ class BoostGroup(app_commands.Group):
         config = await get_guild_config(interaction.guild.id)
         role_id = config.get("booster_role")
         role_obj = interaction.guild.get_role(role_id) if role_id else None
-        role_mention = role_obj.mention if role_obj else "`none`"
+        # [FIX] Đảm bảo rolesetup hiện mention chuẩn trong description
+        rolesetup = role_obj.mention if role_obj else "`none`"
 
         # [KIM BÀI MIỄN TỬ] Kích hoạt bảo vệ 5 phút trong State
         bypass_key = f"boost_test_{interaction.guild.id}_{interaction.user.id}"
@@ -121,9 +123,10 @@ class BoostGroup(app_commands.Group):
         success = await send_config_message(interaction.guild, interaction.user, "booster")
         
         if success:
+            # [FIX] Khôi phục chính xác văn phong yêu cầu và mention chuẩn cho rolesetup
             embed = discord.Embed(
                 title=f"{Emojis.MATTRANG} test hệ thống `boost` thành công",
-                description=f"**yiyi** đã gán role tạm thời cho {interaction.user.mention}. vai trò này sẽ được giữ trong **5 phút** để cậu kiểm tra trước khi vòng lặp định kỳ dọn dẹp.",
+                description=f"yiyi sẽ cho phép cậu giữ role {rolesetup} trong 5 phút tới để kiểm tra cấu hình. sau 5 phút, yiyi sẽ gỡ role nếu cậu không có boost nhé",
                 color=0xf8bbd0
             )
         else:
