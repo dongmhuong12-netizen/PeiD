@@ -59,7 +59,7 @@ async def process_image_upload(interaction: discord.Interaction, file: discord.A
         # 6. GIỮ NGUYÊN THỨ TỰ DNA CỦA NGUYỆT: Text -> Link xanh -> Code block
         # Cặp dấu < > đảm bảo link hiện full nhưng không đẻ thêm view ảnh thứ 2
         response_text = (
-            f"{Emojis.MATTRANG}tạo link thành công, có thể sao chép link bên dưới để sử dụng\n"
+            f"{Emojis.MATTRANG}  tạo link thành công, có thể sao chép link bên dưới để sử dụng\n"
             "lưu ý: **không được** xoá link hoặc kênh này, nếu không link sẽ không hợp lệ.\n\n"
             f"<{cdn_url}>\n"
             f"```{cdn_url}```"
