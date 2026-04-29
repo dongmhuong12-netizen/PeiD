@@ -283,8 +283,9 @@ class ReactionRoleModal(discord.ui.Modal, title="reaction role setup"):
 # =========================
 
 class EmbedUIView(discord.ui.View):
-    def __init__(self, guild_id: int, name: str, data: dict, timeout: float = 600.0):
-        super().__init__(timeout=timeout)
+    # [FIX] Ép timeout=None để View không bao giờ bị liệt
+    def __init__(self, guild_id: int, name: str, data: dict):
+        super().__init__(timeout=None)
         self.guild_id = str(guild_id)
         self.name = name
         self.data = data
@@ -303,12 +304,12 @@ class EmbedUIView(discord.ui.View):
                     "mode": group.get("mode", "single")
                 }
 
-        # [VÁ LỖI] Cơ chế giải phóng RAM: Dọn dẹp các view cũ cùng key trước khi nạp mới
+        # [VÁ LỖI] Cơ chế giải phóng RAM: Dọn dẹp các view cũ
         key = f"{self.guild_id}:{name}"
         if key in ACTIVE_EMBED_VIEWS:
             for old_view in ACTIVE_EMBED_VIEWS[key]:
                 try:
-                    old_view.stop() # Dừng tiến trình lắng nghe của view cũ
+                    old_view.stop()
                 except:
                     pass
         ACTIVE_EMBED_VIEWS[key] = [self]
@@ -354,22 +355,23 @@ class EmbedUIView(discord.ui.View):
         match = re.search(r'\d+', raw_str)
         return match.group() if match else None
 
-    @discord.ui.button(label="edit information (tiêu đề / mô tả / màu sắc)", style=discord.ButtonStyle.secondary, row=0)
+    # [FIX] Thêm custom_id cố định cho tất cả các nút bấm để đảm bảo Persistent View
+    @discord.ui.button(label="edit information (tiêu đề / mô tả / màu sắc)", style=discord.ButtonStyle.secondary, row=0, custom_id="yiyi:embed:edit_info")
     async def edit_info(self, interaction, button):
         await interaction.response.send_modal(EditInformationModal(self))
 
-    @discord.ui.button(label="edit author", style=discord.ButtonStyle.secondary, row=1)
+    @discord.ui.button(label="edit author", style=discord.ButtonStyle.secondary, row=1, custom_id="yiyi:embed:edit_author")
     async def edit_author(self, interaction, button):
         await interaction.response.send_modal(EditAuthorModal(self))
 
-    @discord.ui.button(label="edit footer", style=discord.ButtonStyle.secondary, row=1)
+    @discord.ui.button(label="edit footer", style=discord.ButtonStyle.secondary, row=1, custom_id="yiyi:embed:edit_footer")
     async def edit_footer(self, interaction, button):
         await interaction.response.send_modal(EditFooterModal(self))
 
-    @discord.ui.button(label="set image", style=discord.ButtonStyle.secondary, row=1)
+    @discord.ui.button(label="set image", style=discord.ButtonStyle.secondary, row=1, custom_id="yiyi:embed:set_image")
     async def set_image(self, interaction, button):
         await interaction.response.send_modal(EditImageModal(self))
 
-    @discord.ui.button(label="reaction roles (cài đặt emoji và role)", style=discord.ButtonStyle.secondary, row=2)
+    @discord.ui.button(label="reaction roles (cài đặt emoji và role)", style=discord.ButtonStyle.secondary, row=2, custom_id="yiyi:embed:reaction_roles")
     async def reaction_roles(self, interaction, button):
         await interaction.response.send_modal(ReactionRoleModal(self))
