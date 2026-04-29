@@ -80,9 +80,10 @@ class WellcomeGroup(app_commands.Group):
             update_guild_config(gid, "wellcome", "channel", channel.id)
         if gid in _config_locks and not lock.locked(): _config_locks.pop(gid, None)
         
+        # [FIX] Dùng .name để tránh lộ mã ID thô trong Title
         # Văn phong mới: Chuyển sang Title Embed
         embed = discord.Embed(
-            title=f"{Emojis.MATTRANG} đặt kênh `wellcome` thành công: {channel.mention}",
+            title=f"{Emojis.MATTRANG} đặt kênh `wellcome` thành công: {channel.name}",
             color=0xf8bbd0
         )
         await interaction.response.send_message(embed=embed, ephemeral=False)
@@ -96,9 +97,11 @@ class WellcomeGroup(app_commands.Group):
             update_guild_config(gid, "wellcome", "message", message)
         if gid in _config_locks and not lock.locked(): _config_locks.pop(gid, None)
         
+        # [FIX] Dịch biến ngay lập tức để hiện mention tag trong phản hồi
+        parsed_msg = apply_variables(message, interaction.guild, interaction.user)
         # Văn phong mới: Chuyển sang Title
         embed = discord.Embed(
-            title=f"{Emojis.MATTRANG} cập nhật tin nhắn `wellcome` thành công: {message}",
+            title=f"{Emojis.MATTRANG} cập nhật tin nhắn `wellcome` thành công: {parsed_msg}",
             color=0xf8bbd0
         )
         await interaction.response.send_message(embed=embed, ephemeral=False)
