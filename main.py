@@ -6,6 +6,8 @@ from aiohttp import web
 
 from core.state import State
 from core.cache_manager import force_flush 
+# [FIX] Import View để hồi sinh nút bấm khi Bot khởi động
+from core.embed_ui import EmbedUIView
 
 # Đảm bảo thư mục dữ liệu luôn tồn tại
 os.makedirs("data", exist_ok=True)
@@ -49,6 +51,14 @@ bot = commands.AutoShardedBot(
     intents=intents,
     help_command=None 
 )
+
+# [FIX] setup_hook: Đăng ký Persistent Views để nút bấm không bị liệt sau khi restart
+async def setup_hook():
+    # Đăng ký View vào trình lắng nghe toàn cục của Bot
+    bot.add_view(EmbedUIView(guild_id=0, name="persistent", data={}))
+    print("[UI] Persistent Views đã được đăng ký thành công!", flush=True)
+
+bot.setup_hook = setup_hook
 
 # =========================
 # EXTENSIONS (QUY HOẠCH CHIẾN LƯỢC)
