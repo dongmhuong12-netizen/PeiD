@@ -79,7 +79,13 @@ class WellcomeGroup(app_commands.Group):
         async with lock:
             update_guild_config(gid, "wellcome", "channel", channel.id)
         if gid in _config_locks and not lock.locked(): _config_locks.pop(gid, None)
-        await interaction.response.send_message(f"đặt kênh `wellcome` thành công: {channel.mention}", ephemeral=False)
+        
+        # Văn phong mới: Chuyển sang Title Embed
+        embed = discord.Embed(
+            title=f"{Emojis.MATTRANG} đặt kênh `wellcome` thành công: {channel.mention}",
+            color=0xf8bbd0
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=False)
 
     @app_commands.command(name="message", description="đặt nội dung tin nhắn wellcome")
     @app_commands.default_permissions(manage_guild=True)
@@ -90,8 +96,9 @@ class WellcomeGroup(app_commands.Group):
             update_guild_config(gid, "wellcome", "message", message)
         if gid in _config_locks and not lock.locked(): _config_locks.pop(gid, None)
         
+        # Văn phong mới: Chuyển sang Title
         embed = discord.Embed(
-            description=f"{Emojis.MATTRANG} cập nhật nội dung wellcome thành công: `{message}`",
+            title=f"{Emojis.MATTRANG} cập nhật tin nhắn `wellcome` thành công: {message}",
             color=0xf8bbd0
         )
         await interaction.response.send_message(embed=embed, ephemeral=False)
@@ -101,8 +108,10 @@ class WellcomeGroup(app_commands.Group):
     async def embed(self, interaction: discord.Interaction, name: str):
         # FIX: PHẢI AWAIT load_embed
         if not await load_embed(interaction.guild.id, name):
+            # Văn phong mới: Title & Description
             embed_err = discord.Embed(
-                description=f"{Emojis.HOICHAM} aree...hãy thử lại lần nữa nhé. yiyi không tìm thấy embed có tên `{name}`. xin hãy kiểm tra embed cậu muốn dùng cho wellcome bằng `/p embed edit`",
+                title=f"{Emojis.HOICHAM} aree... có lỗi gì đó ở đây",
+                description=f"hãy thử lại lần nữa nhé. **yiyi** không tìm thấy embed có tên `{name}`. xin hãy kiểm tra embed cậu muốn dùng cho wellcome bằng `/p embed edit`",
                 color=0xf8bbd0
             )
             return await interaction.response.send_message(embed=embed_err, ephemeral=False)
@@ -113,8 +122,9 @@ class WellcomeGroup(app_commands.Group):
             update_guild_config(gid, "wellcome", "embed", name)
         if gid in _config_locks and not lock.locked(): _config_locks.pop(gid, None)
         
+        # Văn phong mới: Chuyển sang Title
         embed_success = discord.Embed(
-            description=f"{Emojis.MATTRANG} gán embed `{name}` cho hệ thống `wellcome` thành công",
+            title=f"{Emojis.MATTRANG} cập nhật embed `{name}` cho hệ thống `wellcome` thành công",
             color=0xf8bbd0
         )
         await interaction.response.send_message(embed=embed_success, ephemeral=False)
@@ -125,13 +135,17 @@ class WellcomeGroup(app_commands.Group):
         success = await send_wellcome(interaction.guild, interaction.user)
         
         if success:
+            # Văn phong mới: Title & Description
             embed = discord.Embed(
-                description=f"{Emojis.MATTRANG} test `wellcome` thành công, hãy kiểm tra tại kênh được setup nhé. nếu không thấy, hãy kiểm tra lại quyền của bot hoặc quyền của kênh",
+                title=f"{Emojis.MATTRANG} test `wellcome` thành công",
+                description="hãy kiểm tra tại kênh được setup nhé. nếu không thấy embed, hãy kiểm tra lại quyền của **yiyi** hoặc quyền của kênh",
                 color=0xf8bbd0
             )
         else:
+            # Văn phong mới: Title & Description
             embed = discord.Embed(
-                description=f"{Emojis.HOICHAM} hmm..? có vẻ có lỗi về cấu hình kênh hoặc embed. hãy kiểm tra lại khi đã đầy đủ `channel` `embed` `message` trước khi test nhé",
+                title=f"{Emojis.HOICHAM} hmm..? có vẻ có lỗi về cấu hình kênh hoặc embed",
+                description="hãy kiểm tra lại khi đã đầy đủ `channel` `embed` `message` trước khi test nhé",
                 color=0xf8bbd0
             )
         await interaction.followup.send(embed=embed, ephemeral=False)
@@ -166,4 +180,4 @@ async def setup(bot: commands.Bot):
             p_cmd.add_command(WellcomeGroup())
     
     await bot.add_cog(WellcomeListener(bot))
-    print("[load] success: core.wellcome (injected into /p)", flush=True)
+    print("[load] success: core.wellcome (logic fixed & persona applied)", flush=True)
