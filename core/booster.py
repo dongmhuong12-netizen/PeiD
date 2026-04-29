@@ -9,7 +9,7 @@ from core.state import State
 from core.cache_manager import get_raw, mark_dirty, save
 from core.embed_storage import load_embed
 from core.greet_leave import send_config_message
-from core.booster_engine import assign_correct_level
+from core.booster_engine import assign_correct_level, sync_all_boosters
 from core.booster_storage import get_guild_config, save_guild_config
 # IMPORT EMOJI HỆ THỐNG
 from utils.emojis import Emojis
@@ -32,7 +32,7 @@ class BoostGroup(app_commands.Group):
         config["booster_role"] = role.id
         await save_guild_config(interaction.guild.id, config)
         
-        # Văn phong (1)
+        # Văn phong (1) - TITLE EMBED
         embed = discord.Embed(
             title=f"{Emojis.MATTRANG} cập nhật role `booster` thành công: {role.mention}",
             color=0xf8bbd0
@@ -40,7 +40,6 @@ class BoostGroup(app_commands.Group):
         await interaction.response.send_message(embed=embed, ephemeral=False)
 
         # LOGIC PROACTIVE: tự động quét toàn server để gán role cho người đang boost
-        from core.booster_engine import sync_all_boosters
         asyncio.create_task(sync_all_boosters(interaction.guild))
 
     @app_commands.command(name="channel", description="đặt kênh thông báo khi có người boost")
@@ -51,7 +50,7 @@ class BoostGroup(app_commands.Group):
         config["channel"] = channel.id
         await save_guild_config(interaction.guild.id, config)
         
-        # Văn phong (2)
+        # Văn phong (2) - TITLE EMBED
         embed = discord.Embed(
             title=f"{Emojis.MATTRANG} cập nhật kênh `boost` thành công: {channel.mention}",
             color=0xf8bbd0
@@ -66,7 +65,7 @@ class BoostGroup(app_commands.Group):
         config["message"] = text
         await save_guild_config(interaction.guild.id, config)
         
-        # Văn phong (3)
+        # Văn phong (3) - TITLE EMBED
         embed = discord.Embed(
             title=f"{Emojis.MATTRANG} cập nhật tin nhắn `boost` thành công: {text}",
             color=0xf8bbd0
@@ -78,7 +77,7 @@ class BoostGroup(app_commands.Group):
     async def embed(self, interaction: discord.Interaction, name: str):
         """(4) & (5) gán embed mẫu"""
         if not await load_embed(interaction.guild.id, name):
-            # Văn phong (4)
+            # Văn phong (4) - TITLE & DESCRIPTION
             embed_err = discord.Embed(
                 title=f"{Emojis.HOICHAM} aree... có lỗi gì đó ở đây",
                 description=f"yiyi không tìm thấy embed có tên {name}. hãy kiểm tra lại bằng `/p embed edit` nhé",
@@ -90,7 +89,7 @@ class BoostGroup(app_commands.Group):
         config["embed"] = name
         await save_guild_config(interaction.guild.id, config)
         
-        # Văn phong (5)
+        # Văn phong (5) - TITLE EMBED
         embed_success = discord.Embed(
             title=f"{Emojis.MATTRANG} cập nhật embed {name} cho hệ thống `boost` thành công",
             color=0xf8bbd0
@@ -100,38 +99,39 @@ class BoostGroup(app_commands.Group):
     @app_commands.command(name="test", description="gửi thử tin nhắn chúc mừng boost và bảo vệ role 5p")
     @app_commands.default_permissions(manage_guild=True)
     async def test(self, interaction: discord.Interaction):
-        """(6) & (7) giả lập gán role và bảo vệ bypass"""
+        """(6) & (7) giả lập gán role thông qua Engine và bảo vệ bypass"""
         await interaction.response.defer(ephemeral=False)
         
         config = await get_guild_config(interaction.guild.id)
         role_id = config.get("booster_role")
         role_mention = "`none`"
         
-        # LOGIC: Gán role vật lý cho người test
+        # Lấy mention để hiển thị trong embed phản hồi
         if role_id:
             role = interaction.guild.get_role(role_id)
             if role:
-                try:
-                    await interaction.user.add_roles(role)
-                    role_mention = role.mention
-                except:
-                    pass
+                role_mention = role.mention
 
-        # [BYPASS LOGIC] Kích hoạt kim bài miễn tử 5 phút
+        # [VIRTUAL BOOST LOGIC] Kích hoạt kim bài miễn tử 5 phút trong RAM
         bypass_key = f"boost_test_{interaction.user.id}"
         await State.set_ui(bypass_key, {"expiry": time.time() + 300})
         
+        # Ra lệnh cho Engine thực thi việc gán role ngay lập tức cho người test
+        # Engine sẽ tự động check State và gán role cho cậu
+        asyncio.create_task(assign_correct_level(interaction.user))
+        
+        # Gửi thử tin nhắn chúc mừng vào kênh đã setup
         success = await send_config_message(interaction.guild, interaction.user, "booster")
         
         if success:
-            # Văn phong (6)
+            # Văn phong (6) - TITLE & DESCRIPTION
             embed = discord.Embed(
                 title=f"{Emojis.MATTRANG} hệ thống `boost` được giả lập thành công",
                 description=f"yiyi sẽ cho phép cậu giữ role {role_mention} trong 5 phút tới. sau 5 phút, yiyi sẽ gỡ role nếu cậu không có boost nhé {Emojis.YIYITIM}",
                 color=0xf8bbd0
             )
         else:
-            # Văn phong (7)
+            # Văn phong (7) - TITLE & DESCRIPTION
             embed = discord.Embed(
                 title=f"{Emojis.HOICHAM} aree... có lỗi gì đó ở đây",
                 description="hãy đảm bảo rằng cậu đã setup đủ cấu hình cho `booster`, hoặc xem lại quyền của yiyi và quyền của kênh nhé",
@@ -160,27 +160,22 @@ class BoosterListener(commands.Cog):
         """chỉ xử lý khi có biến động trạng thái boost thực tế hoặc hết hạn test"""
         if after.bot: return
         
-        # [CHỐT CHẶN BYPASS] Kiểm tra xem thành viên có đang trong 5 phút test không
-        bypass_key = f"boost_test_{after.id}"
-        state_data = await State.get_ui(bypass_key)
-        if state_data and time.time() < state_data.get("expiry", 0):
-            return # Đang trong thời gian bảo vệ, không gỡ role
-
         # [LOGIC ĐA ĐIỀM] Kiểm tra thay đổi boost hoặc thay đổi role sau khi hết hạn test
+        # Engine sẽ tự động check State để biết có đang trong 5p test hay không
         boost_changed = before.premium_since != after.premium_since
         role_changed = before.roles != after.roles
         
         if boost_changed or role_changed:
+            # gọi engine để gán hoặc gỡ role booster gốc
+            task_sync = asyncio.create_task(assign_correct_level(after))
+            self._tasks.add(task_sync)
+            task_sync.add_done_callback(self._tasks.discard)
+
             # gửi tin nhắn chào mừng nếu là boost mới
             if before.premium_since is None and after.premium_since is not None:
                 task_welcome = asyncio.create_task(send_config_message(after.guild, after, "booster"))
                 self._tasks.add(task_welcome)
                 task_welcome.add_done_callback(self._tasks.discard)
-            
-            # gọi engine để gán hoặc gỡ role booster gốc
-            task_sync = asyncio.create_task(assign_correct_level(after))
-            self._tasks.add(task_sync)
-            task_sync.add_done_callback(self._tasks.discard)
 
 async def setup(bot: commands.Bot):
     p_cmd = bot.tree.get_command("p")
