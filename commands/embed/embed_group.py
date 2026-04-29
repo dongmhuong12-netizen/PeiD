@@ -64,12 +64,19 @@ class EmbedGroup(app_commands.Group):
         
         # Validation chuẩn IT Pro
         if await load_embed(guild.id, name):
-            return await interaction.followup.send(f"embed `{name}` đã tồn tại, nếu cậu không tìm thấy embed, hãy dùng `/p embed edit` để tìm lại nhé")
+            # Nhóm 1a: Phản hồi Embed
+            embed_exists = discord.Embed(
+                title=f"{Emojis.MATTRANG} embed tên `{name}` đã tồn tại",
+                description=f"nếu cậu không tìm thấy embed, hãy thử dùng `/p embed edit` để tìm lại nhé",
+                color=0xf8bbd0
+            )
+            return await interaction.followup.send(embed=embed_exists)
 
         key = f"{guild.id}:{name}"
         _cleanup_views(key)
 
         # Khởi tạo bản ghi ban đầu
+        # Nhóm 1b: Giữ nguyên logic/phản hồi lỗi
         success, error = await EmbedSystem.create_embed(guild.id, name)
         
         if not success:
@@ -82,7 +89,7 @@ class EmbedGroup(app_commands.Group):
         view = EmbedUIView(guild.id, name, embed_data, timeout=600.0)
         embed = view.build_embed()
 
-        # TEXT ĐÃ ĐƯỢC XOÁ KHOẢNG CÁCH DÒNG (Dùng \n đơn) VÀ ĐÓNG KHUNG BIẾN/LỆNH
+        # Nhóm 1c: Giữ nguyên văn phong thành công
         msg = await interaction.followup.send(
             content=(
                 f"• đã tạo embed với tên `{name}`\n"
@@ -102,7 +109,14 @@ class EmbedGroup(app_commands.Group):
         await interaction.response.defer(ephemeral=False)
         
         data = await load_embed(interaction.guild.id, name)
-        if not data: return await interaction.followup.send(f"không tìm thấy embed có tên `{name}`, hãy nhập lại thử nhé")
+        if not data:
+            # Nhóm 1d: Phản hồi Embed Title & Description
+            embed_none = discord.Embed(
+                title=f"{Emojis.HOICHAM} hmm...?",
+                description=f"**yiyi** không tìm thấy embed có tên `{name}`, xin hãy nhập lại lần nữa",
+                color=0xf8bbd0
+            )
+            return await interaction.followup.send(embed=embed_none)
 
         key = f"{interaction.guild.id}:{name}"
         _cleanup_views(key)
@@ -111,8 +125,9 @@ class EmbedGroup(app_commands.Group):
         view = EmbedUIView(interaction.guild.id, name, data, timeout=600.0)
         embed = view.build_embed()
 
+        # Nhóm 1e: Text thuần sửa cẩn thận
         msg = await interaction.followup.send(
-            content=f"tìm embed `{name}` thành công, hãy tiếp tục chỉnh sửa", 
+            content=f"• **yiyi** mang embed về rồi, xin hãy tiếp tục chỉnh sửa {Emojis.YIYITIM}", 
             embed=embed, 
             view=view
         )
@@ -124,15 +139,16 @@ class EmbedGroup(app_commands.Group):
         # Async fetch
         data = await load_embed(interaction.guild.id, name)
         if not data: 
-            # PHẢN HỒI BẰNG EMBED MÀU f8bbd0 THEO YÊU CẦU
+            # Nhóm 2a: Split Title/Description
             embed_err = discord.Embed(
-                description=f"{Emojis.HOICHAM} aree...hãy thử lại lần nữa nhé. yiyi không tìm thấy embed có tên `{name}`. xin hãy kiểm tra embed cậu muốn show bằng `/p embed edit`",
+                title=f"{Emojis.HOICHAM} aree...hãy thử lại lần nữa nhé.",
+                description=f"**yiyi** không tìm thấy embed có tên `{name}`. xin hãy kiểm tra embed cậu muốn show bằng `/p embed edit`",
                 color=0xf8bbd0
             )
             return await interaction.response.send_message(embed=embed_err, ephemeral=False)
         
-        # IT Pro: Thông báo trạng thái gửi (ephemeral=False)
-        await interaction.response.send_message(f"embed `{name}` gửi đi thành công", ephemeral=False)
+        # Nhóm 2b: Text thuần
+        await interaction.response.send_message(f"{Emojis.MATTRANG} embed '{name}' gửi đi thành công", ephemeral=False)
         
         await send_embed(interaction.channel, data, interaction.guild, interaction.user, embed_name=name)
 
@@ -142,8 +158,8 @@ class EmbedGroup(app_commands.Group):
         # Await delete task
         await delete_embed(interaction.guild.id, name)
         _cleanup_views(f"{interaction.guild.id}:{name}")
-        # Kết quả công khai
-        await interaction.response.send_message(f"embed `{name}` đã được xoá, có thể tạo embed mới bằng tên của embed này", ephemeral=False)
+        # Nhóm 2c: Text thuần
+        await interaction.response.send_message(f"{Emojis.MATTRANG} embed '{name}' đã được xoá thành công. có thể tạo lại embed mới bằng tên của embed này", ephemeral=False)
 
 # =============================
 # INJECTION (KHÔI PHỤC MẠCH ĐĂNG KÝ LỆNH CHUẨN)
