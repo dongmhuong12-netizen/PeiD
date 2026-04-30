@@ -15,18 +15,17 @@ _engine_locks = defaultdict(asyncio.Lock)
 # ASSIGN CORRECT ROLE (Atomic Sync)
 # ==============================
 
-async def assign_correct_level(member: discord.Member, semaphore: asyncio.Semaphore = None):
+async def assign_correct_level(member: discord.Member, semaphore: asyncio.Semaphore = None, base_role: discord.Role = None):
     """
     hàm cốt lõi: xử lý gán/gỡ booster role gốc.
     logic hội tụ: kiểm tra (boost thật) hoặc (đang trong thời gian test).
     """
-    # [VÁ LỖI] Sử dụng Semaphore nếu được truyền vào để kiểm soát lưu lượng trên server 100k+
     if semaphore:
         async with semaphore:
-            return await _execute_assign_logic(member)
-    return await _execute_assign_logic(member)
+            return await _execute_assign_logic(member, base_role)
+    return await _execute_assign_logic(member, base_role)
 
-async def _execute_assign_logic(member: discord.Member):
+async def _execute_assign_logic(member: discord.Member, base_role: discord.Role = None):
     """Logic thực thi gán/gỡ tách biệt để đảm bảo atomic"""
     guild = member.guild
     
@@ -39,23 +38,21 @@ async def _execute_assign_logic(member: discord.Member):
     lock = _engine_locks[guild.id]
     async with lock:
         try:
-            config = await get_guild_config(guild.id)
-            if not config: return
-
             bot_member = guild.me
             if not bot_member or not bot_member.guild_permissions.manage_roles:
                 return
 
-            # lấy booster role gốc từ cấu hình
-            base_role_id = config.get("booster_role")
-            if not base_role_id: return
-
-            try:
-                base_role = guild.get_role(int(base_role_id))
-            except (ValueError, TypeError):
-                return
-                
-            if not base_role: return
+            # [TỐI ƯU]: Chỉ nạp Config nếu base_role chưa được truyền vào
+            if base_role is None:
+                config = await get_guild_config(guild.id)
+                if not config: return
+                base_role_id = config.get("booster_role")
+                if not base_role_id: return
+                try:
+                    base_role = guild.get_role(int(base_role_id))
+                except (ValueError, TypeError):
+                    return
+                if not base_role: return
 
             # [LOGIC HỘI TỤ]: Phải có role nếu (boost thật) HOẶC (đang test)
             is_boosting_real = member.premium_since is not None
@@ -64,16 +61,22 @@ async def _execute_assign_logic(member: discord.Member):
 
             # thực thi logic gán/gỡ atomic
             if should_have_role and not has_role:
-                # kiểm tra hierarchy trước khi gán
+                # [RESTORE & FIX]: Khôi phục check phân cấp gốc + bọc Try/Except bảo vệ API
                 if base_role < bot_member.top_role:
-                    await member.add_roles(base_role, reason="Booster Sync: Active/Test")
+                    try:
+                        await member.add_roles(base_role, reason="Booster Sync: Active/Test")
+                    except discord.Forbidden:
+                        pass
                     
             elif not should_have_role and has_role:
                 # [BẢO VỆ]: Tuyệt đối không gỡ nếu đang trong trạng thái testing
                 if not is_testing:
-                    # kiểm tra hierarchy trước khi gỡ
+                    # [RESTORE]: Khôi phục check phân cấp gốc
                     if base_role < bot_member.top_role:
-                        await member.remove_roles(base_role, reason="Booster Sync: Ended/Expired")
+                        try:
+                            await member.remove_roles(base_role, reason="Booster Sync: Ended/Expired")
+                        except discord.Forbidden:
+                            pass
 
         except Exception as e:
             # Chỉ in lỗi nếu thực sự nghiêm trọng để tránh spam log server 100k
@@ -92,11 +95,34 @@ async def sync_all_boosters(guild: discord.Guild):
     """
     hàm truy quét: tự động tìm toàn bộ booster trong server để đồng bộ role `booster`.
     """
-    # [VÁ LỖI] Semaphore: Chỉ cho phép xử lý 50 member cùng lúc để bảo vệ RAM và tránh Rate Limit
-    # Với server 100k+, quăng 100k task vào gather cùng lúc sẽ làm sập bot.
+    # [FIX CHÍ MẠNG]: Đọc Config 1 lần duy nhất cho toàn server
+    config = await get_guild_config(guild.id)
+    if not config: return
+    role_id = config.get("booster_role")
+    if not role_id: return
+    
+    try:
+        base_role = guild.get_role(int(role_id))
+    except (ValueError, TypeError):
+        return
+    if not base_role: return
+
+    if not guild.me.guild_permissions.manage_roles:
+        return
+
+    # [CƠ CHẾ TÌM BOOSTER TỐI ƯU 100K+]: Chỉ gom những người liên quan (O(1) thay vì O(N))
+    actual_boosters = set(guild.premium_subscribers)
+    role_holders = set(base_role.members)
+    target_members = actual_boosters.union(role_holders)
+
+    if not target_members:
+        return
+
+    # [VÁ LỖI] Semaphore: Phân luồng 50 task/lần để bảo vệ RAM
     sem = asyncio.Semaphore(50)
     
-    tasks = [assign_correct_level(member, semaphore=sem) for member in guild.members if not member.bot]
+    # Truyền thẳng base_role xuống để Engine không phải đọc lại JSON
+    tasks = [assign_correct_level(member, semaphore=sem, base_role=base_role) for member in target_members if not member.bot]
     
     if tasks:
         # return_exceptions=True để 1 task lỗi không làm dừng toàn bộ tiến trình quét
