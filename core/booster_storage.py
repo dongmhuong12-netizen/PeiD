@@ -19,7 +19,7 @@ def _get_cache():
     """
     cache = get_raw(FILE_KEY)
     if not isinstance(cache, dict):
-        print(f"[STORAGE WARNING] Cache '{FILE_KEY}' bị hỏng. Đ đang reset...", flush=True)
+        print(f"[STORAGE WARNING] Cache '{FILE_KEY}' bị hỏng. Đang reset...", flush=True)
         cache = {}
         update(FILE_KEY, cache)
         mark_dirty(FILE_KEY)
@@ -40,23 +40,29 @@ async def get_guild_config(guild_id: int):
     config = db.get(guild_id_str, {})
     if not isinstance(config, dict): config = {}
 
+    # [VÁ LỖI NỘI SOI]: Đảm bảo các ID luôn là string/int sạch để Engine không bị crash
+    # Purge sạch các data rác từ hệ thống level cũ nếu còn sót lại
+    clean_config = {
+        "booster_role": config.get("booster_role"),
+        "channel": config.get("channel"),
+        "message": config.get("message"),
+        "embed": config.get("embed")
+    }
+    
     # Trả về bản sao để an toàn cho RAM gốc
-    return copy.deepcopy(config)
+    return copy.deepcopy(clean_config)
 
 async def save_guild_config(guild_id: int, config: dict):
     """
     Lưu cấu hình booster gốc vào bộ nhớ.
-    Đã loại bỏ ép ghi để tối ưu IO cho 100k+ server.
     """
     db = _get_cache()
     guild_id_str = str(guild_id)
         
     db[guild_id_str] = config
     
-    # 1. Đánh dấu bẩn để CacheManager tự động lưu ngầm định kỳ
+    # Đánh dấu bẩn để CacheManager tự động lưu ngầm định kỳ
     mark_dirty(FILE_KEY)
-    
-    # [TỐI ƯU IO] Đã loại bỏ await save(FILE_KEY) để giải phóng bottleneck cho Disk I/O
     
     print(f"[STORAGE] **yiyi** đã ghi nhận cấu hình Booster cho Guild {guild_id_str}", flush=True)
 
