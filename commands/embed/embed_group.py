@@ -127,7 +127,7 @@ class EmbedGroup(app_commands.Group):
 
         # Nhóm 1e: Text thuần sửa cẩn thận
         msg = await interaction.followup.send(
-            content=f"• **yiyi** mang embed về rồi, xin hãy tiếp tục chỉnh sửa {Emojis.YIYITIM}", 
+            content=f" **yiyi** mang embed về rồi, xin hãy tiếp tục chỉnh sửa {Emojis.YIYITIM}", 
             embed=embed, 
             view=view
         )
@@ -148,7 +148,7 @@ class EmbedGroup(app_commands.Group):
             return await interaction.response.send_message(embed=embed_err, ephemeral=False)
         
         # Nhóm 2b: Text thuần
-        await interaction.response.send_message(f"{Emojis.MATTRANG} embed '{name}' gửi đi thành công", ephemeral=False)
+        await interaction.response.send_message(f"{Emojis.MATTRANG} embed `{name}` gửi đi thành công", ephemeral=False)
         
         await send_embed(interaction.channel, data, interaction.guild, interaction.user, embed_name=name)
 
@@ -159,7 +159,7 @@ class EmbedGroup(app_commands.Group):
         await delete_embed(interaction.guild.id, name)
         _cleanup_views(f"{interaction.guild.id}:{name}")
         # Nhóm 2c: Text thuần
-        await interaction.response.send_message(f"{Emojis.MATTRANG} embed '{name}' đã được xoá thành công. có thể tạo lại embed mới bằng tên của embed này", ephemeral=False)
+        await interaction.response.send_message(f"{Emojis.MATTRANG} embed `{name}` đã được xoá thành công. có thể tạo lại embed mới bằng tên của embed này", ephemeral=False)
 
 # =============================
 # INJECTION (KHÔI PHỤC MẠCH ĐĂNG KÝ LỆNH CHUẨN)
