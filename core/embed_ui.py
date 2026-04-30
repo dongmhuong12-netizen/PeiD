@@ -283,8 +283,9 @@ class ReactionRoleModal(discord.ui.Modal, title="reaction role setup"):
 # =========================
 
 class EmbedUIView(discord.ui.View):
-    # [FIX] Ép timeout=None để View không bao giờ bị liệt
-    def __init__(self, guild_id: int, name: str, data: dict):
+    # [FIX CHÍ MẠNG] Trả lại biến timeout để tránh lỗi crash TypeError khi gọi lệnh create
+    def __init__(self, guild_id: int, name: str, data: dict, timeout: float = 600.0):
+        # Ép timeout=None để các nút bấm không bao giờ bị liệt
         super().__init__(timeout=None)
         self.guild_id = str(guild_id)
         self.name = name
@@ -355,7 +356,7 @@ class EmbedUIView(discord.ui.View):
         match = re.search(r'\d+', raw_str)
         return match.group() if match else None
 
-    # [FIX] Thêm custom_id cố định cho tất cả các nút bấm để đảm bảo Persistent View
+    # [FIX] Đã thêm custom_id cố định cho tất cả các nút bấm
     @discord.ui.button(label="edit information (tiêu đề / mô tả / màu sắc)", style=discord.ButtonStyle.secondary, row=0, custom_id="yiyi:embed:edit_info")
     async def edit_info(self, interaction, button):
         await interaction.response.send_modal(EditInformationModal(self))
