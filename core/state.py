@@ -161,9 +161,9 @@ class State:
         cache = _get()
         data = cache["ui"].get(key)
         
-        # [FIX] Tự động xóa rác nếu phát hiện đã hết hạn test
+        # [FIX] Kiểm tra expiry: Dùng dấu >= để dọn dẹp chính xác tại thời điểm hết hạn
         if data and isinstance(data, dict) and "expiry" in data:
-            if time.time() > data["expiry"]:
+            if time.time() >= data["expiry"]:
                 async with _lock:
                     def op(cache):
                         cache["ui"].pop(key, None)
