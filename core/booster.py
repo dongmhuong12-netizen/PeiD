@@ -33,7 +33,7 @@ class BoostGroup(app_commands.Group):
         config["booster_role"] = role.id
         await save_guild_config(interaction.guild.id, config)
         
-        # [FIX] Dùng .name để tránh lộ mã ID thô trong Title
+        # [FIX] Dùng .name trong Title để không bị lộ mã ID thô
         embed = discord.Embed(
             title=f"{Emojis.MATTRANG} cập nhật role `booster` thành công: {role.name}",
             color=0xf8bbd0
@@ -49,7 +49,8 @@ class BoostGroup(app_commands.Group):
         """(2) cập nhật kênh thông báo"""
         config = await get_guild_config(interaction.guild.id)
         config["channel"] = channel.id
-        await save_guild_config(interaction.guild.id, channel)
+        # [FIX CHÍ MẠNG]: Phải lưu config (dict), không được lưu channel (object) gây crash db
+        await save_guild_config(interaction.guild.id, config)
         
         # [FIX] Title Embed dùng .name
         embed = discord.Embed(
@@ -123,7 +124,7 @@ class BoostGroup(app_commands.Group):
         success = await send_config_message(interaction.guild, interaction.user, "booster")
         
         if success:
-            # [FIX] Khôi phục chính xác văn phong yêu cầu và mention chuẩn cho rolesetup
+            # [RESTORE]: Trả lại chính xác văn phong Nguyệt yêu cầu
             embed = discord.Embed(
                 title=f"{Emojis.MATTRANG} test hệ thống `boost` thành công",
                 description=f"yiyi sẽ cho phép cậu giữ role {rolesetup} trong 5 phút tới để kiểm tra cấu hình. sau 5 phút, yiyi sẽ gỡ role nếu cậu không có boost nhé",
