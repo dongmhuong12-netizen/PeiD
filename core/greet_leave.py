@@ -21,16 +21,27 @@ async def send_config_message(guild: discord.Guild, member: discord.Member, sect
     """
     xử lý gửi tin nhắn greet/leave/booster tập trung.
     """
+    # 1. nạp cấu hình từ bộ nhớ mặc định
     config = get_section(guild.id, section)
     
-    # [LOGIC GIỮ LẠI]: Fallback cho Booster thường (không phải level)
-    if section == "booster" and (not config or not config.get("channel")):
+    # [LOGIC FIX]: Nếu là booster, ép buộc nạp thêm từ booster_levels để tránh sót data setup
+    if section == "booster":
         from core.cache_manager import get_raw
         db = get_raw("booster_levels")
-        config = db.get(str(guild.id), {})
+        boost_data = db.get(str(guild.id), {})
+        
+        # Hợp nhất dữ liệu: ưu tiên dữ liệu từ booster_levels nếu greet_storage bị rỗng
+        if not config or not config.get("channel"):
+            config = boost_data
+        else:
+            # Hợp nhất các trường còn thiếu
+            for key in ["channel", "message", "embed", "booster_role"]:
+                if key not in config and key in boost_data:
+                    config[key] = boost_data[key]
 
     if not config: return False
 
+    # nạp các trường dữ liệu (hỗ trợ cả legacy keys)
     channel_id = config.get("channel") or config.get("booster_channel")
     message_text = config.get("message") or config.get("booster_message")
     embed_name = config.get("embed") or config.get("booster_embed")
@@ -57,6 +68,7 @@ async def send_config_message(guild: discord.Guild, member: discord.Member, sect
                 processed_data = apply_variables(embed_data, guild, member)
                 final_embed = _build_embed(processed_data)
 
+        # Trả về True nếu có ít nhất text hoặc embed để gửi
         if final_content or final_embed:
             await channel.send(content=final_content, embed=final_embed)
             return True
