@@ -22,9 +22,8 @@ async def assign_correct_level(member: discord.Member):
     """
     guild = member.guild
     
-    # [1] KIỂM TRA TRẠNG THÁI TEST (VIRTUAL BOOST)
-    # kiểm tra xem người dùng có đang được "miễn tử" bởi lệnh test không
-    bypass_key = f"boost_test_{member.id}"
+    # [FIX] Đã đồng bộ key với booster.py: thêm guild.id để tránh lệch pha bypass
+    bypass_key = f"boost_test_{guild.id}_{member.id}"
     state_data = await State.get_ui(bypass_key)
     is_testing = state_data and time.time() < state_data.get("expiry", 0)
 
@@ -36,6 +35,7 @@ async def assign_correct_level(member: discord.Member):
             if not config: return
 
             bot_member = guild.me
+            # [FIX] Kiểm tra quyền hạn Manage Roles tổng quát
             if not bot_member or not bot_member.guild_permissions.manage_roles:
                 return
 
@@ -43,7 +43,11 @@ async def assign_correct_level(member: discord.Member):
             base_role_id = config.get("booster_role")
             if not base_role_id: return
 
-            base_role = guild.get_role(int(base_role_id))
+            try:
+                base_role = guild.get_role(int(base_role_id))
+            except (ValueError, TypeError):
+                return
+                
             if not base_role: return
 
             # [LOGIC HỘI TỤ]: Phải có role nếu (boost thật) HOẶC (đang test)
@@ -53,14 +57,16 @@ async def assign_correct_level(member: discord.Member):
 
             # thực thi logic gán/gỡ atomic
             if should_have_role and not has_role:
-                # kiểm tra hierarchy trước khi gán
+                # kiểm tra hierarchy trước khi gán (Role yiyi phải cao hơn role setup)
                 if base_role < bot_member.top_role:
                     await member.add_roles(base_role, reason="Booster Sync: Active/Test")
                     
             elif not should_have_role and has_role:
-                # kiểm tra hierarchy trước khi gỡ
-                if base_role < bot_member.top_role:
-                    await member.remove_roles(base_role, reason="Booster Sync: Ended/Expired")
+                # [BẢO VỆ]: Chỉ gỡ nếu không trong trạng thái testing
+                if not is_testing:
+                    # kiểm tra hierarchy trước khi gỡ
+                    if base_role < bot_member.top_role:
+                        await member.remove_roles(base_role, reason="Booster Sync: Ended/Expired")
 
         except Exception as e:
             print(f"[engine error] fail to sync role for {member.id}: {e}", flush=True)
@@ -83,4 +89,5 @@ async def sync_all_boosters(guild: discord.Guild):
     tasks = [assign_correct_level(member) for member in guild.members if not member.bot]
     
     if tasks:
-        await asyncio.gather(*tasks)
+        # Sử dụng return_exceptions=True để một task lỗi không làm sập toàn bộ đợt quét
+        await asyncio.gather(*tasks, return_exceptions=True)
