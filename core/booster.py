@@ -29,6 +29,7 @@ class BoostGroup(app_commands.Group):
     @app_commands.default_permissions(manage_guild=True)
     async def role(self, interaction: discord.Interaction, role: discord.Role):
         """(1) cập nhật role và kích hoạt truy quét chủ động"""
+        print(f"[BOOST] Đang setup role {role.name} cho server {interaction.guild.id}", flush=True)
         config = await get_guild_config(interaction.guild.id)
         config["booster_role"] = role.id
         await save_guild_config(interaction.guild.id, config)
@@ -47,6 +48,7 @@ class BoostGroup(app_commands.Group):
     @app_commands.default_permissions(manage_guild=True)
     async def channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
         """(2) cập nhật kênh thông báo"""
+        print(f"[BOOST] Đang setup channel {channel.name} cho server {interaction.guild.id}", flush=True)
         config = await get_guild_config(interaction.guild.id)
         config["channel"] = channel.id
         # [FIX CHÍ MẠNG]: Phải lưu config (dict), không được lưu channel (object) gây crash db
@@ -101,11 +103,13 @@ class BoostGroup(app_commands.Group):
     @app_commands.default_permissions(manage_guild=True)
     async def test(self, interaction: discord.Interaction):
         """(6) & (7) giả lập gán role thông qua Engine và bảo vệ bypass"""
+        print(f"[DEBUG] Đang chạy lệnh test boost cho {interaction.user.name}...", flush=True)
         await interaction.response.defer(ephemeral=False)
         
         config = await get_guild_config(interaction.guild.id)
         role_id = config.get("booster_role")
-        role_obj = interaction.guild.get_role(role_id) if role_id else None
+        # [AN TOÀN]: Ép int() để đảm bảo get_role chạy đúng nếu dữ liệu json là string
+        role_obj = interaction.guild.get_role(int(role_id)) if role_id else None
         # [FIX] Đảm bảo rolesetup hiện mention chuẩn trong description
         rolesetup = role_obj.mention if role_obj else "`none`"
 
@@ -117,7 +121,9 @@ class BoostGroup(app_commands.Group):
         if role_obj:
             try:
                 await interaction.user.add_roles(role_obj, reason="Virtual Boost Test (5m Bypass)")
-            except:
+                print(f"[DEBUG] Đã gán role test thành công", flush=True)
+            except Exception as e:
+                print(f"[DEBUG] Lỗi gán role: {e}", flush=True)
                 pass
         
         # Gửi thử tin nhắn chúc mừng
