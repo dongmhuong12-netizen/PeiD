@@ -15,11 +15,19 @@ _engine_locks = defaultdict(asyncio.Lock)
 # ASSIGN CORRECT ROLE (Atomic Sync)
 # ==============================
 
-async def assign_correct_level(member: discord.Member):
+async def assign_correct_level(member: discord.Member, semaphore: asyncio.Semaphore = None):
     """
     hàm cốt lõi: xử lý gán/gỡ booster role gốc.
     logic hội tụ: kiểm tra (boost thật) hoặc (đang trong thời gian test).
     """
+    # [VÁ LỖI] Sử dụng Semaphore nếu được truyền vào để kiểm soát lưu lượng trên server 100k+
+    if semaphore:
+        async with semaphore:
+            return await _execute_assign_logic(member)
+    return await _execute_assign_logic(member)
+
+async def _execute_assign_logic(member: discord.Member):
+    """Logic thực thi gán/gỡ tách biệt để đảm bảo atomic"""
     guild = member.guild
     
     # [FIX] Đã đồng bộ key với booster.py: thêm guild.id để tránh lệch pha bypass
@@ -35,7 +43,6 @@ async def assign_correct_level(member: discord.Member):
             if not config: return
 
             bot_member = guild.me
-            # [FIX] Kiểm tra quyền hạn Manage Roles tổng quát
             if not bot_member or not bot_member.guild_permissions.manage_roles:
                 return
 
@@ -57,19 +64,21 @@ async def assign_correct_level(member: discord.Member):
 
             # thực thi logic gán/gỡ atomic
             if should_have_role and not has_role:
-                # kiểm tra hierarchy trước khi gán (Role yiyi phải cao hơn role setup)
+                # kiểm tra hierarchy trước khi gán
                 if base_role < bot_member.top_role:
                     await member.add_roles(base_role, reason="Booster Sync: Active/Test")
                     
             elif not should_have_role and has_role:
-                # [BẢO VỆ]: Chỉ gỡ nếu không trong trạng thái testing
+                # [BẢO VỆ]: Tuyệt đối không gỡ nếu đang trong trạng thái testing
                 if not is_testing:
                     # kiểm tra hierarchy trước khi gỡ
                     if base_role < bot_member.top_role:
                         await member.remove_roles(base_role, reason="Booster Sync: Ended/Expired")
 
         except Exception as e:
-            print(f"[engine error] fail to sync role for {member.id}: {e}", flush=True)
+            # Chỉ in lỗi nếu thực sự nghiêm trọng để tránh spam log server 100k
+            if not isinstance(e, discord.Forbidden):
+                print(f"[engine error] fail to sync role for {member.id}: {e}", flush=True)
         finally:
             # [VÁ LỖI] Giải phóng RAM Lock
             if guild.id in _engine_locks and not lock.locked():
@@ -82,12 +91,13 @@ async def assign_correct_level(member: discord.Member):
 async def sync_all_boosters(guild: discord.Guild):
     """
     hàm truy quét: tự động tìm toàn bộ booster trong server để đồng bộ role `booster`.
-    được gọi khi setup role hoặc chạy chu kỳ quét định kỳ của bot.
     """
-    # Lấy toàn bộ member (loại bỏ bot) để chuẩn bị đồng bộ
-    # Với server 100k+, asyncio.gather xử lý task dựa trên event loop để tối ưu RAM
-    tasks = [assign_correct_level(member) for member in guild.members if not member.bot]
+    # [VÁ LỖI] Semaphore: Chỉ cho phép xử lý 50 member cùng lúc để bảo vệ RAM và tránh Rate Limit
+    # Với server 100k+, quăng 100k task vào gather cùng lúc sẽ làm sập bot.
+    sem = asyncio.Semaphore(50)
+    
+    tasks = [assign_correct_level(member, semaphore=sem) for member in guild.members if not member.bot]
     
     if tasks:
-        # Sử dụng return_exceptions=True để một task lỗi không làm sập toàn bộ đợt quét
+        # return_exceptions=True để 1 task lỗi không làm dừng toàn bộ tiến trình quét
         await asyncio.gather(*tasks, return_exceptions=True)
