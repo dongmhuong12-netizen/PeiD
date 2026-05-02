@@ -49,7 +49,7 @@ bot = commands.AutoShardedBot(
     intents=intents,
     help_command=None,
     status=discord.Status.idle,
-    activity=discord.CustomActivity(name="yiyi iu")
+    activity=discord.CustomActivity(name="˚₊‧꒰ა yiyi iu ໒꒱ ‧₊˚")
 )
 
 # =========================
