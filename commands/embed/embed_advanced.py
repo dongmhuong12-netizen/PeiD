@@ -31,23 +31,27 @@ async def export_cmd(interaction: discord.Interaction, name: str):
     if not data:
         embed_err = discord.Embed(
             title=f"{Emojis.HOICHAM} không tìm thấy embed",
-            description=f"**yiyi** không tìm thấy embed `{name}` để xuất mã.",
+            description=f"**yiyi** không tìm thấy embed tên `{name}` để xuất mã.",
             color=0xf8bbd0
         )
         return await interaction.followup.send(embed=embed_err)
 
     try:
-        # [IT PRO] Nén JSON thành chuỗi Base64 siêu ngắn (chuẩn công nghiệp)
+        # [IT PRO] Nén JSON thành chuỗi Base64 siêu ngắn
         json_bytes = json.dumps(data).encode('utf-8')
         compressed = zlib.compress(json_bytes)
         export_code = base64.urlsafe_b64encode(compressed).decode('utf-8')
         
-        embed = discord.Embed(
-            title=f"{Emojis.MATTRANG} mã export của `{name}`",
-            description=f"cậu có thể gửi đoạn mã này cho người khác dùng lệnh `/p embed import` để sao chép.\n\n```yaml\n{export_code}\n```",
-            color=0xf8bbd0
+        # CHỈ THAY ĐỔI: Chuyển từ Embed sang Content thuần túy
+        response_text = (
+            f"tạo mã thành công, có thể sao chép mã bên dưới để sử dụng\n"
+            f"lưu ý: **không được** chỉnh sửa đoạn mã này, nếu không mã sẽ không hợp lệ.\n\n"
+            f"**{export_code}**\n\n"
+            f"```\n{export_code}\n```"
         )
-        await interaction.followup.send(embed=embed)
+        
+        await interaction.followup.send(content=response_text)
+        
     except Exception as e:
         await interaction.followup.send(f"có lỗi xảy ra khi xuất mã: {e}")
 
@@ -59,14 +63,14 @@ async def import_cmd(interaction: discord.Interaction, name: str, code: str):
     if await load_embed(interaction.guild.id, name):
         embed_err = discord.Embed(
             title=f"{Emojis.MATTRANG} tên embed đã tồn tại",
-            description=f"tên `{name}` đã được sử dụng, xin hãy chọn tên khác nhé.",
+            description=f"tên `{name}` đã được sử dụng, cậu hãy chọn tên khác nhé.",
             color=0xf8bbd0
         )
         return await interaction.followup.send(embed=embed_err)
 
     try:
         # Giải nén mã Code ngược lại thành JSON
-        decoded = base64.urlsafe_b64decode(code.encode('utf-8'))
+        decoded = base64.urlsafe_b64decode(code.strip().encode('utf-8'))
         decompressed = zlib.decompress(decoded).decode('utf-8')
         data = json.loads(decompressed)
         
@@ -94,7 +98,7 @@ async def clone_cmd(interaction: discord.Interaction, name: str, link: str):
     await interaction.response.defer(ephemeral=False)
     
     if await load_embed(interaction.guild.id, name):
-        return await interaction.followup.send(f"{Emojis.HOICHAM} tên `{name}` đã tồn tại rồi.")
+        return await interaction.followup.send(f"{Emojis.HOICHAM} tên `{name}` đã tồn tại, cậu hãy chọn tên khác nhé")
 
     # Dùng Regex móc bóc tách ID kênh và ID tin nhắn từ URL
     match = re.search(r'channels/\d+/(\d+)/(\d+)', link)
@@ -104,18 +108,16 @@ async def clone_cmd(interaction: discord.Interaction, name: str, link: str):
     channel_id, msg_id = int(match.group(1)), int(match.group(2))
     
     try:
-        channel = interaction.client.get_channel(channel_id)
-        if not channel:
-            return await interaction.followup.send(f"{Emojis.HOICHAM} **yiyi** không tìm thấy kênh này. (có thể yiyi chưa được vào kênh đó)")
-            
+        channel = interaction.client.get_channel(channel_id) or await interaction.client.fetch_channel(channel_id)
         msg = await channel.fetch_message(msg_id)
+        
         if not msg.embeds:
             return await interaction.followup.send(f"{Emojis.HOICHAM} tin nhắn này không có embed nào cả.")
             
         # [CORE] Ép kiểu từ Discord Embed sang Dictionary của PeiD
         raw_dict = msg.embeds[0].to_dict()
         
-        # Dọn dẹp rác hệ thống của Discord (giữ lại các trường hiển thị)
+        # Dọn dẹp rác hệ thống của Discord
         clean_data = {
             "title": raw_dict.get("title"),
             "description": raw_dict.get("description"),
@@ -126,25 +128,20 @@ async def clone_cmd(interaction: discord.Interaction, name: str, link: str):
             "footer": {"text": raw_dict.get("footer", {}).get("text"), "icon_url": raw_dict.get("footer", {}).get("icon_url")}
         }
         
-        # Cắt bỏ các key rỗng để chuẩn hóa form
         clean_data = {k: v for k, v in clean_data.items() if v}
         
         await save_embed(interaction.guild.id, name, clean_data)
         
         embed_success = discord.Embed(
             title=f"{Emojis.YIYITIM} clone thành công!",
-            description=f"đã chép embed thành công với tên `{name}`. dùng `/p embed edit` để tinh chỉnh nhé!",
+            description=f"đã chép embed thành công với tên `{name}`. cậu hãy dùng `/p embed edit` để chỉnh sửa nhé",
             color=0xf8bbd0
         )
         await interaction.followup.send(embed=embed_success)
         
-    except discord.NotFound:
-        await interaction.followup.send(f"{Emojis.HOICHAM} không tìm thấy tin nhắn (có thể đã bị xóa).")
-    except discord.Forbidden:
-        await interaction.followup.send(f"{Emojis.HOICHAM} **yiyi** không có quyền đọc lịch sử tin nhắn kênh đó.")
     except Exception as e:
         print(f"[clone error] {e}")
-        await interaction.followup.send(f"có lỗi xảy ra: không thể clone lúc này.")
+        await interaction.followup.send(f"{Emojis.HOICHAM} có lỗi xảy ra: **yiyi** không thể đọc được tin nhắn này.")
 
 # =============================
 # INJECTION
@@ -152,20 +149,17 @@ async def clone_cmd(interaction: discord.Interaction, name: str, link: str):
 async def setup(bot: commands.Bot):
     p_cmd = bot.tree.get_command("p")
     if p_cmd and isinstance(p_cmd, app_commands.Group):
-        # Tìm group "embed" bên trong group "p"
-        embed_group = None
-        for cmd in p_cmd.commands:
-            if cmd.name == "embed" and isinstance(cmd, app_commands.Group):
-                embed_group = cmd
-                break
+        embed_group = next((cmd for cmd in p_cmd.commands if cmd.name == "embed" and isinstance(cmd, app_commands.Group)), None)
                 
         if embed_group:
-            # Gắn 3 lệnh mới vào hệ thống /p embed ...
+            # Gỡ bỏ lệnh cũ để tránh trùng lặp khi reload
+            for cmd_name in ["export", "import", "clone"]:
+                existing = next((c for c in embed_group.commands if c.name == cmd_name), None)
+                if existing: embed_group.remove_command(cmd_name)
+
             embed_group.add_command(export_cmd)
             embed_group.add_command(import_cmd)
             embed_group.add_command(clone_cmd)
-            print("[load] success: commands.embed.embed_advanced (export/import/clone)", flush=True)
-        else:
-            print("[error] không tìm thấy lệnh /p embed để tiêm mã nâng cao.", flush=True)
+            print("[load] success: commands.embed.embed_advanced (text mode)", flush=True)
 
 
