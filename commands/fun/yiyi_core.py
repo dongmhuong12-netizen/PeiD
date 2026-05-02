@@ -16,7 +16,7 @@ class YiyiGroup(app_commands.Group):
     # ==========================================
     # LỆNH 1: PING PRO (/yiyi oi)
     # ==========================================
-    @app_commands.command(name="oi", description="gọi yiyi để kiểm tra tốc độ hệ thống (ping pro)")
+    @app_commands.command(name="oi", description="gọi yiyi để kiểm tra tốc độ hệ thống")
     async def oi(self, interaction: discord.Interaction):
         try:
             # [IT PRO] Đo API Latency siêu chuẩn xác qua Defer
@@ -50,7 +50,7 @@ class YiyiGroup(app_commands.Group):
             # [BẢO VỆ CỐT LÕI] Bắt lỗi ngầm, tránh sập cụm lệnh
             print(f"[yiyi_oi error] fail to fetch ping: {e}", flush=True)
             if not interaction.response.is_done():
-                await interaction.response.send_message("yiyi đang bị nghẽn mạng chút xíu, cậu thử lại sau nha!", ephemeral=True)
+                await interaction.response.send_message("**yiyi** đang bị nghẽn mạng chút xíu, cậu thử lại sau nha!", ephemeral=True)
 
     # ==========================================
     # LỆNH 2: IDENTITY (/yiyi iu_ai)
@@ -59,7 +59,7 @@ class YiyiGroup(app_commands.Group):
     async def iu_ai(self, interaction: discord.Interaction):
         try:
             embed = discord.Embed(
-                title=f"**yiyi** iu Vương Dỹ Nguyệt nhấttt {Emojis.YIYITIM}",
+                title=f"**yiyi** iu **Vương Dỹ Nguyệt** nhấttt {Emojis.YIYITIM}",
                 color=0xf8bbd0
             )
             await interaction.response.send_message(embed=embed)
