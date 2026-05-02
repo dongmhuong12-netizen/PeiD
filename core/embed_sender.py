@@ -127,7 +127,7 @@ def _build_embed(embed_copy: dict):
 
 
 # =========================
-# SEND EMBED CORE (GIỮ NGUYÊN 100% LOGIC)
+# SEND EMBED CORE (CẬP NHẬT PHASE 3)
 # =========================
 
 async def send_embed(
@@ -136,7 +136,8 @@ async def send_embed(
     guild: discord.Guild,
     member: discord.Member | None = None,
     embed_name: str | None = None,
-    only_build: bool = False
+    only_build: bool = False,
+    view: discord.ui.View | None = None
 ):
     """
     xử lý gửi embed và đăng ký liên kết vào não bộ state.
@@ -154,13 +155,22 @@ async def send_embed(
         if only_build:
             return embed
 
+        # [CẬP NHẬT PHASE 3] Tự động tạo View nếu trong data có nút bấm mà view truyền vào là None
+        if view is None:
+            buttons_data = embed_data.get("buttons", [])
+            if buttons_data:
+                view = discord.ui.View(timeout=None)
+                for btn in buttons_data:
+                    if btn.get("type") == "link":
+                        view.add_item(discord.ui.Button(label=btn["label"], url=btn["url"]))
+
         # 3. gửi tin nhắn an toàn
         message = None
         if isinstance(destination, discord.Interaction):
             if destination.response.is_done():
-                message = await destination.followup.send(embed=embed)
+                message = await destination.followup.send(embed=embed, view=view)
             else:
-                await destination.response.send_message(embed=embed)
+                await destination.response.send_message(embed=embed, view=view)
                 message = await destination.original_response()
         else:
             # check quyền gửi embed trước khi gửi
@@ -168,7 +178,7 @@ async def send_embed(
             if not perms.send_messages or not perms.embed_links:
                 print(f"[send error] bot thiếu quyền gửi embed tại channel {destination.id}", flush=True)
                 return False
-            message = await destination.send(embed=embed)
+            message = await destination.send(embed=embed, view=view)
 
         if not message:
             return False
@@ -209,3 +219,5 @@ async def teardown(bot):
         except asyncio.CancelledError:
             pass
     print("[unload] success: core.embed_sender", flush=True)
+
+
