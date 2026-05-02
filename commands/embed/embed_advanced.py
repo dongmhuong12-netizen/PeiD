@@ -46,7 +46,7 @@ async def export_cmd(interaction: discord.Interaction, name: str):
         response_text = (
             f"tạo mã thành công, có thể sao chép mã bên dưới để sử dụng\n"
             f"lưu ý: **không được** chỉnh sửa đoạn mã này, nếu không mã sẽ không hợp lệ.\n\n"
-            f"**{export_code}**\n\n"
+            f"{export_code}\n\n"
             f"```\n{export_code}\n```"
         )
         
