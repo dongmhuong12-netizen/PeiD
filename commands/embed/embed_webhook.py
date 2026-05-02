@@ -16,6 +16,16 @@ async def embed_name_autocomplete(interaction: discord.Interaction, current: str
     names = await get_all_embed_names(guild.id)
     return [app_commands.Choice(name=name, value=name) for name in names if current.lower() in name.lower()][:25]
 
+# [BỔ SUNG PHASE 3] Hàm tạo View nút bấm từ dữ liệu lưu trữ cho Webhook
+def create_embed_view(data):
+    buttons_data = data.get("buttons", [])
+    if not buttons_data: return None
+    view = discord.ui.View()
+    for btn in buttons_data:
+        if btn.get("type") == "link":
+            view.add_item(discord.ui.Button(label=btn["label"], url=btn["url"]))
+    return view
+
 # =============================
 # WEBHOOK COMMAND (SEND)
 # =============================
@@ -45,6 +55,9 @@ async def send_cmd(
 
     # Tái tạo Embed từ dữ liệu JSON
     embed = discord.Embed.from_dict(data)
+    
+    # [CẬP NHẬT PHASE 3] Kiểm tra và tạo View chứa nút bấm
+    view = create_embed_view(data)
 
     try:
         # 2. QUẢN LÝ WEBHOOK TỐI ƯU (Pooling Logic)
@@ -57,9 +70,10 @@ async def send_cmd(
             webhook = await channel.create_webhook(name="yiyi_webhook", reason=f"Hệ thống Webhook của yiyi cho server {interaction.guild.name}")
 
         # 3. OVERRIDE IDENTITY (Tính năng 'điếm thúi' của Webhook)
-        # Gửi embed với danh tính giả mà không cần sửa cấu hình gốc của Webhook
+        # Gửi embed với danh tính giả và đính kèm View (nút bấm) nếu có
         await webhook.send(
             embed=embed,
+            view=view,
             username=username or "yiyi",
             avatar_url=avatar_url or interaction.client.user.display_avatar.url,
             wait=True # Chờ phản hồi từ Discord để xác nhận gửi thành công
