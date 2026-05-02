@@ -167,22 +167,33 @@ class EditFooterModal(discord.ui.Modal, title="edit footer details"):
         
         await self.view.update_message(interaction)
 
-class EditImageModal(discord.ui.Modal, title="set image url"):
+class EditImageModal(discord.ui.Modal, title="set image & thumbnail url"):
     def __init__(self, view):
         super().__init__()
         self.view = view
         
-        self.input = discord.ui.TextInput(
-            label="url hình ảnh",
-            placeholder="https://...",
+        # Ô 1: Ảnh chính
+        self.image_input = discord.ui.TextInput(
+            label="url hình ảnh chính",
+            placeholder="https://... hoặc dùng {user_avatar}",
             required=False,
             default=self.view.data.get("image") or ""
         )
         
-        self.add_item(self.input)
+        # Ô 2: Thumbnail (Ảnh nhỏ góc phải)
+        self.thumbnail = discord.ui.TextInput(
+            label="thumbnail (avt góc phải)",
+            placeholder="https://... hoặc dùng {user_avatar}",
+            required=False,
+            default=self.view.data.get("thumbnail") or ""
+        )
+        
+        self.add_item(self.image_input)
+        self.add_item(self.thumbnail)
 
     async def on_submit(self, interaction: discord.Interaction):
-        self.view.data["image"] = self.input.value
+        self.view.data["image"] = self.image_input.value
+        self.view.data["thumbnail"] = self.thumbnail.value
         
         await save_embed(self.view.guild_id, self.view.name, self.view.data)
         await force_save("embeds")
