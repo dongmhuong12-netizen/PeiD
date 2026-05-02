@@ -66,6 +66,7 @@ EXTENSIONS = [
     "commands.fun.yiyi_core",     # LỆNH FUN YIYI: Hệ thống tương tác cá nhân hóa
     "commands.embed.embed_advanced", # ADVANCED: Hệ thống Export, Import, Clone (Phase 1)
     "commands.embed.embed_webhook",  # WEBHOOK: Hệ thống giả danh gửi tin nhắn (Phase 2)
+    "commands.embed.embed_buttons",
 ]
 
 async def load_extensions():
