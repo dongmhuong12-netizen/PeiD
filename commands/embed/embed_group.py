@@ -34,6 +34,16 @@ def _cleanup_views(key: str):
         view.stop()
     ACTIVE_EMBED_VIEWS[key] = []
 
+# [BỔ SUNG PHASE 3] Hàm tạo View nút bấm từ dữ liệu lưu trữ
+def create_embed_view(data):
+    buttons_data = data.get("buttons", [])
+    if not buttons_data: return None
+    view = discord.ui.View()
+    for btn in buttons_data:
+        if btn.get("type") == "link":
+            view.add_item(discord.ui.Button(label=btn["label"], url=btn["url"]))
+    return view
+
 # =============================
 # IMAGE COMMAND (BỔ SUNG VÀO HỆ LỆNH /P)
 # =============================
@@ -150,7 +160,9 @@ class EmbedGroup(app_commands.Group):
         # Nhóm 2b: Text thuần
         await interaction.response.send_message(f"{Emojis.MATTRANG} embed `{name}` gửi đi thành công", ephemeral=False)
         
-        await send_embed(interaction.channel, data, interaction.guild, interaction.user, embed_name=name)
+        # [CẬP NHẬT] Kiểm tra và gắn nút bấm (nếu có) khi hiển thị
+        view = create_embed_view(data)
+        await send_embed(interaction.channel, data, interaction.guild, interaction.user, embed_name=name, view=view)
 
     @app_commands.command(name="delete", description="xóa embed vĩnh viễn")
     @app_commands.autocomplete(name=embed_name_autocomplete)
@@ -170,11 +182,14 @@ async def setup(bot: commands.Bot):
     p_cmd = bot.tree.get_command("p")
     
     if p_cmd and isinstance(p_cmd, app_commands.Group):
+        # [CẬP NHẬT] Xóa group cũ trước khi nạp để tránh lỗi lệnh ma khi reload
+        existing_embed = next((c for c in p_cmd.commands if c.name == "embed"), None)
+        if existing_embed: p_cmd.remove_command("embed")
+        
         # 1. Khôi phục nhóm lệnh /p embed ...
-        if not any(c.name == "embed" for c in p_cmd.commands):
-            p_cmd.add_command(EmbedGroup())
-            # Bảo tồn DNA log của cậu
-            print("[load] success: commands.embed.embed_group", flush=True)
+        p_cmd.add_command(EmbedGroup())
+        # Bảo tồn DNA log của cậu
+        print("[load] success: commands.embed.embed_group", flush=True)
         
         # 2. Đăng ký lệnh /p image (Hệ thống CDN)
         if not any(c.name == "image" for c in p_cmd.commands):
@@ -183,3 +198,5 @@ async def setup(bot: commands.Bot):
     else:
         # IT Standard Error Log
         print("[error] không tìm thấy khung /p! hãy đảm bảo command /p đã được khởi tạo trước.", flush=True)
+
+
