@@ -63,6 +63,7 @@ EXTENSIONS = [
     "core.wellcome",             
     "core.booster",              
     "systems.reaction_role",     
+    "commands.fun.yiyi_core",     # LỆNH FUN YIYI: Hệ thống tương tác cá nhân hóa
 ]
 
 async def load_extensions():
@@ -136,3 +137,5 @@ if __name__ == "__main__":
         # Chốt chặn cuối cùng để bảo vệ dữ liệu JSON
         force_flush()
         print("[EXIT] Bot đã tắt an toàn và đã lưu dữ liệu.")
+
+
