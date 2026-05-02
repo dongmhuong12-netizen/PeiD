@@ -104,6 +104,14 @@ async def on_ready():
     except Exception as e:
         print(f"[SLASH ERROR] {e}", flush=True)
 
+    # 3. THIẾT LẬP TRẠNG THÁI (PRESENCE)
+    try:
+        custom_status = discord.CustomActivity(name="yiyi iu")
+        await bot.change_presence(status=discord.Status.idle, activity=custom_status)
+        print("[PRESENCE] Đã cập nhật trạng thái 'yiyi iu' (Idle).", flush=True)
+    except Exception as e:
+        print(f"[PRESENCE ERROR] {e}", flush=True)
+
     print(f"🚀 {bot.user} đã sẵn sàng phục vụ!", flush=True)
 
 # =========================
