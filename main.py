@@ -67,6 +67,7 @@ EXTENSIONS = [
     "commands.embed.embed_advanced", # ADVANCED: Hệ thống Export, Import, Clone (Phase 1)
     "commands.embed.embed_webhook",  # WEBHOOK: Hệ thống giả danh gửi tin nhắn (Phase 2)
     "commands.embed.embed_buttons",
+    "commands.verify.verify_group",  # [MẠCH AN NINH] Đã nạp hệ thống Double Counter (Phase 3)
 ]
 
 async def load_extensions():
@@ -81,6 +82,41 @@ async def load_extensions():
                 print(f"[RELOAD] Success: {ext}", flush=True)
         except Exception as e:
             print(f"[LOAD ERROR] {ext}: {e}", flush=True)
+
+# =========================
+# SỰ KIỆN AN NINH (DÂY THẦN KINH PHASE 3)
+# =========================
+
+@bot.event
+async def on_member_join(member: discord.Member):
+    """[TỰ ĐỘNG XÍCH CỔ] Tự động gán Role Chưa Veri khi mem mới vào server"""
+    try:
+        from core.cache_manager import get_raw
+        db = get_raw("verify_configs")
+        config = db.get(str(member.guild.id))
+        
+        # Nếu server có cài đặt an ninh và có set Role Unverified
+        if config and config.get("unverified_role"):
+            u_role = member.guild.get_role(int(config["unverified_role"]))
+            if u_role:
+                await member.add_roles(u_role, reason="Yiyi Security: Auto-assigned Unverified Role")
+    except Exception as e:
+        print(f"[SECURITY WARNING] Lỗi gán Role Unverified cho {member.id}: {e}", flush=True)
+
+@bot.event
+async def on_interaction(interaction: discord.Interaction):
+    """[NÃO XỬ LÝ NÚT BẤM] Lắng nghe nút Verify và truyền cho đao phủ xử lý"""
+    try:
+        if interaction.type == discord.InteractionType.component:
+            # IT Pro: Import bên trong sự kiện để tránh lỗi vòng lặp Import (Circular Import)
+            from systems.verify_system import VerifySystem
+            
+            # Truyền tín hiệu cho Hệ thống An ninh. Nếu nó bắt được ID của nó, nó sẽ xử lý và trả về True
+            if await VerifySystem.handle_interaction(interaction):
+                return # Đã xử lý xong, ngắt luồng để khỏi vướng các event khác
+                
+    except Exception as e:
+        print(f"[INTERACTION WARNING] {e}", flush=True)
 
 # =========================
 # READY STATE
@@ -140,5 +176,6 @@ if __name__ == "__main__":
         # Chốt chặn cuối cùng để bảo vệ dữ liệu JSON
         force_flush()
         print("[EXIT] Bot đã tắt an toàn và đã lưu dữ liệu.")
+
 
 
