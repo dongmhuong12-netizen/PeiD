@@ -181,31 +181,36 @@ async def send_embed(
             if buttons_data:
                 view = discord.ui.View(timeout=None)
                 for btn in buttons_data:
-                    # ---> ĐOẠN CODE GỐC 100% CỦA SẾP (KHÔNG THAY ĐỔI) <---
-                    if btn.get("type") == "link":
-                        view.add_item(discord.ui.Button(label=btn["label"], url=btn["url"]))
+                    # [THÊM MỚI] TIÊM BIẾN SỐ VÀO LINH KIỆN (LABEL/PLACEHOLDER)
+                    # IT Pro: Clone dữ liệu linh kiện để xử lý biến số mà không hỏng dữ liệu gốc
+                    btn_v = copy.deepcopy(btn)
+                    btn_v = apply_variables(btn_v, guild, member)
+                    
+                    # ---> ĐOẠN CODE GỐC 100% CỦA SẾP (CẬP NHẬT SỬ DỤNG BIẾN ĐÃ TIÊM) <---
+                    if btn_v.get("type") == "link":
+                        view.add_item(discord.ui.Button(label=btn_v["label"], url=btn_v["url"]))
                     
                     # [THÊM MỚI] XỬ LÝ 9 HỆ THỐNG TƯƠNG TÁC (NÚT & MENU MỚI)
-                    elif btn.get("type") == "button":
+                    elif btn_v.get("type") == "button":
                         try:
-                            _style_val = btn.get("style", 1)
+                            _style_val = btn_v.get("style", 1)
                             _style = discord.ButtonStyle(_style_val) if isinstance(_style_val, int) and 1 <= _style_val <= 4 else discord.ButtonStyle.primary
-                            _label = str(btn.get("label", "Nút bấm"))[:80] # Max 80 ký tự
-                            _custom_id = str(btn.get("custom_id")) if btn.get("custom_id") else None
+                            _label = str(btn_v.get("label", "Nút bấm"))[:80] # Max 80 ký tự
+                            _custom_id = str(btn_v.get("custom_id")) if btn_v.get("custom_id") else None
                             
                             if _custom_id:
                                 view.add_item(discord.ui.Button(
                                     style=_style,
                                     label=_label,
                                     custom_id=_custom_id,
-                                    emoji=btn.get("emoji")
+                                    emoji=btn_v.get("emoji")
                                 ))
                         except Exception: pass
                         
-                    elif btn.get("type") == "select":
+                    elif btn_v.get("type") == "select":
                         try:
-                            _opts = btn.get("options", [])
-                            _custom_id = str(btn.get("custom_id")) if btn.get("custom_id") else None
+                            _opts = btn_v.get("options", [])
+                            _custom_id = str(btn_v.get("custom_id")) if btn_v.get("custom_id") else None
                             
                             if _custom_id and isinstance(_opts, list) and len(_opts) > 0:
                                 _safe_opts = _opts[:25] # Max 25 lựa chọn
@@ -213,19 +218,21 @@ async def send_embed(
                                 
                                 for i, opt in enumerate(_safe_opts):
                                     if isinstance(opt, dict):
+                                        # IT Pro: Tiêm biến số vào từng Option trong menu
+                                        opt_v = apply_variables(copy.deepcopy(opt), guild, member)
                                         _select_options.append(discord.SelectOption(
-                                            label=str(opt.get("label", f"Option {i+1}"))[:100],
-                                            value=str(opt.get("value", str(i)))[:100],
-                                            description=str(opt.get("description", ""))[:100] if opt.get("description") else None,
-                                            emoji=opt.get("emoji")
+                                            label=str(opt_v.get("label", f"Option {i+1}"))[:100],
+                                            value=str(opt_v.get("value", str(i)))[:100],
+                                            description=str(opt_v.get("description", ""))[:100] if opt_v.get("description") else None,
+                                            emoji=opt_v.get("emoji")
                                         ))
                                 
                                 if _select_options:
                                     view.add_item(discord.ui.Select(
                                         custom_id=_custom_id,
-                                        placeholder=str(btn.get("placeholder", "Vui lòng chọn..."))[:150],
-                                        min_values=max(1, btn.get("min_values", 1)),
-                                        max_values=min(len(_select_options), btn.get("max_values", 1)),
+                                        placeholder=str(btn_v.get("placeholder", "Vui lòng chọn..."))[:150],
+                                        min_values=max(1, btn_v.get("min_values", 1)),
+                                        max_values=min(len(_select_options), btn_v.get("max_values", 1)),
                                         options=_select_options
                                     ))
                         except Exception: pass
@@ -286,6 +293,5 @@ async def teardown(bot):
         except asyncio.CancelledError:
             pass
     print("[unload] success: core.embed_sender", flush=True)
-
 
 
