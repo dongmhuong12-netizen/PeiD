@@ -36,8 +36,11 @@ def _gid(guild_id):
     return str(guild_id) if guild_id is not None else "global"
 
 def _nid(name):
-    """chuẩn hóa tên embed"""
-    return str(name) if name is not None else None
+    """
+    [GIA CỐ] chuẩn hóa tên embed về chữ thường và xóa khoảng trắng.
+    đảm bảo việc /create và /show luôn tìm thấy nhau 100%.
+    """
+    return str(name).lower().strip() if name is not None else None
 
 # =========================
 # SAVE EMBED (PUBLIC API)
@@ -59,6 +62,9 @@ async def save_embed(guild_id, name, data):
 
         cache[gid][name] = copy.deepcopy(data)
 
+        # [CỰC QUAN TRỌNG - TRỊ MẤT TRÍ NHỚ] 
+        # Chốt dữ liệu vào bộ não trung tâm để module khác (Show/Edit) thấy ngay
+        update(FILE_KEY, cache)
         mark_dirty(FILE_KEY)
     
     print(f"[storage] đã lưu embed '{name}' cho server {gid} vào bộ nhớ tạm.", flush=True)
@@ -77,7 +83,9 @@ async def load_embed(guild_id, name):
     gid = _gid(guild_id)
     name = _nid(name)
 
-    guild_data = cache.get(gid)
+    # IT Pro: Tìm kiếm thông minh ở cả String ID và Int ID (Tương thích ngược dữ liệu cũ)
+    guild_data = cache.get(gid) or cache.get(int(gid) if gid.isdigit() else None)
+    
     if not isinstance(guild_data, dict):
         return None
 
@@ -101,7 +109,10 @@ async def delete_embed(guild_id, name):
         name = _nid(name)
 
         if gid not in cache:
-            return False
+            # Thử tìm hòm theo Int ID
+            gid_int = int(gid) if gid.isdigit() else None
+            if gid_int not in cache: return False
+            gid = gid_int
 
         guild_data = cache[gid]
         if not isinstance(guild_data, dict) or name not in guild_data:
@@ -112,6 +123,8 @@ async def delete_embed(guild_id, name):
         if not guild_data:
             cache.pop(gid, None)
 
+        # [CẬP NHẬT] Chốt hạ việc xóa vào hệ thống
+        update(FILE_KEY, cache)
         mark_dirty(FILE_KEY)
         
     print(f"[storage] đã xóa embed '{name}' khỏi server {gid}.", flush=True)
@@ -126,7 +139,7 @@ async def get_all_embeds(guild_id):
     cache = _get_cache()
     gid = _gid(guild_id)
 
-    guild_data = cache.get(gid)
+    guild_data = cache.get(gid) or cache.get(int(gid) if gid.isdigit() else None)
     if not isinstance(guild_data, dict):
         return {}
 
@@ -140,7 +153,9 @@ async def get_all_embed_names(guild_id):
     cache = _get_cache()
     gid = _gid(guild_id)
 
-    guild_data = cache.get(gid)
+    # IT Pro: Check cả dạng String và Int để đảm bảo danh sách ko bao giờ trắng xóa
+    guild_data = cache.get(gid) or cache.get(int(gid) if gid.isdigit() else None)
+    
     if not isinstance(guild_data, dict):
         return []
 
@@ -169,12 +184,12 @@ async def atomic_update_button(guild_id, name, button_data: dict = None, action:
         gid = _gid(guild_id)
         name = _nid(name)
 
-        # Kiểm tra tính toàn vẹn của nhánh dữ liệu
-        if gid not in cache or not isinstance(cache[gid], dict):
-            return False
-            
-        if name not in cache[gid]:
-            return False
+        # Kiểm tra tính toàn vẹn của nhánh dữ liệu (Support cả 2 loại ID)
+        if gid not in cache or name not in cache[gid]:
+            gid_int = int(gid) if gid.isdigit() else None
+            if gid_int not in cache or name not in cache[gid_int]:
+                return False
+            gid = gid_int
 
         data = cache[gid][name]
         
@@ -182,7 +197,7 @@ async def atomic_update_button(guild_id, name, button_data: dict = None, action:
         if "buttons" not in data or not isinstance(data["buttons"], list):
             data["buttons"] = []
 
-        # --- XỬ LÝ CÁC HÀNH ĐỘNG (ATOMIC ACTIONS) ---
+        # --- XỬ LÝ CÁC HÀNH ĐỘNG (ATOMIC ACTIONS) - PHỤC HỒI 100% LOGIC CỦA SẾP ---
 
         if action == "add" and button_data:
             # Multi-IT: Bảo vệ giới hạn 25 linh kiện của Discord API tại tầng Storage
@@ -221,7 +236,8 @@ async def atomic_update_button(guild_id, name, button_data: dict = None, action:
             # Hành động không hợp lệ
             return False
 
-        # Đánh dấu dữ liệu đã thay đổi để CacheManager làm việc
+        # [CẬP NHẬT] Chốt thay đổi vào hệ thống cache toàn cục
+        update(FILE_KEY, cache)
         mark_dirty(FILE_KEY)
         
     return True
