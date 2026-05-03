@@ -162,6 +162,10 @@ class EmbedGroup(app_commands.Group):
         
         # [CẬP NHẬT] Kiểm tra và gắn nút bấm (nếu có) khi hiển thị
         view = create_embed_view(data)
+        
+        # [THÊM MỚI] Multi-IT: Ép view về None để nhường quyền xử lý UI cho Xưởng View vạn năng tại embed_sender.py
+        view = None
+        
         await send_embed(interaction.channel, data, interaction.guild, interaction.user, embed_name=name, view=view)
 
     @app_commands.command(name="delete", description="xóa embed vĩnh viễn")
@@ -198,5 +202,6 @@ async def setup(bot: commands.Bot):
     else:
         # IT Standard Error Log
         print("[error] không tìm thấy khung /p! hãy đảm bảo command /p đã được khởi tạo trước.", flush=True)
+
 
 
