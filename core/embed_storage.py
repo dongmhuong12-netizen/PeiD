@@ -145,3 +145,57 @@ async def get_all_embed_names(guild_id):
         return []
 
     return list(guild_data.keys())
+
+# =========================
+# BUTTONS API (PHASE 3 - ATOMIC UPDATES)
+# =========================
+
+async def atomic_update_button(guild_id, name, button_data: dict = None, action: str = "add", index: int = -1):
+    """
+    [MULTI-IT] Thao tác an toàn tuyệt đối với mảng nút bấm.
+    Ngăn chặn Race Condition (xóa đè dữ liệu) khi nhiều thao tác diễn ra cùng 1 miligiây.
+    Hỗ trợ: 'add' (Thêm), 'remove' (Xóa theo vị trí), 'clear' (Xóa sạch nút).
+    """
+    if not name:
+        return False
+
+    async with _lock:
+        cache = _get_cache()
+        gid = _gid(guild_id)
+        name = _nid(name)
+
+        # Kiểm tra tính toàn vẹn của nhánh dữ liệu
+        if gid not in cache or not isinstance(cache[gid], dict):
+            return False
+            
+        if name not in cache[gid]:
+            return False
+
+        data = cache[gid][name]
+        
+        # Vá cấu trúc an toàn (Phòng khi file hệ thống chưa update kip)
+        if "buttons" not in data or not isinstance(data["buttons"], list):
+            data["buttons"] = []
+
+        if action == "add" and button_data:
+            # Multi-IT: Bảo vệ giới hạn 25 linh kiện của Discord API tại tầng Storage
+            if len(data["buttons"]) >= 25:
+                return False
+            data["buttons"].append(copy.deepcopy(button_data))
+            
+        elif action == "remove":
+            # Multi-IT: Xóa an toàn không văng lỗi IndexError
+            if 0 <= index < len(data["buttons"]):
+                data["buttons"].pop(index)
+            else:
+                return False
+                
+        elif action == "clear":
+            data["buttons"] = []
+
+        # Đánh dấu dữ liệu đã thay đổi để CacheManager làm việc
+        mark_dirty(FILE_KEY)
+        
+    return True
+
+
