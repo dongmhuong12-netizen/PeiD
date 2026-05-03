@@ -35,6 +35,7 @@ def _cleanup_views(key: str):
     ACTIVE_EMBED_VIEWS[key] = []
 
 # [BỔ SUNG PHASE 3] Hàm tạo View nút bấm từ dữ liệu lưu trữ
+# IT Pro: Giữ nguyên hàm này để đảm bảo tính tương thích ngược tuyệt đối theo lệnh sếp
 def create_embed_view(data):
     buttons_data = data.get("buttons", [])
     if not buttons_data: return None
@@ -157,13 +158,15 @@ class EmbedGroup(app_commands.Group):
             )
             return await interaction.response.send_message(embed=embed_err, ephemeral=False)
         
-        # Nhóm 2b: Text thuần
-        await interaction.response.send_message(f"{Emojis.MATTRANG} embed `{name}` gửi đi thành công", ephemeral=False)
+        # Nhóm 2b: Văn phong phản hồi thành công (Chuyển ephemeral=True để tối ưu UX)
+        await interaction.response.send_message(f"{Emojis.MATTRANG} embed `{name}` gửi đi thành công", ephemeral=True)
         
         # [CẬP NHẬT] Kiểm tra và gắn nút bấm (nếu có) khi hiển thị
+        # IT Pro: Giữ nguyên dòng này của sếp để bảo tồn DNA cấu trúc
         view = create_embed_view(data)
         
         # [THÊM MỚI] Multi-IT: Ép view về None để nhường quyền xử lý UI cho Xưởng View vạn năng tại embed_sender.py
+        # Logic này giúp tự động lắp ráp 9 loại nút tương tác (Role, Gacha, Ticket, Verify,...) từ storage.
         view = None
         
         await send_embed(interaction.channel, data, interaction.guild, interaction.user, embed_name=name, view=view)
@@ -192,7 +195,7 @@ async def setup(bot: commands.Bot):
         
         # 1. Khôi phục nhóm lệnh /p embed ...
         p_cmd.add_command(EmbedGroup())
-        # Bảo tồn DNA log của cậu
+        # Bảo tồn DNA log của sếp
         print("[load] success: commands.embed.embed_group", flush=True)
         
         # 2. Đăng ký lệnh /p image (Hệ thống CDN)
@@ -202,6 +205,5 @@ async def setup(bot: commands.Bot):
     else:
         # IT Standard Error Log
         print("[error] không tìm thấy khung /p! hãy đảm bảo command /p đã được khởi tạo trước.", flush=True)
-
 
 
