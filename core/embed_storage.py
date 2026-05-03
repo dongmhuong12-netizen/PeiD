@@ -197,7 +197,7 @@ async def atomic_update_button(guild_id, name, button_data: dict = None, action:
         if "buttons" not in data or not isinstance(data["buttons"], list):
             data["buttons"] = []
 
-        # --- XỬ LÝ CÁC HÀNH ĐỘNG (ATOMIC ACTIONS) - PHỤC HỒI 100% LOGIC CỦA SẾP ---
+        # --- XỬ LÝ CÁC HÀNH ĐỘNG (ATOMIC ACTIONS) ---
 
         if action == "add" and button_data:
             # Multi-IT: Bảo vệ giới hạn 25 linh kiện của Discord API tại tầng Storage
