@@ -41,10 +41,9 @@ class TicketGroup(app_commands.Group):
         staff_role_id="ID role của nhân viên hỗ trợ",
         log_channel_id="ID kênh gửi bản lưu (transcript) sau khi đóng"
     )
-    async def setup(self, interaction: discord.Interaction, category_id: str, staff_role_id: str, log_channel_id: str):
+    async def setup_ticket(self, interaction: discord.Interaction, category_id: str, staff_role_id: str, log_channel_id: str):
         await interaction.response.defer(ephemeral=True)
         
-        # IT Pro: Validation ID đầu vào (Check xem ID có tồn tại thực không)
         guild = interaction.guild
         try:
             cat = guild.get_channel(int(category_id))
@@ -83,11 +82,9 @@ class TicketGroup(app_commands.Group):
         guild_id = interaction.guild.id
         config = self._get_config(guild_id)
 
-        # Kiểm tra kiềng ba chân
         if not config["category_id"] or not config["staff_role_id"]:
             return await interaction.followup.send("❌ Hệ thống chưa được setup! Dùng `/p ticket setup` trước sếp ơi.")
 
-        # Cấu hình nút bấm Ticket (DNA cơ bản)
         btn_data = {
             "type": "button",
             "style": "primary",
@@ -97,25 +94,24 @@ class TicketGroup(app_commands.Group):
             "system": "ticket"
         }
 
-        # Sử dụng logic Atomic để cấy nút
         updated = await atomic_update_button(guild_id, embed_name, action="update_by_id", custom_id="yiyi:ticket:open", button_data=btn_data)
         
         if not updated:
             success = await atomic_update_button(guild_id, embed_name, button_data=btn_data, action="add")
             if not success:
-                return await interaction.followup.send("❌ Không thể gắn nút. Embed có thể đã đầy (giới hạn 25 nút).")
+                return await interaction.followup.send("❌ Không thể gắn nút. Embed có thể đã đầy.")
 
         await interaction.followup.send(f"✅ Đã cấy mạch Ticket vào embed `{embed_name}` thành công!")
 
 # =========================
-# INJECTION
+# INJECTION (Ổ CẮM CHUẨN)
 # =========================
-async def setup_ext(bot: commands.Bot):
+async def setup(bot: commands.Bot): # Đổi từ setup_ext thành setup
     p_cmd = bot.tree.get_command("p")
     if p_cmd and isinstance(p_cmd, app_commands.Group):
-        # Dọn lệnh cũ nếu có
         existing = next((c for c in p_cmd.commands if c.name == "ticket"), None)
-        if existing: p_cmd.remove_command("ticket")
+        if existing: 
+            p_cmd.remove_command("ticket")
         
         p_cmd.add_command(TicketGroup())
-        print("[load] Success: commands.ticket.ticket_group", flush=True)
+        print("[LOAD] Success: commands.ticket.ticket_group", flush=True)
