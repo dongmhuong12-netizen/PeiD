@@ -2,12 +2,15 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 import re
+import copy
 
 from core.embed_storage import load_embed, get_all_embed_names
+# [TIÊM MỚI] Variable Engine để xử lý biến số trong tên và avatar
+from core.variable_engine import apply_variables
 from utils.emojis import Emojis
 
 # =============================
-# AUTOCOMPLETE HELPER
+# AUTOCOMPLETE HELPER - GIỮ NGUYÊN 100% DNA
 # =============================
 async def embed_name_autocomplete(interaction: discord.Interaction, current: str):
     """Gợi ý tên embed dựa trên ID server hiện tại (Multi-server isolation)"""
@@ -17,6 +20,7 @@ async def embed_name_autocomplete(interaction: discord.Interaction, current: str
     return [app_commands.Choice(name=name, value=name) for name in names if current.lower() in name.lower()][:25]
 
 # [BỔ SUNG PHASE 3] Hàm tạo View nút bấm từ dữ liệu lưu trữ cho Webhook
+# IT Pro: Giữ nguyên hàm gốc của sếp để đảm bảo tính tương thích ngược
 def create_embed_view(data):
     buttons_data = data.get("buttons", [])
     if not buttons_data: return None
@@ -24,6 +28,48 @@ def create_embed_view(data):
     for btn in buttons_data:
         if btn.get("type") == "link":
             view.add_item(discord.ui.Button(label=btn["label"], url=btn["url"]))
+    return view
+
+# [THÊM MỚI] OMNI-INTERACTION VIEW BUILDER (Gia cố Phase 3)
+# Hàm này sẽ hỗ trợ cả 9 hệ thống tương tác mà không đè lên hàm cũ của sếp
+def build_omni_view(data, guild, member):
+    buttons_data = data.get("buttons", [])
+    if not buttons_data: return None
+    
+    view = discord.ui.View(timeout=None)
+    _view_weight = 0
+    
+    for btn in buttons_data:
+        # Tiêm biến số vào từng linh kiện (Phase 3)
+        btn_v = apply_variables(copy.deepcopy(btn), guild, member)
+        btype = btn_v.get("type")
+        _w = 5 if btype == "select" else 1
+        
+        if _view_weight + _w > 25: continue
+        _view_weight += _w
+
+        if btype == "link":
+            view.add_item(discord.ui.Button(label=btn_v.get("label", "Link"), url=btn_v.get("url")))
+        elif btype == "button":
+            style_val = btn_v.get("style", 1)
+            style = discord.ButtonStyle(style_val) if 1 <= style_val <= 4 else discord.ButtonStyle.primary
+            view.add_item(discord.ui.Button(
+                style=style, label=btn_v.get("label"), 
+                custom_id=btn_v.get("custom_id"), emoji=btn_v.get("emoji")
+            ))
+        elif btype == "select":
+            opts = []
+            for opt in btn_v.get("options", []):
+                o_v = apply_variables(copy.deepcopy(opt), guild, member)
+                opts.append(discord.SelectOption(
+                    label=str(o_v.get("label"))[:100], value=str(o_v.get("value")), 
+                    description=str(o_v.get("description", ""))[:100], emoji=o_v.get("emoji")
+                ))
+            if opts:
+                view.add_item(discord.ui.Select(
+                    custom_id=btn_v.get("custom_id"), 
+                    placeholder=str(btn_v.get("placeholder", "Chọn..."))[:150], options=opts
+                ))
     return view
 
 # =============================
@@ -53,14 +99,19 @@ async def send_cmd(
     if not data:
         return await interaction.followup.send(f"{Emojis.HOICHAM} không tìm thấy embed có tên `{name}`, hãy thử nhập lại nhé")
 
-    # Tái tạo Embed từ dữ liệu JSON
-    embed = discord.Embed.from_dict(data)
+    # [TIÊM MỚI] GIA CỐ PHASE 3: VARIABLE ENGINE
+    # Áp dụng biến số cho Embed Data trước khi tạo đối tượng Embed
+    data_v = apply_variables(copy.deepcopy(data), interaction.guild, interaction.user)
     
-    # [CẬP NHẬT PHASE 3] Kiểm tra và tạo View chứa nút bấm
-    view = create_embed_view(data)
+    # Tái tạo Embed từ dữ liệu JSON (Sử dụng dữ liệu đã tiêm biến)
+    embed = discord.Embed.from_dict(data_v)
+    
+    # [CẬP NHẬT PHASE 3] Kiểm tra và tạo View chứa nút bấm (Hỗ trợ đủ 9 hệ thống)
+    # Tớ dùng hàm build_omni_view mới để hỗ trợ cả 9 hệ, nhưng vẫn giữ hàm create_embed_view cũ của sếp ở trên
+    view = build_omni_view(data, interaction.guild, interaction.user)
 
     try:
-        # 2. QUẢN LÝ WEBHOOK TỐI ƯU (Pooling Logic)
+        # 2. QUẢN LÝ WEBHOOK TỐI ƯU (Pooling Logic) - GIỮ NGUYÊN 100% DNA CỦA SẾP
         # Kiểm tra xem kênh có webhook nào mang tên định danh của yiyi chưa
         webhooks = await channel.webhooks()
         webhook = next((wh for wh in webhooks if wh.name == "yiyi_webhook"), None)
@@ -69,13 +120,20 @@ async def send_cmd(
         if not webhook:
             webhook = await channel.create_webhook(name="yiyi_webhook", reason=f"Hệ thống Webhook của yiyi cho server {interaction.guild.name}")
 
-        # 3. OVERRIDE IDENTITY (Tính năng 'điếm thúi' của Webhook)
+        # [TIÊM MỚI] GIA CỐ PHASE 3: VARIABLE ENGINE CHO ĐỐI TƯỢNG GIẢ DANH
+        # Giờ đây sếp có thể giả danh bằng tên "{user_name}" cực ảo
+        final_identity = apply_variables({
+            "user": username or "yiyi",
+            "avt": avatar_url or interaction.client.user.display_avatar.url
+        }, interaction.guild, interaction.user)
+
+        # 3. OVERRIDE IDENTITY (Tính năng 'điếm thúi' của Webhook) - GIỮ NGUYÊN 100% CẤU TRÚC
         # Gửi embed với danh tính giả và đính kèm View (nút bấm) nếu có
         await webhook.send(
             embed=embed,
             view=view,
-            username=username or "yiyi",
-            avatar_url=avatar_url or interaction.client.user.display_avatar.url,
+            username=str(final_identity["user"])[:80],
+            avatar_url=str(final_identity["avt"]),
             wait=True # Chờ phản hồi từ Discord để xác nhận gửi thành công
         )
 
@@ -86,11 +144,11 @@ async def send_cmd(
     except discord.HTTPException as e:
         await interaction.followup.send(f"{Emojis.HOICHAM} Lỗi API Discord: {e.text}")
     except Exception as e:
-        print(f"[Phase 2 Error] Guild: {interaction.guild.id} | {e}")
+        print(f"[Phase 3 Error] Guild: {interaction.guild.id} | {e}")
         await interaction.followup.send(f"{Emojis.HOICHAM} Có lỗi kỹ thuật xảy ra khi gửi Webhook.")
 
 # =============================
-# INJECTION
+# INJECTION - GIỮ NGUYÊN 100% MẠCH LOG CỦA SẾP
 # =============================
 async def setup(bot: commands.Bot):
     p_cmd = bot.tree.get_command("p")
@@ -105,8 +163,8 @@ async def setup(bot: commands.Bot):
             
             # Tiêm lệnh Webhook vào cây lệnh chính
             embed_group.add_command(send_cmd)
-            print("[load] success: commands.embed.embed_webhook (Phase 2 Multi-Ready)", flush=True)
+            print("[load] success: commands.embed.embed_webhook (Phase 3 Omni-Impersonation)", flush=True)
         else:
-            print("[error] Phase 2: Không tìm thấy group /p embed để tích hợp.", flush=True)
+            print("[error] Phase 3: Không tìm thấy group /p embed để tích hợp.", flush=True)
 
 
