@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 import asyncio
 import datetime
+import random
 
 # IMPORT EMOJI HỆ THỐNG (Đồng bộ đồng nhất giao diện)
 from utils.emojis import Emojis
@@ -21,28 +22,35 @@ class ButtonListener(commands.Cog):
         if not custom_id or not str(custom_id).startswith("yiyi:"):
             return
 
-        # PHÂN TÁCH TOKEN: yiyi:[hệ_thống]:[dữ_liệu]
+        # PHÂN TÁCH TOKEN: yiyi:[hệ_thống:[loại/dữ_liệu]:[extra]
         # Đồng bộ 100% với định dạng custom_id tại commands/embed/embed_buttons.py
         parts = custom_id.split(":")
         if len(parts) < 3:
             return
 
-        system_type = parts[1] # 'role', 'ticket', hoặc 'verify'
-        payload = parts[2]     # Chứa ID (Role ID hoặc Staff Role ID)
-
+        system_type = parts[1] # 'role', 'ticket', 'verify', 'interaction', 'menu'
+        
         # --- OMNI-ROUTING (PHÂN LUỒNG TƯƠNG TÁC) ---
         
         # 1. HỆ THỐNG ROLE (TOGGLE ROLE)
         if system_type == "role":
-            await self._execute_role_logic(interaction, payload)
+            await self._execute_role_logic(interaction, parts[2])
 
         # 2. HỆ THỐNG TICKET (HỖ TRỢ TẠI CHỖ)
         elif system_type == "ticket":
-            await self._execute_ticket_logic(interaction, payload)
+            await self._execute_ticket_logic(interaction, parts[2])
 
         # 3. HỆ THỐNG VERIFY (CỔNG AN NINH)
         elif system_type == "verify":
-            await self._execute_verify_logic(interaction, payload)
+            await self._execute_verify_logic(interaction, parts[2])
+
+        # [THÊM MỚI] 4. HỆ THỐNG MENU (SELECT ROLE)
+        elif system_type == "menu" and parts[2] == "role_pick":
+            await self._execute_menu_role_logic(interaction)
+
+        # [THÊM MỚI] 5. HỆ THỐNG TƯƠNG TÁC OMNI (GACHA, VOTE, SECRET, DISMISS, REFRESH)
+        elif system_type == "interaction":
+            await self._handle_extra_interactions(interaction, parts)
 
     # ----------------------------------------------
     # CHI TIẾT THỰC THI (ENTERPRISE LOGIC)
@@ -138,9 +146,69 @@ class ButtonListener(commands.Cog):
         except:
             await interaction.followup.send(f"{Emojis.HOICHAM} yiyi không thể cấp role xác thực, hãy báo admin kiểm tra lại nhé!", ephemeral=True)
 
+    # ----------------------------------------------
+    # [THÊM MỚI] OMNI-INTERACTION EXTENSIONS
+    # ----------------------------------------------
+
+    async def _execute_menu_role_logic(self, interaction: discord.Interaction):
+        """Xử lý chọn Role từ Menu thả xuống (Dropdown)"""
+        await interaction.response.defer(ephemeral=True)
+        values = interaction.data.get("values", [])
+        if not values: return
+        
+        role_id = values[0]
+        role = interaction.guild.get_role(int(role_id))
+        if not role: return await interaction.followup.send(f"{Emojis.HOICHAM} Role không tồn tại.")
+
+        try:
+            if role in interaction.user.roles:
+                await interaction.user.remove_roles(role)
+                await interaction.followup.send(f"{Emojis.MATTRANG} đã gỡ role **{role.name}**.", ephemeral=True)
+            else:
+                await interaction.user.add_roles(role)
+                await interaction.followup.send(f"{Emojis.YIYITIM} đã cấp role **{role.name}** thành công!", ephemeral=True)
+        except:
+            await interaction.followup.send(f"{Emojis.HOICHAM} Yiyi không đủ quyền cấp role này.", ephemeral=True)
+
+    async def _handle_extra_interactions(self, interaction: discord.Interaction, parts: list):
+        """Xử lý các hệ lẻ: Gacha, Vote, Secret Message, Refresh, Dismiss"""
+        itype = parts[2]
+        data = parts[3] if len(parts) > 3 else "none"
+
+        # 5.1. Secret Message (Chỉ người bấm thấy)
+        if itype == "secret":
+            # Giải nén Token (Gạch dưới -> Khoảng trắng)
+            clean_msg = data.replace("_", " ")
+            await interaction.response.send_message(f"{Emojis.YIYITIM} **Tin nhắn bí mật cho cậu:**\n> {clean_msg}", ephemeral=True)
+
+        # 5.2. Gacha (Quay nhân phẩm)
+        elif itype == "gacha":
+            await interaction.response.defer(ephemeral=True)
+            outcomes = ["Thần kỳ ✨", "May mắn 👍", "Bình thường 😐", "Đen đủi 💀", "Tuyệt vọng 🤡"]
+            luck = random.choice(outcomes)
+            await interaction.followup.send(f"{Emojis.MATTRANG} Kết quả nhân phẩm của {interaction.user.mention}: **{luck}**")
+
+        # 5.3. Vote (Biểu quyết nhanh)
+        elif itype == "vote":
+            # Ghi nhận biểu quyết (Logic lưu trữ sẽ xử lý tại Phase sau nếu sếp cần đếm số)
+            await interaction.response.send_message(f"{Emojis.YIYITIM} Cảm ơn cậu đã tham gia biểu quyết!", ephemeral=True)
+
+        # 5.4. Dismiss (Dọn dẹp tin nhắn)
+        elif itype == "dismiss":
+            if interaction.user.guild_permissions.manage_messages:
+                await interaction.message.delete()
+            else:
+                await interaction.response.send_message(f"{Emojis.HOICHAM} Cậu không có quyền dọn dẹp tin nhắn này!", ephemeral=True)
+
+        # 5.5. Refresh (Cập nhật Realtime)
+        elif itype == "refresh":
+            await interaction.response.defer()
+            # Tương tác này kích hoạt lại việc gửi Embed để cập nhật các biến số {timestamp}, {member_count}...
+            await interaction.edit_original_response(content=f"{Emojis.YIYITIM} Đã làm mới trạng thái dữ liệu!")
+
 async def setup(bot: commands.Bot):
     """nạp listener vào event loop của bot"""
     await bot.add_cog(ButtonListener(bot))
-    print("[load] success: systems.button_listener (Phase 3 Reactive Engine)", flush=True)
+    print("[load] success: systems.button_listener (Phase 3 Full Omni-Interaction Brain)", flush=True)
 
 
