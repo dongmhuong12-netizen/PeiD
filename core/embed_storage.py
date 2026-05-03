@@ -150,11 +150,16 @@ async def get_all_embed_names(guild_id):
 # BUTTONS API (PHASE 3 - ATOMIC UPDATES)
 # =========================
 
-async def atomic_update_button(guild_id, name, button_data: dict = None, action: str = "add", index: int = -1):
+async def atomic_update_button(guild_id, name, button_data: dict = None, action: str = "add", index: int = -1, custom_id: str = None):
     """
     [MULTI-IT] Thao tác an toàn tuyệt đối với mảng nút bấm.
     Ngăn chặn Race Condition (xóa đè dữ liệu) khi nhiều thao tác diễn ra cùng 1 miligiây.
-    Hỗ trợ: 'add' (Thêm), 'remove' (Xóa theo vị trí), 'clear' (Xóa sạch nút).
+    Hỗ trợ: 
+    - 'add': Thêm nút mới.
+    - 'remove': Xóa theo vị trí index.
+    - 'clear': Xóa sạch nút.
+    - 'edit': Sửa dữ liệu nút tại vị trí index cụ thể.
+    - 'update_by_id': Tìm nút theo custom_id và cập nhật dữ liệu (Dùng cho Gacha/Vote).
     """
     if not name:
         return False
@@ -173,9 +178,11 @@ async def atomic_update_button(guild_id, name, button_data: dict = None, action:
 
         data = cache[gid][name]
         
-        # Vá cấu trúc an toàn (Phòng khi file hệ thống chưa update kip)
+        # Vá cấu trúc an toàn (Phòng khi file hệ thống chưa update kịp)
         if "buttons" not in data or not isinstance(data["buttons"], list):
             data["buttons"] = []
+
+        # --- XỬ LÝ CÁC HÀNH ĐỘNG (ATOMIC ACTIONS) ---
 
         if action == "add" and button_data:
             # Multi-IT: Bảo vệ giới hạn 25 linh kiện của Discord API tại tầng Storage
@@ -189,9 +196,30 @@ async def atomic_update_button(guild_id, name, button_data: dict = None, action:
                 data["buttons"].pop(index)
             else:
                 return False
+
+        elif action == "edit" and button_data:
+            # IT Pro: Sửa trực tiếp nút tại index mà không thay đổi thứ tự
+            if 0 <= index < len(data["buttons"]):
+                data["buttons"][index] = copy.deepcopy(button_data)
+            else:
+                return False
+
+        elif action == "update_by_id" and custom_id and button_data:
+            # IT Pro: Tìm và cập nhật nút dựa trên ID (Quan trọng cho hệ thống Reaction/Interaction)
+            found = False
+            for i, btn in enumerate(data["buttons"]):
+                if btn.get("custom_id") == custom_id:
+                    data["buttons"][i] = copy.deepcopy(button_data)
+                    found = True
+                    break
+            if not found: return False
                 
         elif action == "clear":
             data["buttons"] = []
+
+        else:
+            # Hành động không hợp lệ
+            return False
 
         # Đánh dấu dữ liệu đã thay đổi để CacheManager làm việc
         mark_dirty(FILE_KEY)
