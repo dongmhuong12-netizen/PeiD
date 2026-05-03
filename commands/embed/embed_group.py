@@ -68,7 +68,7 @@ class EmbedGroup(app_commands.Group):
 
     @app_commands.command(name="create", description="tạo embed thiết kế mới")
     async def create(self, interaction: discord.Interaction, name: str):
-        # QUY TẮC 3S: Defer ngay lập tức - ephemeral=False để người khác có thể thấy banner đang thiết kế
+        # [VÁ LỖI CHÍ MẠNG] Bốc mạch defer lên đầu tiên theo lệnh sếp để triệt hạ lỗi 404
         await interaction.response.defer(ephemeral=False)
         
         guild = interaction.guild
@@ -116,7 +116,7 @@ class EmbedGroup(app_commands.Group):
     @app_commands.command(name="edit", description="chỉnh sửa embed hiện có")
     @app_commands.autocomplete(name=embed_name_autocomplete)
     async def edit(self, interaction: discord.Interaction, name: str):
-        # IT Standard Defer
+        # [VÁ LỖI CHÍ MẠNG] Bốc mạch defer lên đầu tiên theo lệnh sếp
         await interaction.response.defer(ephemeral=False)
         
         data = await load_embed(interaction.guild.id, name)
