@@ -14,10 +14,13 @@ class FormsGroup(app_commands.Group):
     def _get_config(self, guild_id, embed_name):
         db = get_raw(FILE_KEY)
         if str(guild_id) not in db: db[str(guild_id)] = {}
-        return db[str(guild_id)].get(embed_name, {
-            "log_channel_id": None,
-            "fields": {} # Lưu theo dạng: "1": {"label": "...", "placeholder": "...", "required": True}
-        })
+        # Đảm bảo cấu trúc dữ liệu cho từng embed
+        if embed_name not in db[str(guild_id)]:
+            db[str(guild_id)][embed_name] = {
+                "log_channel_id": None,
+                "fields": {}
+            }
+        return db[str(guild_id)][embed_name]
 
     def _save_config(self, guild_id, embed_name, config):
         db = get_raw(FILE_KEY)
@@ -30,7 +33,7 @@ class FormsGroup(app_commands.Group):
     # LỆNH 1: SETUP NỀN
     # =========================
     @app_commands.command(name="setup", description="Khởi tạo đơn và kênh nhận kết quả")
-    async def setup(self, interaction: discord.Interaction, embed_name: str, log_channel_id: str):
+    async def setup_base(self, interaction: discord.Interaction, embed_name: str, log_channel_id: str):
         await interaction.response.defer(ephemeral=True)
         config = self._get_config(interaction.guild.id, embed_name)
         config["log_channel_id"] = log_channel_id
@@ -55,7 +58,7 @@ class FormsGroup(app_commands.Group):
         config = self._get_config(interaction.guild.id, embed_name)
         
         config["fields"][str(slot)] = {
-            "label": label[:45], # Giới hạn Discord
+            "label": label[:45], 
             "placeholder": placeholder[:100],
             "required": required
         }
@@ -76,7 +79,7 @@ class FormsGroup(app_commands.Group):
             "style": "success",
             "label": label,
             "emoji": "📝",
-            "custom_id": f"yiyi:forms:open:{embed_name}", # Gắn kèm tên embed để nhận diện
+            "custom_id": f"yiyi:forms:open:{embed_name}", 
             "system": "forms"
         }
 
@@ -85,3 +88,19 @@ class FormsGroup(app_commands.Group):
             await interaction.followup.send(f"✅ Đã gắn nút gửi đơn vào `{embed_name}`!")
         else:
             await interaction.followup.send("❌ Gắn nút thất bại. Kiểm tra tên Embed hoặc số lượng nút sếp nhé.")
+
+# =========================
+# Ổ CẮM EXTENSION (QUAN TRỌNG)
+# =========================
+async def setup(bot: commands.Bot):
+    # Lấy lệnh cha /p đã được khai báo ở core.root
+    p_cmd = bot.tree.get_command("p")
+    if p_cmd and isinstance(p_cmd, app_commands.Group):
+        # Dọn dẹp nếu đã tồn tại để tránh lỗi trùng lặp khi reload
+        existing = next((c for c in p_cmd.commands if c.name == "forms"), None)
+        if existing: 
+            p_cmd.remove_command("forms")
+        
+        # Tiêm nhánh /p forms vào
+        p_cmd.add_command(FormsGroup())
+        print("[LOAD] Success: commands.forms.forms_group", flush=True)
