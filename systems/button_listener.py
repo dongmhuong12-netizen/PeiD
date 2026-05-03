@@ -22,7 +22,7 @@ class ButtonListener(commands.Cog):
         if not custom_id or not str(custom_id).startswith("yiyi:"):
             return
 
-        # PHÂN TÁCH TOKEN: yiyi:[hệ_thống:[loại/dữ_liệu]:[extra]
+        # PHÂN TÁCH TOKEN: yiyi:[hệ_thống]:[loại/dữ_liệu]:[extra]
         # Đồng bộ 100% với định dạng custom_id tại commands/embed/embed_buttons.py
         parts = custom_id.split(":")
         if len(parts) < 3:
@@ -44,16 +44,16 @@ class ButtonListener(commands.Cog):
         elif system_type == "verify":
             await self._execute_verify_logic(interaction, parts[2])
 
-        # [THÊM MỚI] 4. HỆ THỐNG MENU (SELECT ROLE)
+        # [BỔ SUNG PHASE 3] 4. HỆ THỐNG MENU (SELECT ROLE)
         elif system_type == "menu" and parts[2] == "role_pick":
             await self._execute_menu_role_logic(interaction)
 
-        # [THÊM MỚI] 5. HỆ THỐNG TƯƠNG TÁC OMNI (GACHA, VOTE, SECRET, DISMISS, REFRESH)
+        # [BỔ SUNG PHASE 3] 5. HỆ THỐNG TƯƠNG TÁC OMNI (GACHA, VOTE, SECRET, DISMISS, REFRESH)
         elif system_type == "interaction":
             await self._handle_extra_interactions(interaction, parts)
 
     # ----------------------------------------------
-    # CHI TIẾT THỰC THI (ENTERPRISE LOGIC)
+    # CHI TIẾT THỰC THI (ENTERPRISE LOGIC) - GIỮ NGUYÊN DNA CỦA SẾP
     # ----------------------------------------------
 
     async def _execute_role_logic(self, interaction: discord.Interaction, role_id: str):
@@ -134,7 +134,7 @@ class ButtonListener(commands.Cog):
         if role in interaction.user.roles:
             return await interaction.followup.send(f"{Emojis.YIYITIM} cậu đã xác thực thành công từ trước rồi nhé!", ephemeral=True)
 
-        # SECURITY: Check account age (Chống Clone)
+        # SECURITY: Check account age (Chống Clone acc mới dưới 3 ngày)
         age = (discord.utils.utcnow() - interaction.user.created_at).days
         if age < 3:
             # Ghi log âm thầm cho admin check
@@ -151,27 +151,27 @@ class ButtonListener(commands.Cog):
     # ----------------------------------------------
 
     async def _execute_menu_role_logic(self, interaction: discord.Interaction):
-        """Xử lý chọn Role từ Menu thả xuống (Dropdown)"""
+        """Xử lý chọn Role từ Dropdown Menu"""
         await interaction.response.defer(ephemeral=True)
         values = interaction.data.get("values", [])
         if not values: return
         
         role_id = values[0]
         role = interaction.guild.get_role(int(role_id))
-        if not role: return await interaction.followup.send(f"{Emojis.HOICHAM} Role không tồn tại.")
+        if not role: return await interaction.followup.send(f"{Emojis.HOICHAM} role này không tồn tại.", ephemeral=True)
 
         try:
             if role in interaction.user.roles:
                 await interaction.user.remove_roles(role)
-                await interaction.followup.send(f"{Emojis.MATTRANG} đã gỡ role **{role.name}**.", ephemeral=True)
+                await interaction.followup.send(f"{Emojis.MATTRANG} đã gỡ role **{role.name}** khỏi cậu.", ephemeral=True)
             else:
                 await interaction.user.add_roles(role)
-                await interaction.followup.send(f"{Emojis.YIYITIM} đã cấp role **{role.name}** thành công!", ephemeral=True)
+                await interaction.followup.send(f"{Emojis.YIYITIM} đã cấp role **{role.name}** cho cậu thành công!", ephemeral=True)
         except:
-            await interaction.followup.send(f"{Emojis.HOICHAM} Yiyi không đủ quyền cấp role này.", ephemeral=True)
+            await interaction.followup.send(f"{Emojis.HOICHAM} yiyi không đủ quyền hạn cấp role này, hãy báo admin nhé!", ephemeral=True)
 
     async def _handle_extra_interactions(self, interaction: discord.Interaction, parts: list):
-        """Xử lý các hệ lẻ: Gacha, Vote, Secret Message, Refresh, Dismiss"""
+        """Xử lý Gacha, Vote, Secret Message, Refresh, Dismiss"""
         itype = parts[2]
         data = parts[3] if len(parts) > 3 else "none"
 
@@ -179,36 +179,34 @@ class ButtonListener(commands.Cog):
         if itype == "secret":
             # Giải nén Token (Gạch dưới -> Khoảng trắng)
             clean_msg = data.replace("_", " ")
-            await interaction.response.send_message(f"{Emojis.YIYITIM} **Tin nhắn bí mật cho cậu:**\n> {clean_msg}", ephemeral=True)
+            await interaction.response.send_message(f"{Emojis.YIYITIM} **bí mật cho cậu:**\n> {clean_msg}", ephemeral=True)
 
         # 5.2. Gacha (Quay nhân phẩm)
         elif itype == "gacha":
-            await interaction.response.defer(ephemeral=True)
-            outcomes = ["Thần kỳ ✨", "May mắn 👍", "Bình thường 😐", "Đen đủi 💀", "Tuyệt vọng 🤡"]
-            luck = random.choice(outcomes)
-            await interaction.followup.send(f"{Emojis.MATTRANG} Kết quả nhân phẩm của {interaction.user.mention}: **{luck}**")
+            await interaction.response.defer(ephemeral=False)
+            res = random.choice(["✨ cực phẩm", "👍 may mắn", "😐 bình thường", "💀 đen đủi", "🤡 về vườn"])
+            await interaction.followup.send(f"{interaction.user.mention} kết quả nhân phẩm: **{res}**")
 
         # 5.3. Vote (Biểu quyết nhanh)
         elif itype == "vote":
-            # Ghi nhận biểu quyết (Logic lưu trữ sẽ xử lý tại Phase sau nếu sếp cần đếm số)
-            await interaction.response.send_message(f"{Emojis.YIYITIM} Cảm ơn cậu đã tham gia biểu quyết!", ephemeral=True)
+            await interaction.response.send_message(f"{Emojis.YIYITIM} yiyi đã ghi nhận biểu quyết của cậu rồi nhé!", ephemeral=True)
 
         # 5.4. Dismiss (Dọn dẹp tin nhắn)
         elif itype == "dismiss":
             if interaction.user.guild_permissions.manage_messages:
                 await interaction.message.delete()
             else:
-                await interaction.response.send_message(f"{Emojis.HOICHAM} Cậu không có quyền dọn dẹp tin nhắn này!", ephemeral=True)
+                await interaction.response.send_message(f"{Emojis.HOICHAM} cậu không đủ quyền hạn để dọn dẹp tin nhắn này!", ephemeral=True)
 
-        # 5.5. Refresh (Cập nhật Realtime)
+        # 5.5. Refresh (Làm mới dữ liệu)
         elif itype == "refresh":
             await interaction.response.defer()
-            # Tương tác này kích hoạt lại việc gửi Embed để cập nhật các biến số {timestamp}, {member_count}...
-            await interaction.edit_original_response(content=f"{Emojis.YIYITIM} Đã làm mới trạng thái dữ liệu!")
+            # Tương tác này kích hoạt lại việc gửi Embed để cập nhật các biến số realtime
+            await interaction.edit_original_response(content=f"{Emojis.YIYITIM} dữ liệu đã được làm mới thành công!")
 
 async def setup(bot: commands.Bot):
     """nạp listener vào event loop của bot"""
     await bot.add_cog(ButtonListener(bot))
-    print("[load] success: systems.button_listener (Phase 3 Full Omni-Interaction Brain)", flush=True)
+    print("[load] success: systems.button_listener (Phase 3 Full Option)", flush=True)
 
 
