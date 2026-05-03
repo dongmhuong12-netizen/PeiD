@@ -1,4 +1,3 @@
-```python
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -98,4 +97,4 @@ async def setup(bot: commands.Bot):
     else:
         print("[error] không tìm thấy khung /p!", flush=True)
 
-```
+
