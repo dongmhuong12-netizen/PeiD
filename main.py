@@ -64,9 +64,11 @@ EXTENSIONS = [
     "core.booster",              
     "systems.reaction_role",     
     "commands.fun.yiyi_core",     # LỆNH FUN YIYI: Hệ thống tương tác cá nhân hóa
-    "commands.embed.embed_advanced", # ADVANCED: Hệ thống Export, Import, Clone (Phase 1)
-    "commands.embed.embed_webhook",  # WEBHOOK: Hệ thống giả danh gửi tin nhắn (Phase 2)
+    "commands.embed.embed_advanced", # ADVANCED: Hệ thống Export, Import, Clone
+    "commands.embed.embed_webhook",  # WEBHOOK: Hệ thống giả danh gửi tin nhắn
     "commands.embed.embed_link",     
+    "commands.ticket.ticket_group",  # PHASE 3: Hệ thống Ticket hỗ trợ
+    "commands.forms.forms_group",    # PHASE 3: Hệ thống Biểu mẫu Modal
 ]
 
 async def load_extensions():
@@ -83,36 +85,33 @@ async def load_extensions():
             print(f"[LOAD ERROR] {ext}: {e}", flush=True)
 
 # =========================
-# SỰ KIỆN AN NINH (DÂY THẦN KINH PHASE 3)
+# SỰ KIỆN TƯƠNG TÁC (NÃO XỬ LÝ PHASE 3)
 # =========================
 
 @bot.event
 async def on_member_join(member: discord.Member):
-    """[TỰ ĐỘNG XÍCH CỔ] Tự động gán Role Chưa Veri khi mem mới vào server"""
-    try:
-        from core.cache_manager import get_raw
-        db = get_raw("verify_configs")
-        config = db.get(str(member.guild.id))
-        
-        # Nếu server có cài đặt an ninh và có set Role Unverified
-        if config and config.get("unverified_role"):
-            u_role = member.guild.get_role(int(config["unverified_role"]))
-            if u_role:
-                await member.add_roles(u_role, reason="Yiyi Security: Auto-assigned Unverified Role")
-    except Exception as e:
-        print(f"[SECURITY WARNING] Lỗi gán Role Unverified cho {member.id}: {e}", flush=True)
+    """[SECURITY] Mạch Verify cũ đã được gỡ bỏ theo yêu cầu để đảm bảo an toàn"""
+    pass
 
 @bot.event
 async def on_interaction(interaction: discord.Interaction):
-    """[NÃO XỬ LÝ NÚT BẤM] Lắng nghe nút Verify và truyền cho đao phủ xử lý"""
+    """[NÃO XỬ LÝ NÚT BẤM] Phân luồng tín hiệu Ticket và Forms"""
     try:
         if interaction.type == discord.InteractionType.component:
-            # IT Pro: Import bên trong sự kiện để tránh lỗi vòng lặp Import (Circular Import)
-            from systems.verify_system import VerifySystem
+            custom_id = interaction.data.get("custom_id", "")
             
-            # Truyền tín hiệu cho Hệ thống An ninh. Nếu nó bắt được ID của nó, nó sẽ xử lý và trả về True
-            if await VerifySystem.handle_interaction(interaction):
-                return # Đã xử lý xong, ngắt luồng để khỏi vướng các event khác
+            # IT Pro: Import bên trong để tránh Circular Import
+            # Mạch xử lý TICKET
+            if custom_id.startswith("yiyi:ticket:"):
+                from systems.ticket_system import handle_ticket_interaction
+                await handle_ticket_interaction(interaction)
+                return
+
+            # Mạch xử lý FORMS
+            elif custom_id.startswith("yiyi:forms:"):
+                from systems.forms_system import handle_forms_interaction
+                await handle_forms_interaction(interaction)
+                return
                 
     except Exception as e:
         print(f"[INTERACTION WARNING] {e}", flush=True)
@@ -139,7 +138,6 @@ async def on_ready():
     # 2. SLASH SYNC (Chốt hạ toàn bộ cây lệnh)
     try:
         print("[SLASH] Đang đồng bộ hóa cây lệnh hợp nhất...", flush=True)
-        # Đồng bộ toàn cầu (Có thể mất vài phút để cập nhật hết 100k server)
         synced = await bot.tree.sync()
         print(f"[SLASH] ✅ Thành công! Đã đồng bộ {len(synced)} lệnh Slash.", flush=True)
     except Exception as e:
@@ -169,12 +167,8 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        # Bỏ qua để nhường luồng xử lý cuối cùng cho finally
         pass
     finally:
         # Chốt chặn cuối cùng để bảo vệ dữ liệu JSON
         force_flush()
         print("[EXIT] Bot đã tắt an toàn và đã lưu dữ liệu.")
-
-
-
