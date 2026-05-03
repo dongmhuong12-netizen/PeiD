@@ -2,6 +2,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 import re
+import copy
 
 from core.embed_storage import load_embed, get_all_embed_names, atomic_update_button
 from utils.emojis import Emojis
@@ -262,11 +263,11 @@ async def setup(bot: commands.Bot):
             button_group.add_command(btn_role_cmd)
             button_group.add_command(btn_ticket_cmd)
             button_group.add_command(btn_verify_cmd)
-            button_group.add_command(btn_interaction_cmd) # [MỚI]
-            button_group.add_command(btn_menu_cmd)        # [MỚI]
+            button_group.add_command(btn_interaction_cmd) 
+            button_group.add_command(btn_menu_cmd)        
             button_group.add_command(btn_clear_cmd)
             
-            print("[load] success: commands.embed.embed_buttons (Phase 3 Full Omni-Interaction)", flush=True)
+            print("[load] success: commands.embed.embed_buttons (Phase 3 Full Option)", flush=True)
         else:
             print("[error] Phase 3: Không tìm thấy nhánh /p button (Kiểm tra lại core.root)", flush=True)
     else:
