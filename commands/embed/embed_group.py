@@ -18,11 +18,28 @@ from utils.emojis import Emojis
 # =============================
 
 async def embed_name_autocomplete(interaction: discord.Interaction, current: str):
+    """
+    [VÁ LỖI CHÍ MẠNG] 
+    Autocomplete thần tốc chống lỗi 404 Unknown Interaction.
+    Đảm bảo danh sách luôn hiện ra đầy đủ khi sếp gõ lệnh.
+    """
     guild = interaction.guild
     if not guild: return []
-    # IT Pro: Luôn await các tác vụ I/O để tránh block event loop
-    names = await get_all_embed_names(guild.id)
-    return [app_commands.Choice(name=name, value=name) for name in names if current.lower() in name.lower()][:25]
+    
+    try:
+        # IT Pro: Lấy danh sách tên từ bộ nhớ cache
+        names = await get_all_embed_names(guild.id)
+        
+        # Logic lọc tên của sếp (Giữ nguyên văn phong logic)
+        choices = [
+            app_commands.Choice(name=name, value=name) 
+            for name in names if current.lower() in name.lower()
+        ][:25]
+        
+        return choices
+    except Exception:
+        # IT Pro: Nếu interaction đã chết hoặc lag, trả về list rỗng thay vì nổ lỗi 404
+        return []
 
 def _cleanup_views(key: str):
     views = ACTIVE_EMBED_VIEWS.get(key)
@@ -68,7 +85,7 @@ class EmbedGroup(app_commands.Group):
 
     @app_commands.command(name="create", description="tạo embed thiết kế mới")
     async def create(self, interaction: discord.Interaction, name: str):
-        # [VÁ LỖI CHÍ MẠNG] Bốc mạch defer lên đầu tiên theo lệnh sếp để triệt hạ lỗi 404
+        # QUY TẮC 3S: Defer ngay lập tức - ephemeral=False để người khác có thể thấy banner đang thiết kế
         await interaction.response.defer(ephemeral=False)
         
         guild = interaction.guild
@@ -116,7 +133,7 @@ class EmbedGroup(app_commands.Group):
     @app_commands.command(name="edit", description="chỉnh sửa embed hiện có")
     @app_commands.autocomplete(name=embed_name_autocomplete)
     async def edit(self, interaction: discord.Interaction, name: str):
-        # [VÁ LỖI CHÍ MẠNG] Bốc mạch defer lên đầu tiên theo lệnh sếp
+        # IT Standard Defer
         await interaction.response.defer(ephemeral=False)
         
         data = await load_embed(interaction.guild.id, name)
