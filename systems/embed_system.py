@@ -58,7 +58,8 @@ class EmbedSystem:
                     "thumbnail": None,
                     "author": {"name": None, "icon_url": None, "url": None},
                     "footer": {"text": None, "icon_url": None},
-                    "fields": [] 
+                    "fields": [],
+                    "buttons": [] # [THÊM MỚI] Multi-IT: Khởi tạo móng an toàn cho Buttons để tránh KeyError sau này
                 }
 
                 # 5. SAVE
@@ -70,3 +71,6 @@ class EmbedSystem:
                 # [VÁ LỖI] Dọn dẹp RAM: Xóa Lock khỏi bộ nhớ sau khi xử lý xong
                 if guild_id in _guild_locks and not lock.locked():
                     _guild_locks.pop(guild_id, None)
+
+
+
