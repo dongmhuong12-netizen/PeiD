@@ -1,10 +1,11 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-import re # Tiêm bộ lọc ký tự lạ
+import re
 
 from core.embed_storage import atomic_update_button
 from core.cache_manager import get_raw, mark_dirty, update, save as force_save
+from utils.emojis import Emojis # Đảm bảo đã import để dùng emoji hệ thống
 
 FILE_KEY = "forms_configs"
 
@@ -23,7 +24,8 @@ class FormsGroup(app_commands.Group):
         if embed_name not in db[str(guild_id)]:
             db[str(guild_id)][embed_name] = {
                 "log_channel_id": None,
-                "form_title": None, # Thêm mạch lưu tiêu đề đơn
+                "form_title": None,
+                "show_thumbnail": True, # Mặc định hiện Avatar cho sang
                 "fields": {}
             }
         return db[str(guild_id)][embed_name]
@@ -36,35 +38,44 @@ class FormsGroup(app_commands.Group):
         mark_dirty(FILE_KEY)
 
     # =========================
-    # LỆNH 1: SETUP NỀN (ĐÃ CẬP NHẬT)
+    # LỆNH 1: SETUP NỀN (Văn phong & Thứ tự mới)
     # =========================
-    @app_commands.command(name="setup", description="Khởi tạo đơn, tiêu đề và kênh nhận kết quả")
+    @app_commands.command(name="setup", description="1. Setup đơn, tiêu đề và kênh nhận kết quả")
     @app_commands.describe(
-        embed_name="Tên embed gắn đơn",
-        log_channel_id="ID hoặc Tag kênh nhận kết quả",
-        form_title="Tiêu đề hiển thị trên đơn (Ví dụ: ĐƠN ỨNG TUYỂN STAFF)"
+        embed_name="2. Tên embed gắn form",
+        form_title="4. Tiêu đề hiển thị trên đơn",
+        log_channel_id="3. ID hoặc tag kênh nhận kết quả",
+        show_thumbnail="Lựa chọn hiển thị avatar người gửi (Thumbnail)"
     )
-    async def setup_base(self, interaction: discord.Interaction, embed_name: str, log_channel_id: str, form_title: str = None):
+    async def setup_base(self, interaction: discord.Interaction, embed_name: str, form_title: str, log_channel_id: str, show_thumbnail: bool = True):
         await interaction.response.defer(ephemeral=True)
         
-        # 1. Gọt sạch ID kênh log
+        # Gọt sạch ID kênh log
         clean_log_id = self._sanitize_id(log_channel_id)
         
         config = self._get_config(interaction.guild.id, embed_name)
         config["log_channel_id"] = clean_log_id
-        config["form_title"] = form_title # Lưu tiêu đề sếp muốn
+        config["form_title"] = form_title
+        config["show_thumbnail"] = show_thumbnail
         
         self._save_config(interaction.guild.id, embed_name, config)
         await force_save(FILE_KEY)
         
-        res_msg = f"✅ Đã thiết lập đơn cho Embed `{embed_name}`.\n• Kênh log: <#{clean_log_id}>"
-        if form_title:
-            res_msg += f"\n• Tiêu đề đơn: **{form_title}**"
+        # Render văn phong theo ý sếp
+        embed_res = discord.Embed(
+            title=f"{Emojis.MATTRANG} thiết lập form thành công",
+            description=(
+                f"embed: `{embed_name}`.\n•\n"
+                f"tiêu đề: **{form_title}**\n"
+                f"kênh trả đơn: <#{clean_log_id}>"
+            ),
+            color=0xf8bbd0
+        )
             
-        await interaction.followup.send(res_msg)
+        await interaction.followup.send(embed=embed_res)
 
     # =========================
-    # LỆNH 2: THIẾT LẬP TRƯỜNG (1-5) - GIỮ NGUYÊN
+    # LỆNH 2: THIẾT LẬP TRƯỜNG (Văn phong mới)
     # =========================
     @app_commands.command(name="field", description="Cấu hình nội dung cho từng ô nhập liệu (Tối đa 5)")
     @app_commands.choices(slot=[
@@ -86,12 +97,23 @@ class FormsGroup(app_commands.Group):
         
         self._save_config(interaction.guild.id, embed_name, config)
         await force_save(FILE_KEY)
-        await interaction.followup.send(f"✅ Đã cập nhật **Trường {slot}** cho đơn `{embed_name}`.")
+
+        # Render văn phong đóng khung biến
+        embed_res = discord.Embed(
+            title=f"{Emojis.MATTRANG} cập nhật nội dung trường `{slot}` thành công",
+            description=(
+                f"embed: `{embed_name}`\n"
+                f"nội dung: `{label}`\n"
+                f"chú thích: `{placeholder}`"
+            ),
+            color=0xf8bbd0
+        )
+        await interaction.followup.send(embed=embed_res)
 
     # =========================
-    # LỆNH 3: CẤY NÚT GỬI ĐƠN - GIỮ NGUYÊN
+    # LỆNH 3: CẤY NÚT GỬI ĐƠN (Văn phong mới)
     # =========================
-    @app_commands.command(name="apply", description="Gắn nút gửi đơn vào Embed")
+    @app_commands.command(name="apply", description="11. Liên kết Form vào Embed")
     async def apply(self, interaction: discord.Interaction, embed_name: str, label: str = "Gửi đơn đăng ký"):
         await interaction.response.defer(ephemeral=True)
         
@@ -105,10 +127,20 @@ class FormsGroup(app_commands.Group):
         }
 
         success = await atomic_update_button(interaction.guild.id, embed_name, action="add", button_data=btn_data)
+        
         if success:
-            await interaction.followup.send(f"✅ Đã gắn nút gửi đơn vào `{embed_name}`!")
+            embed_success = discord.Embed(
+                title=f"{Emojis.MATTRANG} liên kết với embed `{embed_name}` thành công",
+                color=0xf8bbd0
+            )
+            await interaction.followup.send(embed=embed_success)
         else:
-            await interaction.followup.send("❌ Gắn nút thất bại. Kiểm tra tên Embed hoặc số lượng nút sếp nhé.")
+            embed_err = discord.Embed(
+                title=f"{Emojis.HOICHAM} hmm...? có lỗi gì đó ở đây",
+                description=f"cậu hãy nhập lại tên embed hoặc kiểm tra lại trường nhập liệu nhé",
+                color=0xf8bbd0
+            )
+            await interaction.followup.send(embed=embed_err)
 
 async def setup(bot: commands.Bot):
     p_cmd = bot.tree.get_command("p")
@@ -116,4 +148,4 @@ async def setup(bot: commands.Bot):
         existing = next((c for c in p_cmd.commands if c.name == "forms"), None)
         if existing: p_cmd.remove_command("forms")
         p_cmd.add_command(FormsGroup())
-        print("[LOAD] Success: commands.forms.forms_group (Custom Title)", flush=True)
+        print("[LOAD] Success: commands.forms.forms_group (Stylized)", flush=True)
