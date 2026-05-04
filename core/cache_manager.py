@@ -82,8 +82,10 @@ async def _write_file_async(key: str, data: dict):
             json_str = await asyncio.to_thread(json.dumps, data, indent=2, ensure_ascii=False)
             await f.write(json_str)
         await asyncio.to_thread(os.replace, tmp, path)
+        return True # [BỔ SUNG] Trả về trạng thái để worker xử lý hồi phục
     except Exception as e:
         print(f"[DISK WRITE ERROR] {key}: {e}", flush=True)
+        return False # [BỔ SUNG] Đánh dấu thất bại
 
 # =========================
 # PUBLIC API
@@ -140,10 +142,18 @@ async def _flush_worker():
                 data = _cache.get(key)
                 if data is not None:
                     # [VÁ LỖI] Dùng aiofiles thay vì open() sync
-                    await _write_file_async(key, copy.deepcopy(data))
+                    success = await _write_file_async(key, copy.deepcopy(data))
+                    
+                    # [BỔ SUNG] RECOVERY LOGIC: Nếu lưu thất bại, đưa key trở lại set dirty để thử lại sau
+                    if not success:
+                        _dirty_keys.add(key)
+                        print(f"[CACHE RECOVERY] Đã đưa {key} trở lại hàng đợi lưu do lỗi đĩa.", flush=True)
 
             _last_flush_time = time.time()
-            print(f"[CACHE] Đã tự động lưu {len(keys_to_flush)} tệp.", flush=True)
+            # Tính toán số lượng thực tế đã lưu thành công
+            saved_count = len(keys_to_flush) - len([k for k in keys_to_flush if k in _dirty_keys])
+            if saved_count > 0:
+                print(f"[CACHE] Đã tự động lưu {saved_count} tệp.", flush=True)
 
 async def _backup_worker():
     while True:
