@@ -5,9 +5,13 @@ FILE_KEY = "forms_configs"
 
 # --- LỚP MODAL ĐỘNG ---
 class DynamicFormModal(discord.ui.Modal):
-    def __init__(self, title, fields_config, log_channel):
-        super().__init__(title=title[:45])
+    def __init__(self, form_title, fields_config, log_channel):
+        # Thiết lập tiêu đề cho cửa sổ Popup (Giới hạn 45 ký tự của Discord)
+        popup_title = (form_title or "📝 ĐƠN ĐĂNG KÝ")[:45]
+        super().__init__(title=popup_title)
+        
         self.log_channel = log_channel
+        self.form_title = form_title or "📝 ĐƠN ĐĂNG KÝ MỚI"
         self.inputs = {}
 
         # Sắp xếp fields theo thứ tự 1-5 và thêm vào Modal
@@ -18,15 +22,17 @@ class DynamicFormModal(discord.ui.Modal):
                 label=f["label"],
                 placeholder=f["placeholder"],
                 required=f["required"],
+                # Nếu nhãn dài, tự động chuyển sang dạng Paragraph cho dễ nhập liệu
                 style=discord.TextStyle.paragraph if len(f["label"]) > 15 else discord.TextStyle.short
             )
             self.add_item(text_input)
             self.inputs[f["label"]] = text_input
 
     async def on_submit(self, interaction: discord.Interaction):
+        # [CẬP NHẬT] Sử dụng Form Title sếp đã set và xoá ID User cho thẩm mỹ
         embed = discord.Embed(
-            title="📝 ĐƠN ĐĂNG KÝ MỚI",
-            description=f"Người gửi: {interaction.user.mention} (ID: {interaction.user.id})",
+            title=self.form_title,
+            description=f"Người gửi: {interaction.user.mention}", # Chỉ giữ lại mention
             color=discord.Color.green(),
             timestamp=discord.utils.utcnow()
         )
@@ -52,8 +58,14 @@ async def handle_forms_interaction(interaction: discord.Interaction):
     if not config or not config["fields"]:
         return await interaction.response.send_message("⚠️ Đơn này chưa được cấu hình nội dung sếp ơi!", ephemeral=True)
 
-    log_channel = interaction.guild.get_channel(int(config["log_channel_id"]))
+    try:
+        log_channel = interaction.guild.get_channel(int(config["log_channel_id"]))
+    except (ValueError, TypeError):
+        log_channel = None
+    
+    # [CẬP NHẬT] Lấy Title sếp đã lưu từ Config để truyền vào Modal
+    form_title = config.get("form_title")
     
     # Bật Modal cho User
-    modal = DynamicFormModal(title=f"Đơn: {embed_name}", fields_config=config["fields"], log_channel=log_channel)
+    modal = DynamicFormModal(form_title=form_title, fields_config=config["fields"], log_channel=log_channel)
     await interaction.response.send_modal(modal)
