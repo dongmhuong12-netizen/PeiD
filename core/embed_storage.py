@@ -241,5 +241,3 @@ async def atomic_update_button(guild_id, name, button_data: dict = None, action:
         mark_dirty(FILE_KEY)
         
     return True
-
-
