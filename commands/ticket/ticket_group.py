@@ -2,6 +2,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 import asyncio
+import re # Tiêm thêm để lọc ký tự
 
 from core.embed_storage import load_embed, atomic_update_button
 from core.cache_manager import get_raw, mark_dirty, update, save as force_save
@@ -20,7 +21,7 @@ class TicketGroup(app_commands.Group):
             update(FILE_KEY, db)
         return db.get(str(guild_id), {
             "category_id": None,
-            "staff_role_id": None,
+            "staff_role_ids": [], # Cập nhật sang danh sách
             "log_channel_id": None,
             "ticket_count": 0
         })
@@ -33,47 +34,67 @@ class TicketGroup(app_commands.Group):
         mark_dirty(FILE_KEY)
 
     # =========================
-    # LỆNH 1: SETUP THỦ CÔNG QUA ID
+    # LỆNH 1: SETUP THÔNG MINH (ĐÃ CẬP NHẬT)
     # =========================
-    @app_commands.command(name="setup", description="Cấu hình ID hệ thống ticket (Manual Mode)")
+    @app_commands.command(name="setup", description="Cấu hình Ticket (Gõ nhiều role cách nhau bằng dấu /)")
     @app_commands.describe(
-        category_id="ID danh mục chứa các kênh ticket",
-        staff_role_id="ID role của nhân viên hỗ trợ",
-        log_channel_id="ID kênh gửi bản lưu (transcript) sau khi đóng"
+        category_id="ID danh mục hoặc Tag danh mục",
+        staff_roles="ID role hoặc Tag các role nhân viên (Ví dụ: @Role1 / @Role2)",
+        log_channel_id="ID kênh hoặc Tag kênh gửi transcript"
     )
-    async def setup_ticket(self, interaction: discord.Interaction, category_id: str, staff_role_id: str, log_channel_id: str):
+    async def setup_ticket(self, interaction: discord.Interaction, category_id: str, staff_roles: str, log_channel_id: str):
         await interaction.response.defer(ephemeral=True)
         
         guild = interaction.guild
+        
+        # --- BẮT ĐẦU MẠCH CẬP NHẬT (LỌC & TÁCH) ---
+        def sanitize(text): return re.sub(r'\D', '', text) # Hàm gọt sạch ký tự lạ
+        
+        # 1. Gọt sạch ID Kênh và Danh mục
+        clean_cat_id = sanitize(category_id)
+        clean_log_id = sanitize(log_channel_id)
+        
+        # 2. Tách và gọt danh sách Role Staff
+        # Tách theo: dấu gạch chéo (/), dấu phẩy (,) hoặc khoảng trắng
+        raw_parts = re.split(r'[/,\s]+', staff_roles)
+        clean_staff_ids = [sanitize(p) for p in raw_parts if sanitize(p)]
+        # --- KẾT THÚC MẠCH CẬP NHẬT ---
+
         try:
-            cat = guild.get_channel(int(category_id))
-            role = guild.get_role(int(staff_role_id))
-            log = guild.get_channel(int(log_channel_id))
+            cat = guild.get_channel(int(clean_cat_id)) if clean_cat_id else None
+            log = guild.get_channel(int(clean_log_id)) if clean_log_id else None
             
-            if not all([cat, role, log]):
-                return await interaction.followup.send("❌ Một hoặc nhiều ID không hợp lệ trong server này. Sếp kiểm tra lại nhé!")
-        except ValueError:
-            return await interaction.followup.send("❌ Vui lòng chỉ nhập số ID, không nhập ký tự lạ.")
+            # Kiểm tra xem có ít nhất 1 role hợp lệ không
+            valid_roles = []
+            for r_id in clean_staff_ids:
+                role = guild.get_role(int(r_id))
+                if role: valid_roles.append(role)
+            
+            if not cat or not log or not valid_roles:
+                return await interaction.followup.send("❌ Yiyi không tìm thấy Kênh hoặc Role nào hợp lệ. Sếp kiểm tra lại ID/Tag nhé!")
+        except (ValueError, TypeError):
+            return await interaction.followup.send("❌ Dữ liệu nhập vào không đúng định dạng số ID.")
 
         config = self._get_config(guild.id)
         config.update({
-            "category_id": str(category_id),
-            "staff_role_id": str(staff_role_id),
-            "log_channel_id": str(log_channel_id)
+            "category_id": str(clean_cat_id),
+            "staff_role_ids": [str(r.id) for r in valid_roles], # Lưu mảng ID
+            "log_channel_id": str(clean_log_id)
         })
         
         self._save_config(guild.id, config)
         await force_save(FILE_KEY)
         
+        role_mentions = ", ".join([r.mention for r in valid_roles])
         await interaction.followup.send(
             f"✅ **Ticket Setup:** Đã lưu cấu hình!\n"
             f"• Danh mục: {cat.name}\n"
-            f"• Staff Role: {role.name}\n"
+            f"• Staff Roles ({len(valid_roles)}): {role_mentions}\n"
             f"• Log Channel: {log.name}"
         )
 
     # =========================
-    # LỆNH 2: CẤY NÚT MỞ TICKET
+    # LỆNH 2: CẤY NÚT MỞ TICKET (GIỮ NGUYÊN)
     # =========================
     @app_commands.command(name="apply", description="Gắn nút mở ticket vào Embed thiết kế")
     @app_commands.describe(embed_name="Tên embed muốn gắn nút")
@@ -82,7 +103,8 @@ class TicketGroup(app_commands.Group):
         guild_id = interaction.guild.id
         config = self._get_config(guild_id)
 
-        if not config["category_id"] or not config["staff_role_id"]:
+        # Cập nhật check: Kiểm tra danh sách role thay vì 1 role
+        if not config.get("category_id") or not config.get("staff_role_ids"):
             return await interaction.followup.send("❌ Hệ thống chưa được setup! Dùng `/p ticket setup` trước sếp ơi.")
 
         btn_data = {
@@ -103,10 +125,7 @@ class TicketGroup(app_commands.Group):
 
         await interaction.followup.send(f"✅ Đã cấy mạch Ticket vào embed `{embed_name}` thành công!")
 
-# =========================
-# INJECTION (Ổ CẮM CHUẨN)
-# =========================
-async def setup(bot: commands.Bot): # Đổi từ setup_ext thành setup
+async def setup(bot: commands.Bot):
     p_cmd = bot.tree.get_command("p")
     if p_cmd and isinstance(p_cmd, app_commands.Group):
         existing = next((c for c in p_cmd.commands if c.name == "ticket"), None)
