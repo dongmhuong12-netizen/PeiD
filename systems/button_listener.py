@@ -1,10 +1,5 @@
 import discord
 from discord.ext import commands
-import asyncio
-import datetime
-import random
-
-# IMPORT EMOJI HỆ THỐNG (Đồng bộ đồng nhất giao diện)
 from utils.emojis import Emojis
 
 class ButtonListener(commands.Cog):
@@ -14,199 +9,75 @@ class ButtonListener(commands.Cog):
     @commands.Cog.listener()
     async def on_interaction(self, interaction: discord.Interaction):
         """
-        trạm điều phối tương tác toàn cục (interaction gateway).
-        chỉ xử lý các custom_id có tiền tố 'yiyi:' để tối ưu hóa hiệu năng xử lý sự kiện.
+        [PURE OMNI-ROUTER] Trạm trung chuyển tín hiệu thuần túy.
+        Nhiệm vụ: Nhận tín hiệu 'yiyi:' và điều hướng đến các hệ thống chuyên biệt.
         """
-        # Multi-IT: Early return để giải phóng tài nguyên nhanh nhất có thể
-        custom_id = interaction.data.get("custom_id")
+        # 1. Lọc tương tác: Chỉ xử lý Nút bấm/Menu có tiền tố yiyi:
+        if interaction.type != discord.InteractionType.component:
+            return
+            
+        custom_id = interaction.data.get("custom_id", "")
         if not custom_id or not str(custom_id).startswith("yiyi:"):
             return
 
-        # PHÂN TÁCH TOKEN: yiyi:[hệ_thống]:[loại/dữ_liệu]:[extra]
-        # Đồng bộ 100% với định dạng custom_id tại commands/embed/embed_buttons.py
+        # 2. Phân tách TOKEN: yiyi:[system]:[action]:[data]
         parts = custom_id.split(":")
-        if len(parts) < 3:
+        if len(parts) < 2:
             return
 
-        system_type = parts[1] # 'role', 'ticket', 'verify', 'interaction', 'menu'
-        
-        # --- OMNI-ROUTING (PHÂN LUỒNG TƯƠNG TÁC) ---
-        
-        # 1. HỆ THỐNG ROLE (TOGGLE ROLE)
-        if system_type == "role":
-            await self._execute_role_logic(interaction, parts[2])
-
-        # 2. HỆ THỐNG TICKET (HỖ TRỢ TẠI CHỖ)
-        elif system_type == "ticket":
-            await self._execute_ticket_logic(interaction, parts[2])
-
-        # 3. HỆ THỐNG VERIFY (CỔNG AN NINH)
-        elif system_type == "verify":
-            await self._execute_verify_logic(interaction, parts[2])
-
-        # [BỔ SUNG PHASE 3] 4. HỆ THỐNG MENU (SELECT ROLE)
-        elif system_type == "menu" and parts[2] == "role_pick":
-            await self._execute_menu_role_logic(interaction)
-
-        # [BỔ SUNG PHASE 3] 5. HỆ THỐNG TƯƠNG TÁC OMNI (GACHA, VOTE, SECRET, DISMISS, REFRESH)
-        elif system_type == "interaction":
-            await self._handle_extra_interactions(interaction, parts)
-
-    # ----------------------------------------------
-    # CHI TIẾT THỰC THI (ENTERPRISE LOGIC) - GIỮ NGUYÊN DNA CỦA SẾP
-    # ----------------------------------------------
-
-    async def _execute_role_logic(self, interaction: discord.Interaction, role_id: str):
-        """Cơ chế Toggle Role (Tự động nhận/gỡ khi click)"""
-        await interaction.response.defer(ephemeral=True)
-        guild = interaction.guild
-        role = guild.get_role(int(role_id)) if role_id.isdigit() else None
-
-        if not role:
-            return await interaction.followup.send(f"{Emojis.HOICHAM} lỗi: role này không còn tồn tại hoặc id không hợp lệ.")
+        system_type = parts[1] # ticket, forms, role, interaction, webhook...
 
         try:
-            if role in interaction.user.roles:
-                await interaction.user.remove_roles(role)
-                await interaction.followup.send(f"{Emojis.MATTRANG} đã gỡ role **{role.name}** khỏi cậu.", ephemeral=True)
-            else:
-                await interaction.user.add_roles(role)
-                await interaction.followup.send(f"{Emojis.YIYITIM} đã cấp role **{role.name}** cho cậu thành công!", ephemeral=True)
-        except discord.Forbidden:
-            # IT Pro: Xử lý lỗi phân tầng Role (Hierarchy Error)
-            await interaction.followup.send(f"{Emojis.HOICHAM} yiyi thiếu quyền hạn! hãy báo admin đưa role của yiyi lên cao hơn role **{role.name}** nhé.", ephemeral=True)
+            # --- SƠ ĐỒ ĐIỀU PHỐI TÍN HIỆU (TRAFFIC ROUTING) ---
 
-    async def _execute_ticket_logic(self, interaction: discord.Interaction, staff_role_id: str):
-        """Khởi tạo kênh hỗ trợ biệt lập (Privacy & Support)"""
-        await interaction.response.defer(ephemeral=True)
-        guild = interaction.guild
-        user = interaction.user
+            # 1. HỆ THỐNG TICKET
+            if system_type == "ticket":
+                from systems.ticket_system import handle_ticket_interaction
+                await handle_ticket_interaction(interaction)
 
-        # Anti-Spam: Check trùng tên kênh để tránh tạo lặp
-        clean_name = f"ticket-{user.name.lower()}".replace(" ", "-")
-        if discord.utils.get(guild.channels, name=clean_name):
-            return await interaction.followup.send(f"{Emojis.HOICHAM} cậu đã mở một ticket hỗ trợ rồi, hãy kiểm tra lại danh sách kênh nhé!", ephemeral=True)
+            # 2. HỆ THỐNG FORMS (MODAL)
+            elif system_type == "forms":
+                from systems.forms_system import handle_forms_interaction
+                await handle_forms_interaction(interaction)
 
-        # Quyền hạn kênh: Chỉ User, Staff và Bot được xem
-        overwrites = {
-            guild.default_role: discord.PermissionOverwrite(read_messages=False),
-            user: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True),
-            guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_channels=True)
-        }
-        
-        staff_role = guild.get_role(int(staff_role_id)) if staff_role_id.isdigit() else None
-        if staff_role:
-            overwrites[staff_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
+            # 3. HỆ THỐNG WEBHOOK (GIẢ DANH/TƯƠNG TÁC WEBHOOK)
+            elif system_type == "webhook":
+                from systems.webhook_system import handle_webhook_interaction
+                await handle_webhook_interaction(interaction)
 
-        # Category Management: Tự động gom vào nhóm TICKETS
-        category = discord.utils.get(guild.categories, name="TICKETS")
-        if not category:
-            try: category = await guild.create_category("TICKETS")
-            except: category = None
+            # 4. HỆ THỐNG ROLE (SELF-ROLE/TOGGLE ROLE)
+            elif system_type == "role":
+                from systems.role_system import handle_role_interaction
+                await handle_role_interaction(interaction)
 
-        channel = await guild.create_text_channel(name=clean_name, overwrites=overwrites, category=category)
+            # 5. HỆ THỐNG MENU (DROPDOWN ROLE/SELECT)
+            elif system_type == "menu":
+                from systems.menu_system import handle_menu_interaction
+                await handle_menu_interaction(interaction)
 
-        # UI trong Ticket: Nút đóng khẩn cấp
-        class CloseButton(discord.ui.View):
-            def __init__(self): super().__init__(timeout=None)
-            @discord.ui.button(label="đóng ticket", style=discord.ButtonStyle.danger, emoji="🔒")
-            async def close(self, it: discord.Interaction, btn):
-                await it.response.send_message("kênh sẽ tự động xóa sau 5 giây...")
-                await asyncio.sleep(5)
-                await it.channel.delete()
+            # 6. HỆ THỐNG TƯƠNG TÁC OMNI (GACHA, VOTE, SECRET MESSAGE)
+            elif system_type == "interaction":
+                from systems.interaction_system import handle_omni_interaction
+                await handle_omni_interaction(interaction)
 
-        embed = discord.Embed(
-            title=f"{Emojis.YIYITIM} support ticket",
-            description=f"chào {user.mention}, cậu đang ở trong kênh hỗ trợ.\nnhân viên {staff_role.mention if staff_role else 'hệ thống'} sẽ phản hồi cậu tại đây.",
-            color=0xf8bbd0
-        )
-        await channel.send(content=f"{user.mention} {staff_role.mention if staff_role else ''}", embed=embed, view=CloseButton())
-        await interaction.followup.send(f"{Emojis.MATTRANG} đã tạo kênh hỗ trợ cho cậu tại {channel.mention}", ephemeral=True)
+            # 7. HỆ THỐNG UI UTILS (DISMISS, REFRESH, CLEAR)
+            elif system_type == "ui":
+                from systems.ui_system import handle_ui_interaction
+                await handle_ui_interaction(interaction)
 
-    async def _execute_verify_logic(self, interaction: discord.Interaction, member_role_id: str):
-        """Xác thực người dùng (Security & Gatekeeping)"""
-        await interaction.response.defer(ephemeral=True)
-        role = interaction.guild.get_role(int(member_role_id)) if member_role_id.isdigit() else None
-
-        if not role:
-            return await interaction.followup.send(f"{Emojis.HOICHAM} lỗi hệ thống: không tìm thấy role xác thực.", ephemeral=True)
-
-        if role in interaction.user.roles:
-            return await interaction.followup.send(f"{Emojis.YIYITIM} cậu đã xác thực thành công từ trước rồi nhé!", ephemeral=True)
-
-        # SECURITY: Check account age (Chống Clone acc mới dưới 3 ngày)
-        age = (discord.utils.utcnow() - interaction.user.created_at).days
-        if age < 3:
-            # Ghi log âm thầm cho admin check
-            print(f"[SECURITY] User {interaction.user.id} verify với acc mới ({age} ngày).", flush=True)
-
-        try:
-            await interaction.user.add_roles(role)
-            await interaction.followup.send(f"{Emojis.YIYITIM} **xác thực thành công!** chào mừng cậu đã gia nhập **{interaction.guild.name}**.", ephemeral=True)
-        except:
-            await interaction.followup.send(f"{Emojis.HOICHAM} yiyi không thể cấp role xác thực, hãy báo admin kiểm tra lại nhé!", ephemeral=True)
-
-    # ----------------------------------------------
-    # [THÊM MỚI] OMNI-INTERACTION EXTENSIONS
-    # ----------------------------------------------
-
-    async def _execute_menu_role_logic(self, interaction: discord.Interaction):
-        """Xử lý chọn Role từ Dropdown Menu"""
-        await interaction.response.defer(ephemeral=True)
-        values = interaction.data.get("values", [])
-        if not values: return
-        
-        role_id = values[0]
-        role = interaction.guild.get_role(int(role_id))
-        if not role: return await interaction.followup.send(f"{Emojis.HOICHAM} role này không tồn tại.", ephemeral=True)
-
-        try:
-            if role in interaction.user.roles:
-                await interaction.user.remove_roles(role)
-                await interaction.followup.send(f"{Emojis.MATTRANG} đã gỡ role **{role.name}** khỏi cậu.", ephemeral=True)
-            else:
-                await interaction.user.add_roles(role)
-                await interaction.followup.send(f"{Emojis.YIYITIM} đã cấp role **{role.name}** cho cậu thành công!", ephemeral=True)
-        except:
-            await interaction.followup.send(f"{Emojis.HOICHAM} yiyi không đủ quyền hạn cấp role này, hãy báo admin nhé!", ephemeral=True)
-
-    async def _handle_extra_interactions(self, interaction: discord.Interaction, parts: list):
-        """Xử lý Gacha, Vote, Secret Message, Refresh, Dismiss"""
-        itype = parts[2]
-        data = parts[3] if len(parts) > 3 else "none"
-
-        # 5.1. Secret Message (Chỉ người bấm thấy)
-        if itype == "secret":
-            # Giải nén Token (Gạch dưới -> Khoảng trắng)
-            clean_msg = data.replace("_", " ")
-            await interaction.response.send_message(f"{Emojis.YIYITIM} **bí mật cho cậu:**\n> {clean_msg}", ephemeral=True)
-
-        # 5.2. Gacha (Quay nhân phẩm)
-        elif itype == "gacha":
-            await interaction.response.defer(ephemeral=False)
-            res = random.choice(["✨ cực phẩm", "👍 may mắn", "😐 bình thường", "💀 đen đủi", "🤡 về vườn"])
-            await interaction.followup.send(f"{interaction.user.mention} kết quả nhân phẩm: **{res}**")
-
-        # 5.3. Vote (Biểu quyết nhanh)
-        elif itype == "vote":
-            await interaction.response.send_message(f"{Emojis.YIYITIM} yiyi đã ghi nhận biểu quyết của cậu rồi nhé!", ephemeral=True)
-
-        # 5.4. Dismiss (Dọn dẹp tin nhắn)
-        elif itype == "dismiss":
-            if interaction.user.guild_permissions.manage_messages:
-                await interaction.message.delete()
-            else:
-                await interaction.response.send_message(f"{Emojis.HOICHAM} cậu không đủ quyền hạn để dọn dẹp tin nhắn này!", ephemeral=True)
-
-        # 5.5. Refresh (Làm mới dữ liệu)
-        elif itype == "refresh":
-            await interaction.response.defer()
-            # Tương tác này kích hoạt lại việc gửi Embed để cập nhật các biến số realtime
-            await interaction.edit_original_response(content=f"{Emojis.YIYITIM} dữ liệu đã được làm mới thành công!")
+        except ImportError:
+            # Xử lý khi sếp chưa kịp tạo các file .py tương ứng
+            if not interaction.response.is_done():
+                await interaction.response.send_message(
+                    f"{Emojis.HOICHAM} tính năng `{system_type}` đang được Yiyi nâng cấp, sếp chờ xíu nhé!", 
+                    ephemeral=True
+                )
+        except Exception as e:
+            print(f"[ROUTER CRITICAL] Lỗi tại trạm trung tâm ({system_type}): {e}", flush=True)
+            if not interaction.response.is_done():
+                try: await interaction.response.send_message(f"{Emojis.HOICHAM} lỗi đường truyền tín hiệu!", ephemeral=True)
+                except: pass
 
 async def setup(bot: commands.Bot):
-    """nạp listener vào event loop của bot"""
     await bot.add_cog(ButtonListener(bot))
-    print("[load] success: systems.button_listener (Phase 3 Full Option)", flush=True)
-
-
+    print("[LOAD] success: systems.button_listener (PURE OMNI-ROUTER)", flush=True)
