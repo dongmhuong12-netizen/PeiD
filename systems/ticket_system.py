@@ -1,7 +1,7 @@
 import discord
 import io
 import datetime
-import asyncio # <--- CHÍNH LÀ EM NÓ, THIẾU CÁI NÀY LÀ BOT TẮT ĐÀI
+import asyncio 
 from core.cache_manager import get_raw
 
 FILE_KEY = "ticket_configs"
@@ -19,29 +19,39 @@ async def handle_ticket_interaction(interaction: discord.Interaction):
         return await interaction.response.send_message("❌ Hệ thống chưa được cấu hình. Liên hệ Admin nhé sếp!", ephemeral=True)
 
     # =========================
-    # LOGIC 1: MỞ TICKET
+    # LOGIC 1: MỞ TICKET (Đã cập nhật Đa-Role)
     # =========================
     if custom_id == "yiyi:ticket:open":
         await interaction.response.defer(ephemeral=True)
         
-        category = guild.get_channel(int(config["category_id"]))
-        staff_role = guild.get_role(int(config["staff_role_id"]))
+        category_id = config.get("category_id")
+        category = guild.get_channel(int(category_id)) if category_id else None
 
-        # Kiểm tra nếu user đã có ticket chưa (Chống spam)
-        # IT Pro: Chuyển về lowercase để so sánh chính xác tuyệt đối
+        if not category:
+            return await interaction.followup.send("❌ Không tìm thấy danh mục hỗ trợ. Sếp setup lại nhé!", ephemeral=True)
+
+        # Kiểm tra nếu user đã có ticket chưa
         existing_channel = discord.utils.get(guild.channels, name=f"ticket-{user.name.lower()}")
         if existing_channel:
             return await interaction.followup.send(f"⚠️ Sếp đã có một ticket đang mở tại {existing_channel.mention} rồi nhé!", ephemeral=True)
 
-        # Thiết lập quyền hạn (Permissions) - Cực kỳ quan trọng
+        # --- BẮT ĐẦU CẬP NHẬT MẠCH QUYỀN HẠN (MULTI-STAFF) ---
+        # 1. Khởi tạo quyền cơ bản (Khóa mọi người, mở cho User và Bot)
         overwrites = {
-            guild.default_role: discord.PermissionOverwrite(view_channel=False), # Khóa với tất cả
-            user: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True), # Mở cho User
-            staff_role: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True), # Mở cho Staff
-            guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True, manage_channels=True) # Mở cho Bot quản lý
+            guild.default_role: discord.PermissionOverwrite(view_channel=False),
+            user: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True),
+            guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True, manage_channels=True)
         }
 
-        # Tạo kênh
+        # 2. Vòng lặp cấp quyền cho toàn bộ danh sách Staff Roles đã lưu
+        staff_ids = config.get("staff_role_ids", [])
+        for r_id in staff_ids:
+            role = guild.get_role(int(r_id))
+            if role:
+                overwrites[role] = discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True)
+        # --- KẾT THÚC CẬP NHẬT ---
+
+        # Tạo kênh với danh sách overwrites mới
         channel = await guild.create_text_channel(
             name=f"ticket-{user.name}",
             category=category,
@@ -49,7 +59,7 @@ async def handle_ticket_interaction(interaction: discord.Interaction):
             topic=f"Ticket hỗ trợ của {user.name} (ID: {user.id})"
         )
 
-        # Gửi lời chào và nút Đóng
+        # Gửi lời chào và nút Đóng (Giữ nguyên)
         embed = discord.Embed(
             title="🎫 TICKET HỖ TRỢ",
             description=f"Chào {user.mention}, Staff sẽ hỗ trợ sếp sớm nhất có thể.\nNhấn nút dưới đây để đóng ticket nếu đã giải quyết xong.",
@@ -64,14 +74,14 @@ async def handle_ticket_interaction(interaction: discord.Interaction):
         await interaction.followup.send(f"✅ Đã tạo kênh hỗ trợ cho sếp tại {channel.mention}", ephemeral=True)
 
     # =========================
-    # LOGIC 2: ĐÓNG TICKET & XUẤT TRANSCRIPT
+    # LOGIC 2: ĐÓNG TICKET & XUẤT TRANSCRIPT (GIỮ NGUYÊN)
     # =========================
     elif custom_id == "yiyi:ticket:close":
         await interaction.response.defer()
         
-        log_channel = guild.get_channel(int(config["log_channel_id"]))
+        log_id = config.get("log_channel_id")
+        log_channel = guild.get_channel(int(log_id)) if log_id else None
         
-        # Tạo Transcript đơn giản (Text-based)
         transcript_content = f"--- TRANSCRIPT TICKET: {interaction.channel.name} ---\n"
         transcript_content += f"Người mở: {interaction.channel.name.replace('ticket-', '')}\n"
         transcript_content += f"Thời gian đóng: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
@@ -82,16 +92,12 @@ async def handle_ticket_interaction(interaction: discord.Interaction):
             content = message.content if message.content else "[Tin nhắn không có nội dung văn bản]"
             transcript_content += f"[{time}] {message.author}: {content}\n"
 
-        # Đóng gói file
         file_data = io.BytesIO(transcript_content.encode('utf-8'))
         file = discord.File(file_data, filename=f"transcript-{interaction.channel.name}.txt")
 
-        # Gửi log
         if log_channel:
             await log_channel.send(f"🔒 **Ticket Closed:** `{interaction.channel.name}` đã được đóng bởi {user.mention}.", file=file)
 
         await interaction.followup.send("🔒 Đang đóng và xóa kênh trong 5 giây...")
-        
-        # Đã có import asyncio nên dòng này sẽ chạy mượt:
         await asyncio.sleep(5)
         await interaction.channel.delete()
