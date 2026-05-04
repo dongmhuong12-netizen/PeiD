@@ -30,7 +30,6 @@ async def run_web_server():
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
     print(f"[WEB] Service started on port {port}", flush=True)
-    # Giữ web server sống cùng bot
     await asyncio.Event().wait()
 
 # =========================
@@ -58,23 +57,23 @@ bot = commands.AutoShardedBot(
 
 EXTENSIONS = [
     "core.root",                  # XƯƠNG: Tạo lệnh /p (Phải nạp đầu tiên)
+    "systems.button_listener",     # <--- Đã thêm để tiếp quản Interaction
     "commands.embed.embed_group",  # THỊT: Create, Edit, Show...
     "core.greet_leave",          
     "core.wellcome",             
     "core.booster",              
     "systems.reaction_role",     
-    "commands.fun.yiyi_core",     # LỆNH FUN YIYI: Hệ thống tương tác cá nhân hóa
-    "commands.embed.embed_advanced", # ADVANCED: Hệ thống Export, Import, Clone
-    "commands.embed.embed_webhook",  # WEBHOOK: Hệ thống giả danh gửi tin nhắn
+    "commands.fun.yiyi_core",     
+    "commands.embed.embed_advanced", 
+    "commands.embed.embed_webhook",  
     "commands.embed.embed_link",     
-    "commands.ticket.ticket_group",  # PHASE 3: Hệ thống Ticket hỗ trợ
-    "commands.forms.forms_group",    # PHASE 3: Hệ thống Biểu mẫu Modal
+    "commands.ticket.ticket_group",  
+    "commands.forms.forms_group",    
 ]
 
 async def load_extensions():
     for ext in EXTENSIONS:
         try:
-            # Chỉ nạp nếu chưa có trong bộ nhớ để tránh lỗi trùng lặp
             if ext not in bot.extensions:
                 await bot.load_extension(ext)
                 print(f"[LOAD] Success: {ext}", flush=True)
@@ -85,36 +84,14 @@ async def load_extensions():
             print(f"[LOAD ERROR] {ext}: {e}", flush=True)
 
 # =========================
-# SỰ KIỆN TƯƠNG TÁC (NÃO XỬ LÝ PHASE 3)
+# SỰ KIỆN HỆ THỐNG
 # =========================
 
 @bot.event
 async def on_member_join(member: discord.Member):
-    """[SECURITY] Mạch Verify cũ đã được gỡ bỏ theo yêu cầu để đảm bảo an toàn"""
     pass
 
-@bot.event
-async def on_interaction(interaction: discord.Interaction):
-    """[NÃO XỬ LÝ NÚT BẤM] Phân luồng tín hiệu Ticket và Forms"""
-    try:
-        if interaction.type == discord.InteractionType.component:
-            custom_id = interaction.data.get("custom_id", "")
-            
-            # IT Pro: Import bên trong để tránh Circular Import
-            # Mạch xử lý TICKET
-            if custom_id.startswith("yiyi:ticket:"):
-                from systems.ticket_system import handle_ticket_interaction
-                await handle_ticket_interaction(interaction)
-                return
-
-            # Mạch xử lý FORMS
-            elif custom_id.startswith("yiyi:forms:"):
-                from systems.forms_system import handle_forms_interaction
-                await handle_forms_interaction(interaction)
-                return
-                
-    except Exception as e:
-        print(f"[INTERACTION WARNING] {e}", flush=True)
+# [ĐÃ LƯỢC BỎ ON_INTERACTION THEO KẾ HOẠCH PHÂN TÁCH]
 
 # =========================
 # READY STATE
@@ -135,7 +112,7 @@ async def on_ready():
     except Exception as e:
         print(f"[STATE ERROR] {e}", flush=True)
 
-    # 2. SLASH SYNC (Chốt hạ toàn bộ cây lệnh)
+    # 2. SLASH SYNC
     try:
         print("[SLASH] Đang đồng bộ hóa cây lệnh hợp nhất...", flush=True)
         synced = await bot.tree.sync()
@@ -150,17 +127,10 @@ async def on_ready():
 # =========================
 
 async def main():
-    # Bật logging để soi lỗi Async/Network
     discord.utils.setup_logging()
-
-    # Chạy Web Server ngầm cho Render
     asyncio.create_task(run_web_server())
-
-    # Nạp extensions theo trình tự
     await load_extensions()
-
     async with bot:
-        # Bắt đầu vòng đời của Bot
         await bot.start(TOKEN)
 
 if __name__ == "__main__":
@@ -169,6 +139,5 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         pass
     finally:
-        # Chốt chặn cuối cùng để bảo vệ dữ liệu JSON
         force_flush()
         print("[EXIT] Bot đã tắt an toàn và đã lưu dữ liệu.")
