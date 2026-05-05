@@ -1,6 +1,7 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
+import re
 from core.identity_storage import save_identity, delete_identity, get_all_identity_names, load_identity
 from utils.emojis import Emojis
 
@@ -23,13 +24,13 @@ class IdentityGroup(app_commands.Group):
     def __init__(self):
         super().__init__(name="identity", description="quản lý danh tính giả (vỏ) cho webhook")
 
-    # --- LỆNH THÊM VỎ (Hỗ trợ cả 3 loại) ---
-    @app_commands.command(name="add", description="tạo một 'vỏ' danh tính mới")
+    # --- LỆNH THÊM VỎ (BẢN KIỂM ĐỊNH MAX PING) ---
+    @app_commands.command(name="add", description="tạo một 'vỏ' danh tính mới với kiểm định dữ liệu")
     @app_commands.describe(
         id_name="tên gợi nhớ của vỏ (vd: admin_vibe)",
         display_name="tên hiển thị trên webhook (có thể dùng biến {user_name})",
         avatar_url="link ảnh đại diện (có thể dùng biến {user_avatar})",
-        target_id="ID của người muốn mượn xác (nếu dùng loại này, bỏ qua 2 ô trên)"
+        target_id="ID người dùng muốn mượn xác (nếu dùng, Yiyi sẽ tự lấy tên/ảnh của họ)"
     )
     async def add_identity(
         self, 
@@ -41,15 +42,40 @@ class IdentityGroup(app_commands.Group):
     ):
         await interaction.response.defer(ephemeral=True)
         
-        # Xác định loại vỏ dựa trên dữ liệu nhập vào
-        ident_type = "target" if target_id else "manual"
-        
-        if ident_type == "target" and not str(target_id).isdigit():
-            return await interaction.followup.send(f"{Emojis.HOICHAM} ID người dùng phải là một dãy số cậu nhé!")
+        # 1. KIỂM ĐỊNH LOẠI 3: MƯỢN XÁC (ID)
+        if target_id:
+            # Gọt vỏ ID: Loại bỏ <@! >, chỉ lấy dãy số
+            clean_id = re.sub(r'\D', '', str(target_id))
+            if not clean_id:
+                return await interaction.followup.send(f"{Emojis.HOICHAM} ID không hợp lệ, hãy nhập số hoặc mention người dùng.")
             
-        if ident_type == "manual" and not display_name:
-            return await interaction.followup.send(f"{Emojis.HOICHAM} Cậu cần nhập ít nhất là 'Tên hiển thị' cho loại vỏ này.")
+            try:
+                # IT Pro: Truy vấn trực tiếp Discord API để xác thực ID
+                target_user = await interaction.client.fetch_user(int(clean_id))
+                
+                # Tự động gán info từ ID để đảm bảo tính chính xác
+                display_name = target_user.display_name
+                avatar_url = target_user.display_avatar.url
+                target_id = clean_id
+                ident_type = "target"
+                
+            except discord.NotFound:
+                return await interaction.followup.send(f"{Emojis.HOICHAM} Không tìm thấy người dùng nào có ID `{clean_id}` trên Discord!")
+            except Exception as e:
+                return await interaction.followup.send(f"{Emojis.HOICHAM} Lỗi khi xác thực ID: `{str(e)}`")
 
+        # 2. KIỂM ĐỊNH LOẠI 1 & 2: THỦ CÔNG/BIẾN SỐ
+        else:
+            if not display_name:
+                return await interaction.followup.send(f"{Emojis.HOICHAM} Cậu cần nhập 'Tên hiển thị' cho loại vỏ thủ công này.")
+            
+            # Check nhanh định dạng URL (tránh dán rác vào DB)
+            if avatar_url and not avatar_url.startswith(("http://", "https://", "{")):
+                return await interaction.followup.send(f"{Emojis.HOICHAM} Link ảnh không hợp lệ (phải bắt đầu bằng http/https hoặc biến số).")
+            
+            ident_type = "manual"
+
+        # 3. LƯU VÀO KHO SAU KHI ĐÃ SẠCH DỮ LIỆU
         success = await save_identity(
             guild_id=interaction.guild.id,
             name=id_name,
@@ -60,8 +86,12 @@ class IdentityGroup(app_commands.Group):
         )
 
         if success:
-            msg = f"Đã lưu vỏ mượn xác ID `{target_id}`" if ident_type == "target" else f"Đã lưu vỏ `{id_name}`"
-            await interaction.followup.send(f"{Emojis.YIYITIM} {msg} thành công rồi nè!")
+            detail = f"Mượn xác của: **{display_name}**" if ident_type == "target" else f"Tên hiển thị: `{display_name}`"
+            await interaction.followup.send(
+                f"{Emojis.YIYITIM} **Đã lưu danh tính thành công!**\n"
+                f"> 🆔 Tên gợi nhớ: `{id_name}`\n"
+                f"> 🎭 Thông tin: {detail}"
+            )
 
     # --- LỆNH XÓA VỎ ---
     @app_commands.command(name="delete", description="xóa một 'vỏ' khỏi kho lưu trữ")
@@ -82,17 +112,17 @@ class IdentityGroup(app_commands.Group):
         
         names = await get_all_identity_names(interaction.guild.id)
         if not names:
-            return await interaction.followup.send(f"{Emojis.HOICHAM} Server mình chưa có cái 'vỏ' nào cả, cậu tạo đi!")
+            return await interaction.followup.send(f"{Emojis.HOICHAM} Server mình chưa có cái 'vỏ' nào cả.")
 
         embed = discord.Embed(
             title=f"{Emojis.YIYITIM} Kho Danh Tính - {interaction.guild.name}",
-            description="Dưới đây là các 'vỏ' cậu có thể dùng với lệnh `/p embed send`",
+            description="Danh sách các 'vỏ' khả dụng cho `/p embed send`",
             color=0x2b2d31
         )
 
         for n in names:
             data = await load_identity(interaction.guild.id, n)
-            v_type = "🎯 Mượn xác (ID)" if data.get("type") == "target" else "🎭 Tự chế/Biến số"
+            v_type = "🎯 Mượn xác" if data.get("type") == "target" else "🎭 Tùy chỉnh"
             embed.add_field(name=f"🆔 `{n}`", value=f"Loại: {v_type}", inline=True)
 
         await interaction.followup.send(embed=embed)
@@ -103,6 +133,9 @@ class IdentityGroup(app_commands.Group):
 async def setup(bot: commands.Bot):
     p_cmd = bot.tree.get_command("p")
     if p_cmd and isinstance(p_cmd, app_commands.Group):
-        # Tiêm group identity vào dưới lệnh /p
+        # Dọn dẹp bản cũ nếu có để nạp bản kiểm định mới
+        existing = next((c for c in p_cmd.commands if c.name == "identity"), None)
+        if existing: p_cmd.remove_command("identity")
+        
         p_cmd.add_command(IdentityGroup())
-        print("[load] success: identity_group (Admin Management Tools)", flush=True)
+        print("[load] success: identity_group (Fail-Fast Verification Edition)", flush=True)
