@@ -9,11 +9,31 @@ from core.variable_engine import apply_variables
 from utils.emojis import Emojis
 
 # =============================
+# HELPER: XỬ LÝ BIẾN SỐ ĐA TẦNG (FIX LỖI KỸ THUẬT)
+# =============================
+
+def process_variable_data(target, guild, member):
+    """
+    IT PRO: Đệ quy để dịch biến số trong mọi ngóc ngách của Embed/Button
+    Đảm bảo không làm hỏng cấu trúc Dictionary của Discord.
+    """
+    if isinstance(target, str):
+        # Nếu là chuỗi, tiến hành dịch biến số (user_name -> Nguyệt)
+        return apply_variables(target, guild, member)
+    elif isinstance(target, list):
+        # Nếu là danh sách (như các field), duyệt từng phần tử
+        return [process_variable_data(item, guild, member) for item in target]
+    elif isinstance(target, dict):
+        # Nếu là Dictionary (như nội dung Embed), duyệt từng key-value
+        return {k: process_variable_data(v, guild, member) for k, v in target.items()}
+    # Nếu là số hoặc None, giữ nguyên
+    return target
+
+# =============================
 # AUTOCOMPLETE HELPERS
 # =============================
 
 async def embed_name_autocomplete(interaction: discord.Interaction, current: str):
-    """Gợi ý tên embed - Cô lập dữ liệu theo từng Server"""
     guild = interaction.guild
     if not guild: return []
     try:
@@ -22,7 +42,6 @@ async def embed_name_autocomplete(interaction: discord.Interaction, current: str
     except Exception: return []
 
 async def identity_autocomplete(interaction: discord.Interaction, current: str):
-    """Gợi ý tên 'Vỏ' (Identity) - Cô lập dữ liệu theo từng Server"""
     guild = interaction.guild
     if not guild: return []
     try:
@@ -35,7 +54,6 @@ async def identity_autocomplete(interaction: discord.Interaction, current: str):
 # =============================
 
 def build_omni_view(data, guild, member):
-    """Dựng hệ thống tương tác (Buttons/Selects) y hệt lệnh /p embed show"""
     buttons_data = data.get("buttons", [])
     if not buttons_data: return None
     
@@ -43,8 +61,8 @@ def build_omni_view(data, guild, member):
     _view_weight = 0
     
     for btn in buttons_data:
-        # Tiêm biến số vào từng linh kiện nút bấm
-        btn_v = apply_variables(copy.deepcopy(btn), guild, member)
+        # Sử dụng hàm xử lý biến số an toàn cho từng nút bấm
+        btn_v = process_variable_data(copy.deepcopy(btn), guild, member)
         btype = btn_v.get("type")
         _w = 5 if btype == "select" else 1
         
@@ -67,7 +85,7 @@ def build_omni_view(data, guild, member):
         elif btype == "select":
             opts = []
             for opt in btn_v.get("options", []):
-                o_v = apply_variables(copy.deepcopy(opt), guild, member)
+                o_v = process_variable_data(copy.deepcopy(opt), guild, member)
                 opts.append(discord.SelectOption(
                     label=str(o_v.get("label"))[:100], 
                     value=str(o_v.get("value")), 
@@ -87,86 +105,60 @@ def build_omni_view(data, guild, member):
 # =============================
 
 @app_commands.command(name="send", description="gửi embed vào kênh hiện tại bằng danh tính giả (identity)")
-@app_commands.describe(
-    name="tên embed muốn dùng",
-    identity="chọn 'vỏ' danh tính đã lưu để giả danh"
-)
+@app_commands.describe(name="tên embed muốn dùng", identity="chọn 'vỏ' danh tính đã lưu")
 @app_commands.autocomplete(name=embed_name_autocomplete, identity=identity_autocomplete)
 async def send_cmd(interaction: discord.Interaction, name: str, identity: str):
-    # Sử dụng ephemeral=True để tránh làm phiền member khác trong khi setup
     await interaction.response.defer(ephemeral=True)
     
     guild = interaction.guild
     channel = interaction.channel
 
-    # 1. TRUY XUẤT DỮ LIỆU
     data = await load_embed(guild.id, name)
     ident_raw = await load_identity(guild.id, identity)
 
-    if not data:
-        return await interaction.followup.send(f"{Emojis.HOICHAM} yiyi không tìm thấy embed nào tên `{name}` cả.")
-    
-    if not ident_raw:
-        return await interaction.followup.send(f"{Emojis.HOICHAM} 'vỏ' `{identity}` chưa được đăng ký trong kho.")
+    if not data or not ident_raw:
+        return await interaction.followup.send(f"{Emojis.HOICHAM} Không tìm thấy dữ liệu yêu cầu.")
 
     try:
-        # --- BƯỚC 2: XỬ LÝ DANH TÍNH (ĐÃ ĐỒNG BỘ LOGIC KIỂM ĐỊNH) ---
+        # --- BƯỚC 2: XỬ LÝ DANH TÍNH ---
         target_name = "yiyi"
         target_avatar = interaction.client.user.display_avatar.url
 
-        # Loại 3: Mượn xác (Target ID)
         if ident_raw.get("type") == "target":
-            # Dữ liệu đã được kiểm định và bóc tách sẵn từ lệnh /p identity add
-            # Ta lấy trực tiếp để đạt tốc độ phản hồi tối đa
-            target_name = ident_raw.get("display_name", "Unknown User")
+            target_name = ident_raw.get("display_name", "Unknown")
             target_avatar = ident_raw.get("avatar_url")
-            
-            # (Optionally) Nếu muốn cập nhật Avatar/Name mới nhất của Target:
-            # try:
-            #     user = await interaction.client.fetch_user(int(ident_raw["target_id"]))
-            #     target_name, target_avatar = user.display_name, user.display_avatar.url
-            # except: pass
-        
-        # Loại 1 & 2: Thủ công hoặc Biến số
         else:
-            # IT Pro: Chỉ chạy biến số lên Text/URL để tránh lỗi định dạng Dictionary
-            raw_name = ident_raw.get("display_name") or "yiyi"
-            raw_avatar = ident_raw.get("avatar_url") or target_avatar
-            
-            target_name = apply_variables(raw_name, guild, interaction.user)
-            target_avatar = apply_variables(raw_avatar, guild, interaction.user)
+            # Dịch biến số cho Tên và Avatar của "Vỏ"
+            target_name = apply_variables(ident_raw.get("display_name", "yiyi"), guild, interaction.user)
+            target_avatar = apply_variables(ident_raw.get("avatar_url", target_avatar), guild, interaction.user)
 
-        # --- BƯỚC 3: CHUẨN BỊ NỘI DUNG ---
-        data_v = apply_variables(copy.deepcopy(data), guild, interaction.user)
+        # --- BƯỚC 3: CHUẨN BỊ NỘI DUNG (SỬ DỤNG HÀM XỬ LÝ ĐA TẦNG) ---
+        # Đây là nơi fix lỗi "biến hình" cho cả Embed
+        data_v = process_variable_data(copy.deepcopy(data), guild, interaction.user)
+        
+        # Tạo Embed từ dict đã được dịch sạch biến số
         embed = discord.Embed.from_dict(data_v)
         view = build_omni_view(data, guild, interaction.user)
 
         # --- BƯỚC 4: WEBHOOK POOLING ---
         webhooks = await channel.webhooks()
         webhook = next((wh for wh in webhooks if wh.name == "yiyi_webhook"), None)
-        
         if not webhook:
-            webhook = await channel.create_webhook(
-                name="yiyi_webhook", 
-                reason="Hệ thống giả danh Identity (Max Ping Edition)"
-            )
+            webhook = await channel.create_webhook(name="yiyi_webhook", reason="Identity System")
 
-        # --- BƯỚC 5: EXECUTE ---
+        # --- BƯỚC 5: PHÓNG ---
         await webhook.send(
-            embed=embed,
-            view=view,
+            embed=embed, view=view,
             username=str(target_name)[:80],
             avatar_url=target_avatar,
             wait=True
         )
 
-        await interaction.followup.send(f"{Emojis.YIYITIM} Đã mượn xác **{identity}** để gửi embed `{name}` thành công!")
+        await interaction.followup.send(f"{Emojis.YIYITIM} Đã mượn xác **{identity}** gửi embed `{name}` thành công!")
 
-    except discord.Forbidden:
-        await interaction.followup.send(f"{Emojis.HOICHAM} Yiyi thiếu quyền 'Quản lý Webhook' tại kênh này.")
     except Exception as e:
-        print(f"[Identity Error] Guild: {guild.id} | {e}")
-        await interaction.followup.send(f"{Emojis.HOICHAM} Có lỗi kỹ thuật khi thực hiện 'biến hình'.")
+        print(f"[Send Error] {e}")
+        await interaction.followup.send(f"{Emojis.HOICHAM} Lỗi kỹ thuật: `{str(e)}`")
 
 # =============================
 # INJECTION
@@ -176,9 +168,7 @@ async def setup(bot: commands.Bot):
     if p_cmd and isinstance(p_cmd, app_commands.Group):
         embed_group = next((cmd for cmd in p_cmd.commands if cmd.name == "embed" and isinstance(cmd, app_commands.Group)), None)
         if embed_group:
-            # Dọn dẹp lệnh cũ để đảm bảo tính nhất quán sau khi nâng cấp
             existing = next((c for c in embed_group.commands if c.name == "send"), None)
             if existing: embed_group.remove_command("send")
-            
             embed_group.add_command(send_cmd)
-            print("[load] success: embed_webhook (Identity Synced Edition)", flush=True)
+            print("[load] success: embed_webhook (Clean Variable Edition)", flush=True)
