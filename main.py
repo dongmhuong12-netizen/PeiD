@@ -67,6 +67,7 @@ EXTENSIONS = [
     "commands.embed.embed_advanced", 
     "commands.embed.embed_webhook",  
     "commands.embed.embed_link",     
+    "commands.identity.identity_group",
     "commands.ticket.ticket_group",  
     "commands.forms.forms_group",    
 ]
