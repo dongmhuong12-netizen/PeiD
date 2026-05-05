@@ -3,7 +3,8 @@ from discord import app_commands
 from discord.ext import commands
 import re
 
-from core.embed_storage import atomic_update_button, get_all_embed_names
+# IT Pro: Bổ sung load_embed để phục vụ logic gợi ý nút bấm
+from core.embed_storage import load_embed, atomic_update_button, get_all_embed_names
 from utils.emojis import Emojis
 
 # =========================
@@ -36,6 +37,30 @@ async def embed_name_autocomplete(interaction: discord.Interaction, current: str
     except Exception:
         return []
 
+# [GIA CỐ] Gợi ý danh sách nút bấm hiện có để gỡ chính xác theo ý cậu
+async def button_index_autocomplete(interaction: discord.Interaction, current: str):
+    """Tự động liệt kê danh sách nút bấm dựa trên embed_name đã chọn"""
+    embed_name = interaction.namespace.embed_name
+    if not embed_name: return []
+    
+    guild_id = interaction.guild.id
+    data = await load_embed(guild_id, embed_name)
+    
+    if not data or "buttons" not in data or not data["buttons"]:
+        return []
+
+    choices = []
+    for i, btn in enumerate(data["buttons"]):
+        label = btn.get("label", "Không tiêu đề")
+        btn_type = btn.get("type", "link")
+        # Format: "1. Tên nút (link)"
+        choice_display = f"{i + 1}. {label} ({btn_type})"
+        
+        if current.lower() in choice_display.lower():
+            choices.append(app_commands.Choice(name=choice_display, value=i + 1))
+            
+    return choices[:25]
+
 # =========================
 # LÕI HỆ THỐNG LINK (MAX PING)
 # =========================
@@ -56,18 +81,18 @@ class EmbedLinkGroup(app_commands.Group):
         await interaction.response.defer(ephemeral=True)
         guild_id = interaction.guild.id
         
-        # 1. Validation: Chặn Label quá dài (Discord API giới hạn 80)
+        # 1. Validation: Chặn Label quá dài
         if len(label) > 80:
-            return await interaction.followup.send(f"{Emojis.HOICHAM} chữ hiển thị quá dài ({len(label)}/80)! sếp rút gọn lại nhé.")
+            return await interaction.followup.send(f"{Emojis.HOICHAM} chữ hiển thị vượt giới hạn ({len(label)}/80). hãy viết ngắn đi một chút nhé.")
 
-        # 2. Validation: Regex URL chặt chẽ (Chống khoảng trắng và ký tự lạ)
+        # 2. Validation: Regex URL chặt chẽ (Đã đổi xưng hô thành 'cậu')
         url_pattern = r"^https?://[^\s/$.?#].[^\s]*$"
         if not re.match(url_pattern, url):
-            return await interaction.followup.send(f"{Emojis.HOICHAM} URL không hợp lệ hoặc chứa khoảng trắng. sếp kiểm tra kỹ lại nhé!")
+            return await interaction.followup.send(f"{Emojis.HOICHAM} aree... URL cậu nhập có vẻ không đúng định dạng rồi. cậu hãy chắc chắn nó bắt đầu bằng http:// hoặc https:// nhé.")
 
-        # 3. Validation: Check Emoji thông minh
+        # 3. Validation: Check Emoji (Đã đổi xưng hô thành 'cậu')
         if emoji and not is_valid_emoji(emoji):
-            return await interaction.followup.send(f"{Emojis.HOICHAM} emoji không hợp lệ! hãy dùng emoji chuẩn hoặc trong file `emojis.py` nhé.")
+            return await interaction.followup.send(f"{Emojis.HOICHAM} hình như emoji này không nằm trong danh sách hỗ trợ rồi. cậu check lại định dạng <:name:id> hoặc dùng emoji mặc định nhé.")
 
         # 4. Tạo Data Nút Link
         btn_data = {
@@ -77,19 +102,17 @@ class EmbedLinkGroup(app_commands.Group):
             "emoji": emoji
         }
         
-        # 5. Cấy nút vào Storage (Tối ưu: Chỉ gọi 1 lần duy nhất)
-        # atomic_update_button sẽ tự trả về False nếu không tìm thấy embed
+        # 5. Cấy nút vào Storage
         success = await atomic_update_button(guild_id, embed_name, button_data=btn_data, action="add")
         
         if success:
-            await interaction.followup.send(f"{Emojis.YIYITIM} đã gắn nút link **{label}** vào embed `{embed_name}` thành công!")
+            await interaction.followup.send(f"{Emojis.MATTRANG} liên kết Link **{label}** với Embed `{embed_name}` thành công. có thể dùng `/p embed show` để sử dụng nhé.")
         else:
-            # IT Pro: Phân tích lỗi dựa trên ngữ cảnh (Embed không tồn tại hoặc đầy nút)
-            await interaction.followup.send(f"{Emojis.HOICHAM} không thể gắn nút! có thể embed `{embed_name}` không tồn tại hoặc đã đầy 25 nút.")
+            await interaction.followup.send(f"{Emojis.HOICHAM} aree...? embed {embed_name} đã đạt giới hạn 25 nút bấm hoặc không tồn tại. cậu hãy kiểm tra lại nhé.")
 
     @app_commands.command(name="remove", description="xóa một nút khỏi embed bằng số thứ tự (index)")
-    @app_commands.describe(embed_name="tên embed", index="số thứ tự của nút cần xóa (bắt đầu từ 1)")
-    @app_commands.autocomplete(embed_name=embed_name_autocomplete)
+    @app_commands.describe(embed_name="tên embed", index="chọn nút cần xóa từ danh sách gợi ý")
+    @app_commands.autocomplete(embed_name=embed_name_autocomplete, index=button_index_autocomplete)
     async def remove_button(self, interaction: discord.Interaction, embed_name: str, index: int):
         await interaction.response.defer(ephemeral=True)
         guild_id = interaction.guild.id
@@ -98,14 +121,14 @@ class EmbedLinkGroup(app_commands.Group):
         real_index = index - 1
         
         if real_index < 0:
-            return await interaction.followup.send(f"{Emojis.HOICHAM} số thứ tự phải bắt đầu từ 1 chứ sếp!")
+            return await interaction.followup.send(f"{Emojis.HOICHAM} số thứ tự phải bắt đầu từ 1 chứ cậu!")
 
         success = await atomic_update_button(guild_id, embed_name, action="remove", index=real_index)
         
         if success:
-            await interaction.followup.send(f"{Emojis.MATTRANG} đã gỡ nút ở vị trí số {index} khỏi embed `{embed_name}`.")
+            await interaction.followup.send(f"{Emojis.MATTRANG} gỡ nút vị trí **{index}** thành công. các nút phía sau đã tự động dồn lại thay thế vị trí đã xoá.")
         else:
-            await interaction.followup.send(f"{Emojis.HOICHAM} không tìm thấy nút ở vị trí số {index} trong embed `{embed_name}`.")
+            await interaction.followup.send(f"{Emojis.HOICHAM} aree...? **yiyi** không tìm thấy nút nào ở vị trí số {index} cả. cậu hãy chọn theo danh sách gợi ý của **yiyi** cho chính xác nhé.")
 
 # =========================
 # INJECTION
@@ -118,6 +141,6 @@ async def setup(bot: commands.Bot):
         if existing: p_cmd.remove_command("link")
         
         p_cmd.add_command(EmbedLinkGroup())
-        print("[load] success: commands.embed.embed_link (Hệ Link Max Ping)", flush=True)
+        print("[load] success: commands.embed.embed_link (Smart Remove & Yiyi Style)", flush=True)
     else:
-        print("[error] không tìm thấy khung /p để nạp hệ Link!", flush=True)
+        print("[error] không tìm thấy khung /p!", flush=True)
