@@ -18,15 +18,11 @@ def process_variable_data(target, guild, member):
     Đảm bảo không làm hỏng cấu trúc Dictionary của Discord.
     """
     if isinstance(target, str):
-        # Nếu là chuỗi, tiến hành dịch biến số (user_name -> Nguyệt)
         return apply_variables(target, guild, member)
     elif isinstance(target, list):
-        # Nếu là danh sách (như các field), duyệt từng phần tử
         return [process_variable_data(item, guild, member) for item in target]
     elif isinstance(target, dict):
-        # Nếu là Dictionary (như nội dung Embed), duyệt từng key-value
         return {k: process_variable_data(v, guild, member) for k, v in target.items()}
-    # Nếu là số hoặc None, giữ nguyên
     return target
 
 # =============================
@@ -54,6 +50,7 @@ async def identity_autocomplete(interaction: discord.Interaction, current: str):
 # =============================
 
 def build_omni_view(data, guild, member):
+    """Dựng hệ thống tương tác (Buttons/Selects) - Trả về None nếu không có nút"""
     buttons_data = data.get("buttons", [])
     if not buttons_data: return None
     
@@ -61,7 +58,6 @@ def build_omni_view(data, guild, member):
     _view_weight = 0
     
     for btn in buttons_data:
-        # Sử dụng hàm xử lý biến số an toàn cho từng nút bấm
         btn_v = process_variable_data(copy.deepcopy(btn), guild, member)
         btype = btn_v.get("type")
         _w = 5 if btype == "select" else 1
@@ -121,22 +117,11 @@ async def send_cmd(interaction: discord.Interaction, name: str, identity: str):
 
     try:
         # --- BƯỚC 2: XỬ LÝ DANH TÍNH ---
-        target_name = "yiyi"
-        target_avatar = interaction.client.user.display_avatar.url
+        target_name = apply_variables(ident_raw.get("display_name", "yiyi"), guild, interaction.user)
+        target_avatar = apply_variables(ident_raw.get("avatar_url"), guild, interaction.user)
 
-        if ident_raw.get("type") == "target":
-            target_name = ident_raw.get("display_name", "Unknown")
-            target_avatar = ident_raw.get("avatar_url")
-        else:
-            # Dịch biến số cho Tên và Avatar của "Vỏ"
-            target_name = apply_variables(ident_raw.get("display_name", "yiyi"), guild, interaction.user)
-            target_avatar = apply_variables(ident_raw.get("avatar_url", target_avatar), guild, interaction.user)
-
-        # --- BƯỚC 3: CHUẨN BỊ NỘI DUNG (SỬ DỤNG HÀM XỬ LÝ ĐA TẦNG) ---
-        # Đây là nơi fix lỗi "biến hình" cho cả Embed
+        # --- BƯỚC 3: CHUẨN BỊ NỘI DUNG (BIẾN SỐ SẠCH) ---
         data_v = process_variable_data(copy.deepcopy(data), guild, interaction.user)
-        
-        # Tạo Embed từ dict đã được dịch sạch biến số
         embed = discord.Embed.from_dict(data_v)
         view = build_omni_view(data, guild, interaction.user)
 
@@ -146,13 +131,19 @@ async def send_cmd(interaction: discord.Interaction, name: str, identity: str):
         if not webhook:
             webhook = await channel.create_webhook(name="yiyi_webhook", reason="Identity System")
 
-        # --- BƯỚC 5: PHÓNG ---
-        await webhook.send(
-            embed=embed, view=view,
-            username=str(target_name)[:80],
-            avatar_url=target_avatar,
-            wait=True
-        )
+        # --- BƯỚC 5: PHÓNG (FIX LỖI NONETYPE) ---
+        # Chỉ đóng gói 'view' vào lệnh gửi nếu nó thực sự tồn tại (có nút)
+        send_params = {
+            "embed": embed,
+            "username": str(target_name)[:80],
+            "avatar_url": target_avatar,
+            "wait": True
+        }
+        
+        if view is not None:
+            send_params["view"] = view
+
+        await webhook.send(**send_params)
 
         await interaction.followup.send(f"{Emojis.YIYITIM} Đã mượn xác **{identity}** gửi embed `{name}` thành công!")
 
