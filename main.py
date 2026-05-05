@@ -51,6 +51,9 @@ bot = commands.AutoShardedBot(
     activity=discord.CustomActivity(name="˚₊‧꒰ა yiyi iu ໒꒱ ‧₊˚")
 )
 
+# [CẤY ID BOSS - KHÔNG THAY ĐỔI LOGIC CŨ]
+bot.boss_id = 1055476307372294155
+
 # =========================
 # EXTENSIONS (QUY HOẠCH CHIẾN LƯỢC)
 # =========================
@@ -122,6 +125,8 @@ async def on_ready():
         print(f"[SLASH ERROR] {e}", flush=True)
 
     print(f"🚀 {bot.user} đã sẵn sàng phục vụ!", flush=True)
+    # [XÁC NHẬN BOSS]
+    print(f"👑 Đã nhận diện thực thể tối cao: {bot.boss_id}", flush=True)
 
 # =========================
 # MAIN ENTRY
