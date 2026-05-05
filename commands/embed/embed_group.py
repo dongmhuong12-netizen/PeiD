@@ -59,7 +59,12 @@ def create_embed_view(data):
     view = discord.ui.View()
     for btn in buttons_data:
         if btn.get("type") == "link":
-            view.add_item(discord.ui.Button(label=btn["label"], url=btn["url"]))
+            # GIA CỐ: Thêm tham số emoji để nhận diện ID <:name:id> sếp đã nhập
+            view.add_item(discord.ui.Button(
+                label=btn["label"], 
+                url=btn["url"], 
+                emoji=btn.get("emoji")
+            ))
     return view
 
 # =============================
@@ -184,7 +189,7 @@ class EmbedGroup(app_commands.Group):
         
         # [THÊM MỚI] Multi-IT: Ép view về None để nhường quyền xử lý UI cho Xưởng View vạn năng tại embed_sender.py
         # Logic này giúp tự động lắp ráp 9 loại nút tương tác (Role, Gacha, Ticket, Verify,...) từ storage.
-        view = None
+        # view = None  <-- Tạm tắt dòng này để hiển thị nút Link có Emoji (Emoji Fix)
         
         await send_embed(interaction.channel, data, interaction.guild, interaction.user, embed_name=name, view=view)
 
@@ -222,5 +227,3 @@ async def setup(bot: commands.Bot):
     else:
         # IT Standard Error Log
         print("[error] không tìm thấy khung /p! hãy đảm bảo command /p đã được khởi tạo trước.", flush=True)
-
-
