@@ -169,12 +169,6 @@ async def atomic_update_button(guild_id, name, button_data: dict = None, action:
     """
     [MULTI-IT] Thao tác an toàn tuyệt đối với mảng nút bấm.
     Ngăn chặn Race Condition (xóa đè dữ liệu) khi nhiều thao tác diễn ra cùng 1 miligiây.
-    Hỗ trợ: 
-    - 'add': Thêm nút mới.
-    - 'remove': Xóa theo vị trí index.
-    - 'clear': Xóa sạch nút.
-    - 'edit': Sửa dữ liệu nút tại vị trí index cụ thể.
-    - 'update_by_id': Tìm nút theo custom_id và cập nhật dữ liệu (Dùng cho Gacha/Vote).
     """
     if not name:
         return False
@@ -203,7 +197,15 @@ async def atomic_update_button(guild_id, name, button_data: dict = None, action:
             # Multi-IT: Bảo vệ giới hạn 25 linh kiện của Discord API tại tầng Storage
             if len(data["buttons"]) >= 25:
                 return False
-            data["buttons"].append(copy.deepcopy(button_data))
+            
+            # [GIA CỐ THẨM MỸ] Tự động thêm khoảng trắng nếu có Emoji để tránh dính chữ
+            btn = copy.deepcopy(button_data)
+            if btn.get("emoji") and "label" in btn:
+                lbl = str(btn["label"])
+                if lbl and not lbl.startswith(" "):
+                    btn["label"] = f" {lbl}"
+            
+            data["buttons"].append(btn)
             
         elif action == "remove":
             # Multi-IT: Xóa an toàn không văng lỗi IndexError
@@ -215,16 +217,28 @@ async def atomic_update_button(guild_id, name, button_data: dict = None, action:
         elif action == "edit" and button_data:
             # IT Pro: Sửa trực tiếp nút tại index mà không thay đổi thứ tự
             if 0 <= index < len(data["buttons"]):
-                data["buttons"][index] = copy.deepcopy(button_data)
+                # [GIA CỐ THẨM MỸ] Chuẩn hóa thẩm mỹ trước khi sửa
+                btn = copy.deepcopy(button_data)
+                if btn.get("emoji") and "label" in btn:
+                    lbl = str(btn["label"])
+                    if lbl and not lbl.startswith(" "):
+                        btn["label"] = f" {lbl}"
+                data["buttons"][index] = btn
             else:
                 return False
 
         elif action == "update_by_id" and custom_id and button_data:
-            # IT Pro: Tìm và cập nhật nút dựa trên ID (Quan trọng cho hệ thống Reaction/Interaction)
+            # [GIA CỐ THẨM MỸ] Chuẩn hóa thẩm mỹ cho hệ thống Update ID
+            btn_fixed = copy.deepcopy(button_data)
+            if btn_fixed.get("emoji") and "label" in btn_fixed:
+                lbl = str(btn_fixed["label"])
+                if lbl and not lbl.startswith(" "):
+                    btn_fixed["label"] = f" {lbl}"
+
             found = False
             for i, btn in enumerate(data["buttons"]):
                 if btn.get("custom_id") == custom_id:
-                    data["buttons"][i] = copy.deepcopy(button_data)
+                    data["buttons"][i] = btn_fixed
                     found = True
                     break
             if not found: return False
