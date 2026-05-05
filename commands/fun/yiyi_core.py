@@ -27,12 +27,21 @@ class YiyiGroup(app_commands.Group):
             api_latency = round((end_time - start_time) * 1000)
             ws_latency = round(self.bot.latency * 1000)
 
-            # Ngân hàng câu thoại random
-            responses = [
-                f"**yiyi** đây, gọi **yiyi** vì nhớ phải hong? {Emojis.YIYITIM}",
-                f"**yiyi** đây, có chuyện gì muốn nhờ **yiyi** giúp hee? {Emojis.HOICHAM}",
-                f"haii, **yiyi** tới rùi nè {Emojis.MATTRANG}"
-            ]
+            # KIỂM TRA ĐẶC QUYỀN BOSS (NGUYỆT)
+            is_boss = interaction.user.id == getattr(self.bot, "boss_id", 1055476307372294155)
+
+            if is_boss:
+                responses = [
+                    f"**yiyi** đây nè **Nguyệt**. có việc gì muốn nhờ **yiyi** he? {Emojis.HOICHAM}",
+                    f"haii, **yiyi** ở đây chờ **Nguyệt** chỉ thị nè {Emojis.YIYITIM}",
+                    f"**Nguyệt** gọi vì nhớ **yiyi** phải hong? {Emojis.YIYITIM}"
+                ]
+            else:
+                responses = [
+                    "haiii, **yiyi** đâyyy",
+                    "**yiyi** có mặt",
+                    f"gọi **yiyi** có chuyện gì hee? {Emojis.HOICHAM}"
+                ]
             
             embed = discord.Embed(
                 title=random.choice(responses),
@@ -40,41 +49,52 @@ class YiyiGroup(app_commands.Group):
                 color=0xf8bbd0
             )
             
-            # [TELEMETRY] Hỗ trợ Debug trên môi trường Multi-Shard (100k+ servers)
             shard_id = interaction.guild.shard_id if interaction.guild and self.bot.shard_count else 0
             embed.set_footer(text=f"hệ thống ổn định • shard: {shard_id}")
             
             await interaction.followup.send(embed=embed)
             
         except Exception as e:
-            # [BẢO VỆ CỐT LÕI] Bắt lỗi ngầm, tránh sập cụm lệnh
             print(f"[yiyi_oi error] fail to fetch ping: {e}", flush=True)
             if not interaction.response.is_done():
-                await interaction.response.send_message("**yiyi** đang bị nghẽn mạng chút xíu, cậu thử lại sau nha!", ephemeral=True)
+                await interaction.followup.send("**yiyi** đang bị nghẽn mạng chút xíu nha!", ephemeral=True)
 
     # ==========================================
-    # LỆNH 2: IDENTITY (/yiyi iu_ai)
+    # LỆNH 2: LOVE (/yiyi iu)
     # ==========================================
-    @app_commands.command(name="iu_ai", description="hỏi xem yiyi thương ai nhất")
-    async def iu_ai(self, interaction: discord.Interaction):
+    @app_commands.command(name="iu", description="hỏi xem yiyi thương ai nhất")
+    async def iu(self, interaction: discord.Interaction):
         try:
+            # KIỂM TRA ĐẶC QUYỀN BOSS (NGUYỆT)
+            is_boss = interaction.user.id == getattr(self.bot, "boss_id", 1055476307372294155)
+
+            if is_boss:
+                responses = [
+                    f"**yiyi** yêu người nhấttt {Emojis.YIYITIM}",
+                    f"**yiyi** cũng iu cậu nhất {Emojis.YIYITIM}",
+                    f"iu **Vương Dỹ Nguyệt** nhất luôn {Emojis.YIYITIM}"
+                ]
+            else:
+                responses = [
+                    f"**yiyi** cũng iu **yiyi** lắm {Emojis.YIYITIM}",
+                    "ehe ₍₍ (̨̡⸝⸝´꒳`⸝⸝)̧̢ ₎₎",
+                    f"ủa gì zạ {Emojis.HOICHAM}"
+                ]
+
             embed = discord.Embed(
-                title=f"**yiyi** iu **Vương Dỹ Nguyệt** nhấttt {Emojis.YIYITIM}",
+                title=random.choice(responses),
                 color=0xf8bbd0
             )
             await interaction.response.send_message(embed=embed)
         except Exception as e:
-            print(f"[yiyi_iu_ai error] {e}", flush=True)
+            print(f"[yiyi_iu error] {e}", flush=True)
 
 # ==========================================
 # INJECTION (ĐĂNG KÝ VÀO CÂY LỆNH TỔNG)
 # ==========================================
 async def setup(bot: commands.Bot):
     try:
-        # Nạp nguyên nhóm lệnh /yiyi vào Command Tree
         bot.tree.add_command(YiyiGroup(bot))
-        print("[load] success: commands.fun.yiyi_core (identity engine loaded)", flush=True)
+        print("[load] success: commands.fun.yiyi_core (sweet personality loaded)", flush=True)
     except Exception as e:
         print(f"[load error] failed to inject yiyi_core: {e}", flush=True)
-
-
