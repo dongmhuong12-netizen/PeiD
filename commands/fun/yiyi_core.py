@@ -40,11 +40,7 @@ class YiyiGroup(app_commands.Group):
                     f"**Nguyệt** gọi vì nhớ **yiyi** phải hong? {Emojis.YIYITIM}"
                 ]
             else:
-                responses = [
-                    "haiiii, **yiyi** đâyyy", 
-                    "**yiyi** có mặt", 
-                    f"gọi **yiyi** có chuyện gì hee? {Emojis.HOICHAM}"
-                ]
+                responses = ["haiiii, **yiyi** đâyyy", "**yiyi** có mặt", f"gọi **yiyi** có chuyện gì hee? {Emojis.HOICHAM}"]
             
             api_latency = round((time.perf_counter() - start_time) * 1000)
             embed = discord.Embed(
@@ -64,7 +60,6 @@ class YiyiGroup(app_commands.Group):
     async def iu(self, interaction: discord.Interaction):
         try:
             is_boss = interaction.user.id == 1055476307372294155
-            # TRẢ LẠI ĐẦY ĐỦ CÁC CÂU THOẠI CHO NGUYỆT
             if is_boss:
                 responses = [
                     f"**yiyi** yêu người nhấttt {Emojis.YIYITIM}", 
@@ -94,7 +89,7 @@ class YiyiGroup(app_commands.Group):
             gid = interaction.guild.id
             gid_str = str(gid)
 
-            # NẠP DỮ LIỆU ĐA LUỒNG CHỐNG NGHẼN
+            # NẠP DATA ĐA LUỒNG
             try:
                 try: 
                     from core.forms_storage import get_forms_config
@@ -117,12 +112,15 @@ class YiyiGroup(app_commands.Group):
             form_cfg = results[4] if isinstance(results[4], dict) else {}
             ident_data = results[5] if isinstance(results[5], dict) else {}
 
-            # Phản hồi Reaction Role từ DB
+            # --- VÁ LỖI ATTRIBUTEERROR: TRUY CẬP COLLECTION THEO KEY ---
             rr_count = 0
             db = getattr(State.bot, "db", None)
-            if db: rr_count = await db.reactions.count_documents({"guild_id": gid_str})
+            if db is not None:
+                # Dùng db['reactions'] thay vì db.reactions để an toàn tuyệt đối
+                collection = db['reactions']
+                rr_count = await collection.count_documents({"guild_id": gid_str})
 
-            # --- HELPERS ĐỊNH DẠNG ---
+            # --- HELPERS PHÂN TÍCH ---
             def parse_module(module_key):
                 data = greet_full.get(module_key, {})
                 c_id, e_nm, msg = data.get("channel_id"), data.get("embed_name"), data.get("message")
@@ -136,7 +134,6 @@ class YiyiGroup(app_commands.Group):
 
             embed_with_buttons = sum(1 for e in embed_data.values() if isinstance(e, dict) and e.get("buttons"))
 
-            # Phân tách thông số
             g_st, g_ch, g_eb, g_tx = parse_module("greet")
             l_st, l_ch, l_eb, l_tx = parse_module("leave")
             w_st, w_ch, w_eb, w_tx = parse_module("wellcome")
@@ -149,7 +146,7 @@ class YiyiGroup(app_commands.Group):
             f_st = f"`ON`" if form_cfg else f"`OFF`"
             f_th = f"`ON`" if form_cfg.get("thumbnail") else f"`OFF`"
 
-            # --- RÁP DASHBOARD ---
+            # --- RÁP DASHBOARD CHI TIẾT ---
             desc = f"""{Emojis.MATTRANG} **hệ thống tiếp tân & tương tác**
 • **greet (chào mừng)**: {g_st}
   └ kênh: {g_ch} | embed: {g_eb} | text: {g_tx}
@@ -193,4 +190,4 @@ class YiyiGroup(app_commands.Group):
 
 async def setup(bot: commands.Bot):
     bot.tree.add_command(YiyiGroup(bot))
-    print("[load] success: commands.fun.yiyi_core (Full Logic & Dashboard)")
+    print("[load] success: commands.fun.yiyi_core (Fix Database Access Applied)")
