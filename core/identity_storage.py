@@ -57,13 +57,15 @@ async def save_identity(guild_id: int, name: str, display_name: str = None, avat
         cache[gid][nid] = identity_data
         
         # [CẤY MỚI] Đồng bộ dữ liệu lên ngăn 'identities' của Cloud
-        if hasattr(State.bot, "db"):
-            await State.bot.db.identities.update_one(
+        db = getattr(State.bot, "db", None)
+        if db:
+            await db.identities.update_one(
                 {"guild_id": gid, "name": nid},
                 {"$set": {"data": identity_data}},
                 upsert=True
             )
             
+        print(f"[STORAGE] Identity '{nid}' saved for Guild {gid} (Cloud Synced)", flush=True)
         return True
 
 async def load_identity(guild_id: int, name: str):
@@ -74,12 +76,13 @@ async def load_identity(guild_id: int, name: str):
 
     # 1. Ưu tiên tìm trong RAM
     guild_data = cache.get(gid) or cache.get(int(gid) if gid.isdigit() else None)
-    if guild_data and nid in guild_data:
+    if isinstance(guild_data, dict) and nid in guild_data:
         return copy.deepcopy(guild_data[nid])
 
     # 2. [CẤY MỚI] Nếu RAM hụt (do Reboot), truy vấn Cloud Atlas
-    if hasattr(State.bot, "db"):
-        doc = await State.bot.db.identities.find_one({"guild_id": gid, "name": nid})
+    db = getattr(State.bot, "db", None)
+    if db:
+        doc = await db.identities.find_one({"guild_id": gid, "name": nid})
         if doc:
             if gid not in cache: cache[gid] = {}
             cache[gid][nid] = doc["data"]
@@ -94,12 +97,13 @@ async def load_identity_raw(guild_id: int, name: str):
     nid = _nid(name)
     
     guild_data = cache.get(gid) or cache.get(int(gid) if gid.isdigit() else None)
-    if guild_data and nid in guild_data:
+    if isinstance(guild_data, dict) and nid in guild_data:
         return guild_data.get(nid)
 
     # [CẤY MỚI] Khôi phục dữ liệu thô từ Cloud
-    if hasattr(State.bot, "db"):
-        doc = await State.bot.db.identities.find_one({"guild_id": gid, "name": nid})
+    db = getattr(State.bot, "db", None)
+    if db:
+        doc = await db.identities.find_one({"guild_id": gid, "name": nid})
         if doc:
             if gid not in cache: cache[gid] = {}
             cache[gid][nid] = doc["data"]
@@ -118,19 +122,44 @@ async def delete_identity(guild_id: int, name: str):
             del cache[gid][nid]
             
             # [CẤY MỚI] Xóa vĩnh viễn trên Cloud Atlas
-            if hasattr(State.bot, "db"):
-                await State.bot.db.identities.delete_one({"guild_id": gid, "name": nid})
+            db = getattr(State.bot, "db", None)
+            if db:
+                await db.identities.delete_one({"guild_id": gid, "name": nid})
                 
             return True
         return False
 
-async def get_all_identity_names(guild_id: int):
-    """Lấy danh sách tất cả tên 'vỏ' để phục vụ Autocomplete"""
+async def get_all_identities(guild_id: int):
+    """
+    Lấy toàn bộ danh sách danh tính của server.
+    [GIA CỐ] Tự động khôi phục toàn bộ từ Cloud nếu RAM trống sau reboot.
+    """
     cache = _get_cache()
     gid = _gid(guild_id)
-    
+
+    # Nếu RAM trống, thực hiện nạp hàng loạt từ Cloud Atlas (Industrial Logic)
+    db = getattr(State.bot, "db", None)
+    if gid not in cache and db:
+        cursor = db.identities.find({"guild_id": gid})
+        async for doc in cursor:
+            if gid not in cache: cache[gid] = {}
+            cache[gid][doc["name"]] = doc["data"]
+
     guild_data = cache.get(gid) or cache.get(int(gid) if gid.isdigit() else None)
-    if not guild_data:
+    if not isinstance(guild_data, dict):
+        return {}
+
+    return copy.deepcopy(guild_data)
+
+async def get_all_identity_names(guild_id: int):
+    """Lấy danh sách tất cả tên 'vỏ' để phục vụ Autocomplete"""
+    if guild_id is None:
+        return []
+
+    # Gọi get_all_identities để đảm bảo RAM đã được nạp từ Cloud trước khi liệt kê
+    guild_data = await get_all_identities(guild_id)
+    
+    if not isinstance(guild_data, dict):
         return []
         
     return list(guild_data.keys())
