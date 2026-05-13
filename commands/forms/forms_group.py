@@ -4,10 +4,8 @@ from discord.ext import commands
 import re
 
 from core.embed_storage import atomic_update_button
-from core.cache_manager import get_raw, mark_dirty, update, save as force_save
-from utils.emojis import Emojis # Đảm bảo đã import để dùng emoji hệ thống
-
-FILE_KEY = "forms_configs"
+# [TRÍ NHỚ ĐÃ BÓC TÁCH] Gỡ bỏ các import liên quan đến cache manager cục bộ
+from utils.emojis import Emojis 
 
 class FormsGroup(app_commands.Group):
     def __init__(self):
@@ -17,25 +15,6 @@ class FormsGroup(app_commands.Group):
         """[BỘ LỌC YIYI] Gọt sạch tag kênh/role chỉ lấy số ID"""
         if not input_str: return ""
         return re.sub(r'\D', '', input_str)
-
-    def _get_config(self, guild_id, embed_name):
-        db = get_raw(FILE_KEY)
-        if str(guild_id) not in db: db[str(guild_id)] = {}
-        if embed_name not in db[str(guild_id)]:
-            db[str(guild_id)][embed_name] = {
-                "log_channel_id": None,
-                "form_title": None,
-                "show_thumbnail": True, # Mặc định hiện Avatar cho sang
-                "fields": {}
-            }
-        return db[str(guild_id)][embed_name]
-
-    def _save_config(self, guild_id, embed_name, config):
-        db = get_raw(FILE_KEY)
-        if str(guild_id) not in db: db[str(guild_id)] = {}
-        db[str(guild_id)][embed_name] = config
-        update(FILE_KEY, db)
-        mark_dirty(FILE_KEY)
 
     # =========================
     # LỆNH 1: SETUP NỀN (Văn phong & Thứ tự mới)
@@ -53,13 +32,9 @@ class FormsGroup(app_commands.Group):
         # Gọt sạch ID kênh log
         clean_log_id = self._sanitize_id(log_channel_id)
         
-        config = self._get_config(interaction.guild.id, embed_name)
-        config["log_channel_id"] = clean_log_id
-        config["form_title"] = form_title
-        config["show_thumbnail"] = show_thumbnail
-        
-        self._save_config(interaction.guild.id, embed_name, config)
-        await force_save(FILE_KEY)
+        # [TRÍ NHỚ ĐÃ BÓC TÁCH] 
+        # Cậu sẽ thay thế logic lấy và lưu config vào MongoDB tại đây.
+        # Logic gọt sạch ID và chuẩn bị dữ liệu phản hồi vẫn giữ nguyên.
         
         # Render văn phong theo ý sếp
         embed_res = discord.Embed(
@@ -87,16 +62,10 @@ class FormsGroup(app_commands.Group):
     ])
     async def field(self, interaction: discord.Interaction, embed_name: str, slot: int, label: str, placeholder: str = "Nhập nội dung...", required: bool = True):
         await interaction.response.defer(ephemeral=True)
-        config = self._get_config(interaction.guild.id, embed_name)
         
-        config["fields"][str(slot)] = {
-            "label": label[:45], 
-            "placeholder": placeholder[:100],
-            "required": required
-        }
-        
-        self._save_config(interaction.guild.id, embed_name, config)
-        await force_save(FILE_KEY)
+        # [TRÍ NHỚ ĐÃ BÓC TÁCH]
+        # Xóa bỏ các lệnh gọi _get_config, _save_config và force_save.
+        # Dữ liệu slot, label, placeholder sẽ được cấy vào MongoDB sau này.
 
         # Render văn phong đóng khung biến
         embed_res = discord.Embed(
@@ -126,6 +95,8 @@ class FormsGroup(app_commands.Group):
             "system": "forms"
         }
 
+        # [GIA CỐ] Giữ lại atomic_update_button vì đây là DAL (Data Access Layer) 
+        # sẽ được cậu xử lý MongoDB bên trong core/embed_storage.py sau.
         success = await atomic_update_button(interaction.guild.id, embed_name, action="add", button_data=btn_data)
         
         if success:
