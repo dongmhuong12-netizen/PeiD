@@ -7,6 +7,11 @@ import random
 # Nhập hệ Emojis của PeiD
 from utils.emojis import Emojis
 
+# [GIA CỐ] Di chuyển import lên đầu file để tối ưu tốc độ phản hồi (IT Industrial Grade)
+from core.greet_storage import get_guild_config
+from core.ticket_storage import get_ticket_config
+from core.embed_storage import get_all_embeds
+
 class YiyiGroup(app_commands.Group):
     def __init__(self, bot: commands.Bot):
         # Đặt tên lệnh cha là /yiyi
@@ -94,18 +99,13 @@ class YiyiGroup(app_commands.Group):
     # ==========================================
     @app_commands.command(name="setting", description="kiểm tra chi tiết các cài đặt của server")
     async def setting(self, interaction: discord.Interaction):
-        # [IT PRO] Luôn defer trước khi gọi Storage để tránh timeout
+        # [CỰC HẠN] Defer ngay đầu tiên để tránh lỗi Unknown Interaction (404)
         await interaction.response.defer(ephemeral=True)
         guild = interaction.guild
         guild_id = guild.id
 
         try:
-            # --- Nạp Trí Nhớ Cloud ---
-            from core.greet_storage import get_guild_config
-            from core.ticket_storage import get_ticket_config
-            from core.embed_storage import get_all_embeds
-            
-            # 1. Thu thập dữ liệu (FIX: Chỉ truyền guild_id để khớp với tham số của Nguyệt)
+            # 1. Thu thập dữ liệu từ Cloud Atlas (Đã import đầu file để tăng tốc)
             greet_data = await get_guild_config(guild_id)
             ticket_cfg = await get_ticket_config(guild_id)
             all_embeds = await get_all_embeds(guild_id) 
@@ -195,7 +195,7 @@ class YiyiGroup(app_commands.Group):
             # Ghi log lỗi chính xác để Nguyệt dễ debug
             print(f"[yiyi_setting error] critical failure: {e}", flush=True)
             if not interaction.response.is_done():
-                await interaction.followup.send(f"{Emojis.HOICHAM} yiyi bị nghẽn mạch khi nạp dữ liệu rồi...", ephemeral=True)
+                await interaction.followup.send(f"{Emojis.HOICHAM} yiyi bị nghẽn mạch khi nạp dữ liệu rồi!", ephemeral=True)
 
 # ==========================================
 # INJECTION (ĐĂNG KÝ VÀO CÂY LỆNH TỔNG)
