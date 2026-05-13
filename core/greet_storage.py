@@ -33,18 +33,28 @@ async def get_guild_config(guild_id: int):
     gid = str(guild_id)
     
     # [CẤY MỚI] Tự phục hồi dữ liệu từ Cloud Atlas nếu RAM hụt
-    if gid not in cache and hasattr(State.bot, "db"):
-        doc = await State.bot.db.configs.find_one({
-            "guild_id": gid, 
-            "module": "greet_leave"
-        })
-        if doc:
-            cache[gid] = doc.get("settings", {})
+    if gid not in cache:
+        db = getattr(State.bot, "db", None)
+        if db:
+            doc = await db.configs.find_one({
+                "guild_id": gid, 
+                "module": "greet_leave"
+            })
+            if doc:
+                cache[gid] = doc.get("settings", {})
+            else:
+                # Khởi tạo khung xương nếu server mới hoàn toàn để tránh truy vấn lặp
+                cache[gid] = {"greet": {}, "leave": {}, "wellcome": {}}
 
     config = cache.get(gid, {})
     
+    # Đảm bảo cấu trúc 3 nhánh luôn tồn tại trước khi trả về (Self-healing)
+    if not isinstance(config, dict): config = {}
+    for s in ["greet", "leave", "wellcome"]:
+        if s not in config: config[s] = {}
+
     # Bảo vệ RAM gốc và đảm bảo cấu trúc 3 nhánh luôn sẵn sàng (Industrial Grade)
-    return copy.deepcopy(config) if config else {"greet": {}, "leave": {}, "wellcome": {}}
+    return copy.deepcopy(config)
 
 
 async def update_guild_config(guild_id: int, section: str, key: str, value):
@@ -65,12 +75,15 @@ async def update_guild_config(guild_id: int, section: str, key: str, value):
     cache[gid][section][key] = value
 
     # [CẤY MỚI] Đồng bộ Cloud Atlas vào ngăn 'configs'
-    if hasattr(State.bot, "db"):
-        await State.bot.db.configs.update_one(
+    db = getattr(State.bot, "db", None)
+    if db:
+        await db.configs.update_one(
             {"guild_id": gid, "module": "greet_leave"},
             {"$set": {f"settings.{section}.{key}": value}},
             upsert=True
         )
+    else:
+        print(f"[ERROR] Không thể đồng bộ {section}.{key} lên Cloud Atlas cho Guild {gid}", flush=True)
 
     print(f"[STORAGE] Updated {section}.{key} for Guild {gid} (Cloud Synced)", flush=True)
 
