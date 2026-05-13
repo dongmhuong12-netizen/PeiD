@@ -1,8 +1,5 @@
 import discord
-from core.cache_manager import get_raw
 from utils.emojis import Emojis
-
-FILE_KEY = "forms_configs"
 
 # --- LỚP MODAL ĐỘNG ---
 class DynamicFormModal(discord.ui.Modal):
@@ -74,8 +71,11 @@ async def handle_forms_interaction(interaction: discord.Interaction):
     if not custom_id.startswith("yiyi:forms:open:"): return
 
     embed_name = custom_id.replace("yiyi:forms:open:", "")
-    db = get_raw(FILE_KEY)
-    config = db.get(str(interaction.guild.id), {}).get(embed_name)
+    
+    # [TRÍ NHỚ ĐÃ BÓC TÁCH] 
+    # Cậu sẽ thay thế đoạn fetch config từ MongoDB tại đây thay cho cache_manager cũ.
+    # Logic xử lý config bên dưới vẫn được giữ nguyên 100%.
+    config = None 
 
     # 4. Khi chưa cấu hình field
     if not config or not config.get("fields"):
