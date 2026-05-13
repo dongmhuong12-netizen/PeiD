@@ -3,10 +3,7 @@ import asyncio
 # [CẤY MỚI] Kết nối với não bộ bot.db thông qua State
 from core.state import State
 
-# [TRÍ NHỚ ĐÃ BÓC TÁCH] Gỡ bỏ các import liên quan đến cache manager cục bộ
-# from core.cache_manager import get_raw, mark_dirty, update
-
-# Khởi tạo một bộ đệm RAM để duy trì vận hành Stateless
+# Khởi tạo một bộ đệm RAM để duy trì vận hành Stateless (100k+ servers optimization)
 _internal_greet_cache = {}
 
 # =========================
@@ -27,12 +24,12 @@ def _get_cache():
 async def get_guild_config(guild_id: int):
     """
     Lấy toàn bộ cấu hình Greet/Leave/Wellcome của server.
-    Logic: RAM first, nạp từ Cloud nếu RAM trống sau khi reboot.
+    Logic: RAM first, nạp từ Cloud nếu RAM trống sau khi reboot (Industrial Standard).
     """
     cache = _get_cache()
     gid = str(guild_id)
     
-    # [CẤY MỚI] Tự phục hồi dữ liệu từ Cloud Atlas nếu RAM hụt
+    # [CẤY MỚI] Tự phục hồi dữ liệu từ Cloud Atlas nếu RAM hụt (Sau khi Render restart)
     if gid not in cache:
         db = getattr(State.bot, "db", None)
         if db:
@@ -53,7 +50,7 @@ async def get_guild_config(guild_id: int):
     for s in ["greet", "leave", "wellcome"]:
         if s not in config: config[s] = {}
 
-    # Bảo vệ RAM gốc và đảm bảo cấu trúc 3 nhánh luôn sẵn sàng (Industrial Grade)
+    # Bảo vệ RAM gốc bằng Deepcopy (Bản sao an toàn cho logic xử lý biến số)
     return copy.deepcopy(config)
 
 
@@ -64,17 +61,17 @@ async def update_guild_config(guild_id: int, section: str, key: str, value):
     cache = _get_cache()
     gid = str(guild_id)
 
-    # Khởi tạo không gian lưu trữ cho Guild nếu chưa có (mở rộng thêm wellcome)
+    # Khởi tạo không gian lưu trữ cho Guild nếu chưa có (Hỗ trợ 3 nhánh Greet/Leave/Wellcome)
     if gid not in cache or not isinstance(cache[gid], dict):
         cache[gid] = {"greet": {}, "leave": {}, "wellcome": {}}
 
     if section not in cache[gid] or not isinstance(cache[gid][section], dict):
         cache[gid][section] = {}
 
-    # Ghi trực tiếp vào RAM (Source of Truth)
+    # Ghi trực tiếp vào RAM (Source of Truth tạm thời để phản hồi ngay lập tức)
     cache[gid][section][key] = value
 
-    # [CẤY MỚI] Đồng bộ Cloud Atlas vào ngăn 'configs'
+    # [CẤY MỚI] Đồng bộ Cloud Atlas vào ngăn 'configs' với đường dẫn settings động
     db = getattr(State.bot, "db", None)
     if db:
         await db.configs.update_one(
