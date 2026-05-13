@@ -4,12 +4,12 @@ from discord.ext import commands
 import time
 import random
 import asyncio
-import traceback # [CẤY MỚI] Công cụ dò lỗi tàng hình chuẩn IT Pro
+import traceback
 
 # Nhập hệ Emojis của PeiD
 from utils.emojis import Emojis
 
-# Nạp sẵn Storage để tối ưu tốc độ phản hồi 
+# Nạp sẵn Storage để tối ưu tốc độ
 from core.greet_storage import get_guild_config
 from core.ticket_storage import get_ticket_config
 from core.embed_storage import get_all_embeds
@@ -25,11 +25,10 @@ class YiyiGroup(app_commands.Group):
     @app_commands.command(name="oi", description="gọi yiyi để kiểm tra tốc độ hệ thống")
     async def oi(self, interaction: discord.Interaction):
         try:
-            start_time = time.perf_counter()
+            # Phản hồi thần tốc
             await interaction.response.defer(ephemeral=False)
-            end_time = time.perf_counter()
             
-            api_latency = round((end_time - start_time) * 1000)
+            start_time = time.perf_counter()
             ws_latency = round(self.bot.latency * 1000)
             is_boss = interaction.user.id == getattr(self.bot, "boss_id", 1055476307372294155)
 
@@ -45,6 +44,9 @@ class YiyiGroup(app_commands.Group):
                     "**yiyi** có mặt",
                     f"gọi **yiyi** có chuyện gì hee? {Emojis.HOICHAM}"
                 ]
+            
+            end_time = time.perf_counter()
+            api_latency = round((end_time - start_time) * 1000)
             
             embed = discord.Embed(
                 title=random.choice(responses),
@@ -87,22 +89,28 @@ class YiyiGroup(app_commands.Group):
     # ==========================================
     @app_commands.command(name="setting", description="kiểm tra chi tiết các cài đặt của server")
     async def setting(self, interaction: discord.Interaction):
+        # [CHIẾN THUẬT TỐC BIẾN] Đưa defer lên tách biệt hoàn toàn để chống lỗi Timeout 10062
         try:
-            # Đưa defer vào trong try để nếu văng lỗi 40060 nó cũng bị Traceback tóm cổ
             await interaction.response.defer(ephemeral=True)
-            guild = interaction.guild
-            guild_id = guild.id
+        except Exception as e:
+            print(f"[CRITICAL] Không thể defer interaction: {e}", flush=True)
+            return
 
+        guild = interaction.guild
+        guild_id = guild.id
+
+        try:
             # --- Tích hợp Parallel Loading ---
-            greet_task = get_guild_config(guild_id)
-            ticket_task = get_ticket_config(guild_id)
-            embed_task = get_all_embeds(guild_id) 
+            results = await asyncio.gather(
+                get_guild_config(guild_id),
+                get_ticket_config(guild_id),
+                get_all_embeds(guild_id),
+                return_exceptions=True
+            )
             
-            results = await asyncio.gather(greet_task, ticket_task, embed_task, return_exceptions=True)
-            
-            greet_data = results[0] if not isinstance(results[0], Exception) and results[0] else {}
-            ticket_cfg = results[1] if not isinstance(results[1], Exception) and results[1] else {}
-            all_embeds = results[2] if not isinstance(results[2], Exception) and results[2] else []
+            greet_data = results[0] if isinstance(results[0], dict) else {}
+            ticket_cfg = results[1] if isinstance(results[1], dict) else {}
+            all_embeds = results[2] if isinstance(results[2], (dict, list)) else []
             
             # --- HELPER: SOI CHI TIẾT LINH KIỆN ---
             def get_detail(module_data):
@@ -110,19 +118,13 @@ class YiyiGroup(app_commands.Group):
                     return "`chưa thiết lập`"
                 
                 comps = []
-                if module_data.get("channel_id"):
-                    comps.append("channel")
-                if module_data.get("embed_name"):
-                    comps.append("embed")
-                if module_data.get("message"):
-                    comps.append("message")
+                if module_data.get("channel_id"): comps.append("channel")
+                if module_data.get("embed_name"): comps.append("embed")
+                if module_data.get("message"): comps.append("message")
                     
-                if not comps:
-                    return "`chưa thiết lập`"
-                
-                return f"{Emojis.YIYITIM} (đã setup: " + ", ".join(comps) + ")"
+                return f"{Emojis.YIYITIM} (đã setup: " + ", ".join(comps) + ")" if comps else "`chưa thiết lập`"
 
-            # --- [ĐÃ VÁ LỖI] HELPER: ĐẾM NÚT BẤM (BUTTON) ---
+            # --- [ĐÃ VÁ LỖI DB] HELPER: ĐẾM NÚT BẤM (BUTTON) ---
             total_btns = 0
             linked_embeds = 0
             
@@ -142,7 +144,7 @@ class YiyiGroup(app_commands.Group):
                 color=0xf8bbd0
             )
 
-            # [ĐÃ VÁ LỖI] Nhánh Greet/Leave/Wellcome/Booster
+            # [ĐÃ VÁ LỖI DB] Nhánh Greet/Leave/Wellcome/Booster
             greet_sec = greet_data.get('greet', {}) if isinstance(greet_data, dict) else {}
             greet_sec = greet_sec if isinstance(greet_sec, dict) else {}
             booster_status = "`đã có channel`" if greet_sec.get('booster_channel') else "`chưa thiết lập`"
@@ -170,7 +172,7 @@ class YiyiGroup(app_commands.Group):
                 inline=False
             )
 
-            # [ĐÃ VÁ LỖI] Nhánh Tính năng nâng cao (Soi Ticket)
+            # [ĐÃ VÁ LỖI DB] Nhánh Tính năng nâng cao (Soi Ticket)
             ticket_status = "`chưa thiết lập`"
             if isinstance(ticket_cfg, dict):
                 t_comp = []
@@ -191,16 +193,16 @@ class YiyiGroup(app_commands.Group):
             )
 
             embed.set_footer(text="yiyi iu cậu • báo cáo chi tiết linh kiện cloud")
+            
+            # Gửi tin nhắn qua followup do đã defer từ đầu
             await interaction.followup.send(embed=embed)
 
         except Exception as e:
-            # [IT PRO] Dùng Traceback để in đích danh dòng lỗi ra log Render
             print(f"\n[CRITICAL ERROR] --- BẮT ĐẦU DÒ LỖI YIYI SETTING ---", flush=True)
             traceback.print_exc()
             print(f"--- KẾT THÚC DÒ LỖI ---\n", flush=True)
             
             try:
-                # Gửi nguyên cái tên lỗi ra kênh Discord để Nguyệt thấy ngay lập tức
                 error_name = repr(e)
                 await interaction.followup.send(f"{Emojis.HOICHAM} yiyi gặp lỗi khi quét dữ liệu! Mã lỗi: `{error_name}` (Soi log Render ngay sếp ơi)", ephemeral=True)
             except Exception:
