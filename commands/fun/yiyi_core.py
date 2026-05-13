@@ -94,100 +94,107 @@ class YiyiGroup(app_commands.Group):
     # ==========================================
     @app_commands.command(name="setting", description="kiểm tra chi tiết các cài đặt của server")
     async def setting(self, interaction: discord.Interaction):
+        # Sử dụng defer để tránh timeout khi truy vấn MongoDB
         await interaction.response.defer(ephemeral=True)
         guild = interaction.guild
         guild_id = guild.id
 
-        # --- Nạp Trí Nhớ Cloud ---
-        from core.greet_storage import get_guild_config
-        from core.ticket_storage import get_ticket_config
-        from core.embed_storage import get_all_embeds
-        
-        # 1. Thu thập dữ liệu
-        greet_data = await get_guild_config(guild_id)
-        ticket_cfg = await get_ticket_config(guild_id)
-        all_embeds = await get_all_embeds(guild_id)
-        
-        # --- HELPER: SOI CHI TIẾT LINH KIỆN ---
-        def get_detail(module_data):
-            if not module_data:
-                return "`chưa thiết lập`"
+        try:
+            # --- Nạp Trí Nhớ Cloud ---
+            from core.greet_storage import get_guild_config
+            from core.ticket_storage import get_ticket_config
+            from core.embed_storage import get_all_embeds
             
-            comps = []
-            if module_data.get("channel_id"):
-                comps.append("channel")
-            if module_data.get("embed_name"):
-                comps.append("embed")
-            if module_data.get("message"):
-                comps.append("message")
+            # 1. Thu thập dữ liệu (Fix: truyền self.bot vào get_all_embeds)
+            greet_data = await get_guild_config(guild_id)
+            ticket_cfg = await get_ticket_config(guild_id)
+            all_embeds = await get_all_embeds(self.bot, guild_id)
+            
+            # --- HELPER: SOI CHI TIẾT LINH KIỆN ---
+            def get_detail(module_data):
+                if not module_data:
+                    return "`chưa thiết lập`"
                 
-            if not comps:
-                return "`chưa thiết lập`"
-            
-            return f"{Emojis.YIYITIM} (đã setup: " + ", ".join(comps) + ")"
+                comps = []
+                if module_data.get("channel_id"):
+                    comps.append("channel")
+                if module_data.get("embed_name"):
+                    comps.append("embed")
+                if module_data.get("message"):
+                    comps.append("message")
+                    
+                if not comps:
+                    return "`chưa thiết lập`"
+                
+                return f"{Emojis.YIYITIM} (đã setup: " + ", ".join(comps) + ")"
 
-        # --- HELPER: ĐẾM NÚT BẤM (BUTTON) ---
-        total_btns = 0
-        linked_embeds = 0
-        for emb in all_embeds:
-            btns = emb.get("buttons", [])
-            if btns:
-                total_btns += len(btns)
-                linked_embeds += 1
+            # --- HELPER: ĐẾM NÚT BẤM (BUTTON) ---
+            total_btns = 0
+            linked_embeds = 0
+            for emb in all_embeds:
+                btns = emb.get("buttons", [])
+                if btns:
+                    total_btns += len(btns)
+                    linked_embeds += 1
 
-        # 2. Xây dựng nội dung hiển thị
-        embed = discord.Embed(
-            title=f"{Emojis.MATTRANG} chi tiết các cài đặt của {guild.name}",
-            color=0xf8bbd0
-        )
+            # 2. Xây dựng nội dung hiển thị
+            embed = discord.Embed(
+                title=f"{Emojis.MATTRANG} Chi tiết các cài đặt của {guild.name}",
+                color=0xf8bbd0
+            )
 
-        # Nhánh Greet/Leave/Wellcome/Booster
-        booster_status = "`đã có channel`" if greet_data.get('greet', {}).get('booster_channel') else "`chưa thiết lập`"
-        embed.add_field(
-            name=f"{Emojis.YIYITIM} HỆ THỐNG LỜI CHÀO",
-            value=(
-                f"• **greet:** {get_detail(greet_data.get('greet'))}\n"
-                f"• **leave:** {get_detail(greet_data.get('leave'))}\n"
-                f"• **wellcome:** {get_detail(greet_data.get('wellcome'))}\n"
-                f"• **booster:** {booster_status}"
-            ),
-            inline=False
-        )
+            # Nhánh Greet/Leave/Wellcome/Booster
+            booster_status = "`đã có channel`" if greet_data.get('greet', {}).get('booster_channel') else "`chưa thiết lập`"
+            embed.add_field(
+                name=f"{Emojis.YIYITIM} HỆ THỐNG LỜI CHÀO",
+                value=(
+                    f"• **greet:** {get_detail(greet_data.get('greet'))}\n"
+                    f"• **leave:** {get_detail(greet_data.get('leave'))}\n"
+                    f"• **wellcome:** {get_detail(greet_data.get('wellcome'))}\n"
+                    f"• **booster:** {booster_status}"
+                ),
+                inline=False
+            )
 
-        # Nhánh Embed & Interaction
-        embed.add_field(
-            name=f"{Emojis.MATTRANG} TƯƠNG TÁC & EMBED",
-            value=(
-                f"• **embed:** `{len(all_embeds)}/50` (số lượng đã tạo)\n"
-                f"• **button:** `{total_btns}` nút bấm trên `{linked_embeds}` embed\n"
-                f"• **reaction role:** (kiểm tra theo message id)"
-            ),
-            inline=False
-        )
+            # Nhánh Embed & Interaction
+            embed.add_field(
+                name=f"{Emojis.MATTRANG} TƯƠNG TÁC & EMBED",
+                value=(
+                    f"• **embed:** `{len(all_embeds)}/50` (số lượng đã tạo)\n"
+                    f"• **button:** `{total_btns}` nút bấm trên `{linked_embeds}` embed\n"
+                    f"• **reaction role:** (kiểm tra theo message id)"
+                ),
+                inline=False
+            )
 
-        # Nhánh Tính năng nâng cao (Soi Ticket)
-        ticket_status = "`chưa thiết lập`"
-        if ticket_cfg:
-            t_comp = []
-            if ticket_cfg.get("category_id"): t_comp.append("category")
-            if ticket_cfg.get("staff_roles"): t_comp.append("staff")
-            if ticket_cfg.get("log_channel_id"): t_comp.append("logs")
-            if t_comp:
-                ticket_status = f"{Emojis.YIYITIM} (đã setup: " + ", ".join(t_comp) + ")"
+            # Nhánh Tính năng nâng cao (Soi Ticket)
+            ticket_status = "`chưa thiết lập`"
+            if ticket_cfg:
+                t_comp = []
+                if ticket_cfg.get("category_id"): t_comp.append("category")
+                if ticket_cfg.get("staff_roles"): t_comp.append("staff")
+                if ticket_cfg.get("log_channel_id"): t_comp.append("logs")
+                if t_comp:
+                    ticket_status = f"{Emojis.YIYITIM} (đã setup: " + ", ".join(t_comp) + ")"
 
-        embed.add_field(
-            name=f"{Emojis.HOICHAM} TIỆN ÍCH HỆ THỐNG",
-            value=(
-                f"• **ticket:** {ticket_status}\n"
-                f"• **form:** (kiểm tra theo từng tên embed)\n"
-                f"• **identity:** `active`\n"
-                f"• **link:** `active`"
-            ),
-            inline=False
-        )
+            embed.add_field(
+                name=f"{Emojis.HOICHAM} TIỆN ÍCH HỆ THỐNG",
+                value=(
+                    f"• **ticket:** {ticket_status}\n"
+                    f"• **form:** (kiểm tra theo từng tên embed)\n"
+                    f"• **identity:** `active`\n"
+                    f"• **link:** `active`"
+                ),
+                inline=False
+            )
 
-        embed.set_footer(text="yiyi iu cậu • báo cáo chi tiết linh kiện cloud")
-        await interaction.followup.send(embed=embed)
+            embed.set_footer(text="yiyi iu cậu • báo cáo chi tiết linh kiện cloud")
+            await interaction.followup.send(embed=embed)
+
+        except Exception as e:
+            print(f"[yiyi_setting error] {e}", flush=True)
+            if not interaction.response.is_done():
+                await interaction.followup.send(f"{Emojis.HOICHAM} yiyi bị nghẽn mạch khi nạp setting rồi!", ephemeral=True)
 
 # ==========================================
 # INJECTION (ĐĂNG KÝ VÀO CÂY LỆNH TỔNG)
