@@ -3,8 +3,9 @@ from discord import app_commands
 from discord.ext import commands
 import re
 
-from core.embed_storage import atomic_update_button
-# [TRÍ NHỚ ĐÃ BÓC TÁCH] Gỡ bỏ các import liên quan đến cache manager cục bộ
+# Nạp công cụ cập nhật nút bấm và trí nhớ Form mới
+from core.embed_storage import atomic_update_button, load_embed
+from core.forms_storage import update_form_base, update_form_field # [CẤY MỚI]
 from utils.emojis import Emojis 
 
 class FormsGroup(app_commands.Group):
@@ -27,27 +28,35 @@ class FormsGroup(app_commands.Group):
         show_thumbnail="Lựa chọn hiển thị avatar người gửi (Thumbnail)"
     )
     async def setup_base(self, interaction: discord.Interaction, embed_name: str, form_title: str, log_channel_id: str, show_thumbnail: bool = True):
+        # QUY TẮC 3S: Defer ngay lập tức (Industrial Standard)
         await interaction.response.defer(ephemeral=True)
         
         # Gọt sạch ID kênh log
         clean_log_id = self._sanitize_id(log_channel_id)
         
-        # [TRÍ NHỚ ĐÃ BÓC TÁCH] 
-        # Cậu sẽ thay thế logic lấy và lưu config vào MongoDB tại đây.
-        # Logic gọt sạch ID và chuẩn bị dữ liệu phản hồi vẫn giữ nguyên.
-        
-        # Render văn phong theo ý sếp
-        embed_res = discord.Embed(
-            title=f"{Emojis.MATTRANG} thiết lập form thành công",
-            description=(
-                f"embed: `{embed_name}`.\n•\n"
-                f"tiêu đề: **{form_title}**\n"
-                f"kênh trả đơn: <#{clean_log_id}>"
-            ),
-            color=0xf8bbd0
+        # [CẤY MỚI] Đồng bộ cấu hình nền lên Cloud Atlas
+        # Dữ liệu được bóc tách theo từng embed_name để hỗ trợ multi-form
+        success = await update_form_base(
+            interaction.guild.id, 
+            embed_name, 
+            form_title, 
+            clean_log_id, 
+            show_thumbnail
         )
-            
-        await interaction.followup.send(embed=embed_res)
+        
+        if success:
+            embed_res = discord.Embed(
+                title=f"{Emojis.MATTRANG} thiết lập form thành công",
+                description=(
+                    f"embed: `{embed_name}`.\n•\n"
+                    f"tiêu đề: **{form_title}**\n"
+                    f"kênh trả đơn: <#{clean_log_id}>"
+                ),
+                color=0xf8bbd0
+            )
+            await interaction.followup.send(embed=embed_res)
+        else:
+            await interaction.followup.send(f"{Emojis.HOICHAM} có lỗi khi lưu cấu hình form vào Cloud.")
 
     # =========================
     # LỆNH 2: THIẾT LẬP TRƯỜNG (Văn phong mới)
@@ -63,21 +72,29 @@ class FormsGroup(app_commands.Group):
     async def field(self, interaction: discord.Interaction, embed_name: str, slot: int, label: str, placeholder: str = "Nhập nội dung...", required: bool = True):
         await interaction.response.defer(ephemeral=True)
         
-        # [TRÍ NHỚ ĐÃ BÓC TÁCH]
-        # Xóa bỏ các lệnh gọi _get_config, _save_config và force_save.
-        # Dữ liệu slot, label, placeholder sẽ được cấy vào MongoDB sau này.
-
-        # Render văn phong đóng khung biến
-        embed_res = discord.Embed(
-            title=f"{Emojis.MATTRANG} cập nhật nội dung trường `{slot}` thành công",
-            description=(
-                f"embed: `{embed_name}`\n"
-                f"nội dung: `{label}`\n"
-                f"chú thích: `{placeholder}`"
-            ),
-            color=0xf8bbd0
+        # [CẤY MỚI] Đẩy dữ liệu slot vào mảng trường của MongoDB
+        success = await update_form_field(
+            interaction.guild.id, 
+            embed_name, 
+            slot, 
+            label, 
+            placeholder, 
+            required
         )
-        await interaction.followup.send(embed=embed_res)
+
+        if success:
+            embed_res = discord.Embed(
+                title=f"{Emojis.MATTRANG} cập nhật nội dung trường `{slot}` thành công",
+                description=(
+                    f"embed: `{embed_name}`\n"
+                    f"nội dung: `{label}`\n"
+                    f"chú thích: `{placeholder}`"
+                ),
+                color=0xf8bbd0
+            )
+            await interaction.followup.send(embed=embed_res)
+        else:
+            await interaction.followup.send(f"{Emojis.HOICHAM} lỗi: cậu cần setup đơn trước bằng `/p forms setup`.")
 
     # =========================
     # LỆNH 3: CẤY NÚT GỬI ĐƠN (Văn phong mới)
@@ -95,8 +112,11 @@ class FormsGroup(app_commands.Group):
             "system": "forms"
         }
 
-        # [GIA CỐ] Giữ lại atomic_update_button vì đây là DAL (Data Access Layer) 
-        # sẽ được cậu xử lý MongoDB bên trong core/embed_storage.py sau.
+        # [GIA CỐ] Kiểm tra sự tồn tại của Embed trước khi gắn nút
+        if not await load_embed(interaction.guild.id, embed_name):
+            return await interaction.followup.send(f"{Emojis.HOICHAM} không tìm thấy embed `{embed_name}` để liên kết.")
+
+        # Atomic Update đã được nâng cấp lên Async/MongoDB ở file core/embed_storage.py
         success = await atomic_update_button(interaction.guild.id, embed_name, action="add", button_data=btn_data)
         
         if success:
