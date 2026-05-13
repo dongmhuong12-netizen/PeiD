@@ -7,7 +7,7 @@ import random
 # Nhập hệ Emojis của PeiD
 from utils.emojis import Emojis
 
-# [GIA CỐ INDUSTRIAL] Nạp sẵn Storage để triệt tiêu độ trễ 3 giây, tránh lỗi 404 Unknown Interaction
+# [GIẢI PHÁP SỐNG CÒN] Đưa import ra ngoài để nạp sẵn khi bot onl, triệt tiêu độ trễ nạp module
 from core.greet_storage import get_guild_config
 from core.ticket_storage import get_ticket_config
 from core.embed_storage import get_all_embeds
@@ -99,18 +99,18 @@ class YiyiGroup(app_commands.Group):
     # ==========================================
     @app_commands.command(name="setting", description="kiểm tra chi tiết các cài đặt của server")
     async def setting(self, interaction: discord.Interaction):
-        # [CẤY GIỮ CHỖ] Gọi defer ngay mili giây đầu tiên để thông mạch với Discord
+        # [IT PRO] Luôn defer trước khi gọi Storage để tránh timeout
         await interaction.response.defer(ephemeral=True)
         guild = interaction.guild
         guild_id = guild.id
 
         try:
-            # --- Thu thập dữ liệu (Sử dụng module đã nạp sẵn ở đầu file) ---
+            # 1. Thu thập dữ liệu (Sử dụng các hàm nạp sẵn từ Cloud Atlas)
             greet_data = await get_guild_config(guild_id)
             ticket_cfg = await get_ticket_config(guild_id)
             all_embeds = await get_all_embeds(guild_id) 
             
-            # --- HELPER: SOI CHI TIẾT LINH KIỆN ---
+            # --- HELPER: SOI CHI TIẾT LINH KIỆN (GIỮ NGUYÊN GỐC) ---
             def get_detail(module_data):
                 if not module_data:
                     return "`chưa thiết lập`"
@@ -128,7 +128,7 @@ class YiyiGroup(app_commands.Group):
                 
                 return f"{Emojis.YIYITIM} (đã setup: " + ", ".join(comps) + ")"
 
-            # --- HELPER: ĐẾM NÚT BẤM (BUTTON) ---
+            # --- HELPER: ĐẾM NÚT BẤM (GIỮ NGUYÊN GỐC) ---
             total_btns = 0
             linked_embeds = 0
             for emb in all_embeds:
@@ -171,9 +171,12 @@ class YiyiGroup(app_commands.Group):
             ticket_status = "`chưa thiết lập`"
             if ticket_cfg:
                 t_comp = []
-                if ticket_cfg.get("category_id"): t_comp.append("category")
-                if ticket_cfg.get("staff_roles"): t_comp.append("staff")
-                if ticket_cfg.get("log_channel_id"): t_comp.append("logs")
+                if ticket_cfg.get("category_id"):
+                    t_comp.append("category")
+                if ticket_cfg.get("staff_roles"):
+                    t_comp.append("staff")
+                if ticket_cfg.get("log_channel_id"):
+                    t_comp.append("logs")
                 if t_comp:
                     ticket_status = f"{Emojis.YIYITIM} (đã setup: " + ", ".join(t_comp) + ")"
 
@@ -181,7 +184,7 @@ class YiyiGroup(app_commands.Group):
                 name=f"{Emojis.HOICHAM} TIỆN ÍCH HỆ THỐNG",
                 value=(
                     f"• **ticket:** {ticket_status}\n"
-                    f"• **form:** (kiểm tra theo tên embed)\n"
+                    f"• **form:** (kiểm tra theo từng tên embed)\n"
                     f"• **identity:** `active`\n"
                     f"• **link:** `active`"
                 ),
