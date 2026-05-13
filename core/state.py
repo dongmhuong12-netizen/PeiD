@@ -1,9 +1,12 @@
 import asyncio
 import discord
 import time # [THÊM] để check thời gian hết hạn test
-from core.cache_manager import load, mark_dirty, get_raw
 
-FILE_KEY = "state"
+# [TRÍ NHỚ ĐÃ BÓC TÁCH] Gỡ bỏ các import liên quan đến cache manager cục bộ
+# from core.cache_manager import load, mark_dirty, get_raw
+
+# Khởi tạo một dictionary cục bộ để duy trì logic vận hành trong RAM mà không dính đĩa
+_internal_state = {}
 
 # Sử dụng lock cho các thao tác quan trọng để tránh race condition ở RAM
 _lock = asyncio.Lock()
@@ -15,10 +18,11 @@ _tx_lock = asyncio.Lock()
 
 def _get():
     """
-    Lấy reference trực tiếp từ RAM của CacheManager.
+    Lấy reference trực tiếp từ bộ nhớ RAM.
     Đảm bảo mọi thay đổi được phản ánh ngay lập tức.
     """
-    cache = get_raw(FILE_KEY)
+    # [TRÍ NHỚ ĐÃ BÓC TÁCH] Không gọi get_raw từ file nữa
+    cache = _internal_state
 
     # Khởi tạo cấu trúc dữ liệu bền vững (Tiêu chuẩn 100k+)
     cache.setdefault("embeds", {})
@@ -45,8 +49,8 @@ def _write(mutator):
     cache = _get()
     mutator(cache)
     
-    # Đánh dấu dữ liệu đã thay đổi để CacheManager tự động lưu sau 5s
-    mark_dirty(FILE_KEY)
+    # [TRÍ NHỚ ĐÃ BÓC TÁCH] Không đánh dấu dirty để ghi file cục bộ nữa
+    # mark_dirty(FILE_KEY)
 
 # =========================
 # EMBED STATE (TRÍ NHỚ)
@@ -193,11 +197,6 @@ class State:
 
     @staticmethod
     async def resync():
-        try:
-            load(FILE_KEY)
-            _get() 
-            print(f"[STATE] Trí nhớ '{FILE_KEY}' đã được khôi phục thành công.", flush=True)
-            return True
-        except Exception as e:
-            print(f"[STATE ERROR] Không thể khôi phục trí nhớ: {e}", flush=True)
-            return False
+        # [TRÍ NHỚ ĐÃ BÓC TÁCH] Không khôi phục từ tệp tin cục bộ nữa
+        print(f"[STATE] Chế độ Stateless đã sẵn sàng cho MongoDB.", flush=True)
+        return True
