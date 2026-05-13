@@ -5,33 +5,13 @@ import asyncio
 import re
 
 from core.embed_storage import load_embed, atomic_update_button
-from core.cache_manager import get_raw, mark_dirty, update, save as force_save
+# [TRÍ NHỚ ĐÃ BÓC TÁCH] Gỡ bỏ các import liên quan đến cache manager cục bộ
 from utils.emojis import Emojis
-
-FILE_KEY = "ticket_configs"
 
 class TicketGroup(app_commands.Group):
     def __init__(self):
         # [MỤC 1] Bỏ chữ "chuyên nghiệp"
         super().__init__(name="ticket", description="Hệ thống hỗ trợ và quản lý Ticket")
-
-    def _get_config(self, guild_id):
-        db = get_raw(FILE_KEY)
-        if not isinstance(db, dict):
-            db = {}
-            update(FILE_KEY, db)
-        return db.get(str(guild_id), {
-            "category_id": None,
-            "staff_role_ids": [],
-            "log_channel_id": None,
-            "ticket_count": 0
-        })
-
-    def _save_config(self, guild_id, config):
-        db = get_raw(FILE_KEY)
-        db[str(guild_id)] = config
-        update(FILE_KEY, db)
-        mark_dirty(FILE_KEY)
 
     # =========================
     # LỆNH 1: SETUP (Đã gọt văn phong & đóng khung code)
@@ -79,15 +59,9 @@ class TicketGroup(app_commands.Group):
             )
             return await interaction.followup.send(embed=embed_err)
 
-        config = self._get_config(guild.id)
-        config.update({
-            "category_id": str(clean_cat_id),
-            "staff_role_ids": [str(r.id) for r in valid_roles],
-            "log_channel_id": str(clean_log_id)
-        })
-        
-        self._save_config(guild.id, config)
-        await force_save(FILE_KEY)
+        # [TRÍ NHỚ ĐÃ BÓC TÁCH] 
+        # Cậu sẽ thay thế logic lấy/cập nhật config vào MongoDB tại đây.
+        # Logic chuẩn hóa dữ liệu cat/log/roles vẫn được giữ nguyên 100%.
         
         # [MỤC 6] Setup thành công
         role_mentions = "\n".join([f"• {r.mention}" for r in valid_roles])
@@ -110,16 +84,10 @@ class TicketGroup(app_commands.Group):
     async def apply(self, interaction: discord.Interaction, embed_name: str):
         await interaction.response.defer(ephemeral=True)
         guild_id = interaction.guild.id
-        config = self._get_config(guild_id)
-
-        # [MỤC 8] Chưa setup
-        if not config.get("category_id") or not config.get("staff_role_ids"):
-            embed_err = discord.Embed(
-                title=f"{Emojis.HOICHAM} không được rùi.",
-                description=f"cậu hãy setup cấu hình Ticket trước bằng `/p ticket setup` nhé",
-                color=0xf8bbd0
-            )
-            return await interaction.followup.send(embed=embed_err)
+        
+        # [TRÍ NHỚ ĐÃ BÓC TÁCH]
+        # Xóa bỏ các lệnh gọi _get_config. 
+        # Cần kiểm tra config từ MongoDB tại đây trước khi thực hiện cấy nút bấm.
 
         btn_data = {
             "type": "button",
@@ -148,7 +116,7 @@ class TicketGroup(app_commands.Group):
             title=f"{Emojis.MATTRANG} liên kết Ticket vào embed `{embed_name}` thành công.",
             color=0xf8bbd0
         )
-        await interaction.followup.send(embed=embed_ok)
+        await interaction.followup.send(embed_ok)
 
 async def setup(bot: commands.Bot):
     p_cmd = bot.tree.get_command("p")
