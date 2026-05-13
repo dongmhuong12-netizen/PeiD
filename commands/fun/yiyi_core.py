@@ -3,6 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 import time
 import random
+import asyncio # [BỔ SUNG] Để chạy song song các tác vụ nạp dữ liệu
 
 # Nhập hệ Emojis của PeiD
 from utils.emojis import Emojis
@@ -106,13 +107,19 @@ class YiyiGroup(app_commands.Group):
         guild_id = guild.id
 
         try:
-            # --- Nạp Trí Nhớ Cloud ---
-            # Sử dụng các hàm đã import sẵn ở đầu file để đảm bảo tốc độ phản hồi
-            greet_data = await get_guild_config(guild_id) or {}
-            ticket_cfg = await get_ticket_config(guild_id) or {}
-            all_embeds = await get_all_embeds(guild_id)
-            if all_embeds is None:
-                all_embeds = []
+            # --- [INDUSTRIAL UPGRADE] Nạp Trí Nhớ Cloud Song Song ---
+            # Gọi cả 3 hàm cùng lúc để triệt tiêu thời gian chờ đợi Database
+            greet_task = get_guild_config(guild_id)
+            ticket_task = get_ticket_config(guild_id)
+            embed_task = get_all_embeds(guild_id)
+            
+            # Đợi cả 3 hoàn thành đồng thời
+            results = await asyncio.gather(greet_task, ticket_task, embed_task, return_exceptions=True)
+            
+            # Gán kết quả và bảo vệ dữ liệu khỏi NoneType
+            greet_data = results[0] if not isinstance(results[0], Exception) and results[0] else {}
+            ticket_cfg = results[1] if not isinstance(results[1], Exception) and results[1] else {}
+            all_embeds = results[2] if not isinstance(results[2], Exception) and results[2] else []
             
             # --- HELPER: SOI CHI TIẾT LINH KIỆN (FULL LOGIC) ---
             def get_detail(module_data):
