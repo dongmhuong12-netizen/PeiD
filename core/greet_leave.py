@@ -31,10 +31,10 @@ async def send_config_message(guild: discord.Guild, member: discord.Member, sect
 
     if not config: return False
 
-    # nạp các trường dữ liệu (hỗ trợ cả legacy keys)
-    channel_id = config.get("channel") or config.get("booster_channel")
+    # [GIA CỐ] Hỗ trợ đọc cả key mới (channel_id/embed_name) và key cũ (legacy)
+    channel_id = config.get("channel_id") or config.get("channel") or config.get("booster_channel")
     message_text = config.get("message") or config.get("booster_message")
-    embed_name = config.get("embed") or config.get("booster_embed")
+    embed_name = config.get("embed_name") or config.get("embed") or config.get("booster_embed")
 
     if not channel_id: return False
 
@@ -79,26 +79,28 @@ class GreetGroup(app_commands.Group):
     @app_commands.command(name="channel", description="đặt kênh gửi tin nhắn chào mừng")
     @app_commands.default_permissions(manage_guild=True)
     async def channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
+        # [GIA CỐ] Defer sớm chống lỗi 10062
+        await interaction.response.defer(ephemeral=False)
         gid = interaction.guild.id
         lock = _config_locks[gid]
         async with lock:
-            # [SỬA LỖI] Thêm await để thực thi lệnh ghi vào MongoDB
-            await update_guild_config(gid, "greet", "channel", channel.id)
+            # Chuẩn hóa key lưu DB
+            await update_guild_config(gid, "greet", "channel_id", channel.id)
         if gid in _config_locks and not lock.locked(): _config_locks.pop(gid, None)
         
         embed = discord.Embed(
             title=f"{Emojis.MATTRANG} đặt kênh `greet` thành công: {channel.mention}",
             color=0xf8bbd0
         )
-        await interaction.response.send_message(embed=embed, ephemeral=False)
+        await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="message", description="đặt nội dung tin nhắn chào mừng")
     @app_commands.default_permissions(manage_guild=True)
     async def message(self, interaction: discord.Interaction, message: str):
+        await interaction.response.defer(ephemeral=False)
         gid = interaction.guild.id
         lock = _config_locks[gid]
         async with lock:
-            # [SỬA LỖI] Thêm await
             await update_guild_config(gid, "greet", "message", message)
         if gid in _config_locks and not lock.locked(): _config_locks.pop(gid, None)
         
@@ -107,31 +109,32 @@ class GreetGroup(app_commands.Group):
             title=f"{Emojis.MATTRANG} cập nhật tin nhắn `greet` thành công: {display_msg}",
             color=0xf8bbd0
         )
-        await interaction.response.send_message(embed=embed, ephemeral=False)
+        await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="embed", description="gán embed cho hệ thống greet")
     @app_commands.default_permissions(manage_guild=True)
     async def embed(self, interaction: discord.Interaction, name: str):
+        await interaction.response.defer(ephemeral=False)
         if not await load_embed(interaction.guild.id, name):
             embed_err = discord.Embed(
                 title=f"{Emojis.HOICHAM} aree... có lỗi gì đó ở đây",
                 description=f"hãy thử lại lần nữa nhé. **yiyi** không tìm thấy embed có tên `{name}`. xin hãy kiểm tra embed cậu muốn dùng cho greet bằng `/p embed edit`",
                 color=0xf8bbd0
             )
-            return await interaction.response.send_message(embed=embed_err, ephemeral=False)
+            return await interaction.followup.send(embed=embed_err)
         
         gid = interaction.guild.id
         lock = _config_locks[gid]
         async with lock:
-            # [SỬA LỖI] Thêm await
-            await update_guild_config(gid, "greet", "embed", name)
+            # Chuẩn hóa key lưu DB
+            await update_guild_config(gid, "greet", "embed_name", name)
         if gid in _config_locks and not lock.locked(): _config_locks.pop(gid, None)
         
         embed_success = discord.Embed(
             title=f"{Emojis.MATTRANG} cập nhật embed `{name}` cho hệ thống `greet` thành công",
             color=0xf8bbd0
         )
-        await interaction.response.send_message(embed=embed_success, ephemeral=False)
+        await interaction.followup.send(embed=embed_success)
 
     @app_commands.command(name="test", description="gửi thử tin nhắn chào mừng")
     async def test(self, interaction: discord.Interaction):
@@ -150,7 +153,7 @@ class GreetGroup(app_commands.Group):
                 description="hãy kiểm tra lại khi đã đầy đủ `channel` `embed` `message` trước khi test nhé",
                 color=0xf8bbd0
             )
-        await interaction.followup.send(embed=embed, ephemeral=False)
+        await interaction.followup.send(embed=embed)
 
 class LeaveGroup(app_commands.Group):
     def __init__(self):
@@ -159,26 +162,26 @@ class LeaveGroup(app_commands.Group):
     @app_commands.command(name="channel", description="đặt kênh gửi tin nhắn tạm biệt")
     @app_commands.default_permissions(manage_guild=True)
     async def channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
+        await interaction.response.defer(ephemeral=False)
         gid = interaction.guild.id
         lock = _config_locks[gid]
         async with lock:
-            # [SỬA LỖI] Thêm await
-            await update_guild_config(gid, "leave", "channel", channel.id)
+            await update_guild_config(gid, "leave", "channel_id", channel.id)
         if gid in _config_locks and not lock.locked(): _config_locks.pop(gid, None)
         
         embed = discord.Embed(
             title=f"{Emojis.MATTRANG} đặt kênh `leave` thành công: {channel.mention}",
             color=0xf8bbd0
         )
-        await interaction.response.send_message(embed=embed, ephemeral=False)
+        await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="message", description="đặt nội dung tin nhắn tạm biệt")
     @app_commands.default_permissions(manage_guild=True)
     async def message(self, interaction: discord.Interaction, message: str):
+        await interaction.response.defer(ephemeral=False)
         gid = interaction.guild.id
         lock = _config_locks[gid]
         async with lock:
-            # [SỬA LỖI] Thêm await
             await update_guild_config(gid, "leave", "message", message)
         if gid in _config_locks and not lock.locked(): _config_locks.pop(gid, None)
         
@@ -187,31 +190,32 @@ class LeaveGroup(app_commands.Group):
             title=f"{Emojis.MATTRANG} cập nhật tin nhắn `leave` thành công: {display_msg}",
             color=0xf8bbd0
         )
-        await interaction.response.send_message(embed=embed, ephemeral=False)
+        await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="embed", description="gán embed cho hệ thống leave")
     @app_commands.default_permissions(manage_guild=True)
     async def embed(self, interaction: discord.Interaction, name: str):
+        await interaction.response.defer(ephemeral=False)
         if not await load_embed(interaction.guild.id, name):
             embed_err = discord.Embed(
                 title=f"{Emojis.HOICHAM} aree... có lỗi gì đó ở đây",
                 description=f"hãy thử lại lần nữa nhé. **yiyi** không tìm thấy embed có tên `{name}`. xin hãy kiểm tra embed cậu muốn dùng cho leave bằng `/p embed edit`",
                 color=0xf8bbd0
             )
-            return await interaction.response.send_message(embed=err, ephemeral=False)
+            # [FIX TYPO] Đã sửa biến err thành embed_err
+            return await interaction.followup.send(embed=embed_err)
         
         gid = interaction.guild.id
         lock = _config_locks[gid]
         async with lock:
-            # [SỬA LỖI] Thêm await
-            await update_guild_config(gid, "leave", "embed", name)
+            await update_guild_config(gid, "leave", "embed_name", name)
         if gid in _config_locks and not lock.locked(): _config_locks.pop(gid, None)
         
         embed_success = discord.Embed(
             title=f"{Emojis.MATTRANG} cập nhật embed `{name}` cho hệ thống `leave` thành công",
             color=0xf8bbd0
         )
-        await interaction.response.send_message(embed=embed_success, ephemeral=False)
+        await interaction.followup.send(embed=embed_success)
 
     @app_commands.command(name="test", description="gửi thử tin nhắn tạm biệt")
     async def test(self, interaction: discord.Interaction):
@@ -230,7 +234,7 @@ class LeaveGroup(app_commands.Group):
                 description="hãy kiểm tra lại khi đã đầy đủ `channel` `embed` `message` trước khi test nhé",
                 color=0xf8bbd0
             )
-        await interaction.followup.send(embed=embed, ephemeral=False)
+        await interaction.followup.send(embed=embed)
 
 # ======================
 # LISTENER & SETUP
@@ -271,3 +275,4 @@ async def setup(bot: commands.Bot):
             p_cmd.add_command(LeaveGroup())
     
     await bot.add_cog(GreetLeaveListener(bot))
+    print("[load] success: core.greet_leave (Industrial Fix Applied)", flush=True)
