@@ -3,3 +3,6 @@ aiohttp
 pytz
 uvloop; sys_platform == 'linux'
 aiofiles
+motor
+dnspython
+python-dotenv
