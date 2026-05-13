@@ -5,10 +5,6 @@ import os
 from aiohttp import web
 
 from core.state import State
-from core.cache_manager import force_flush 
-
-# Đảm bảo thư mục dữ liệu luôn tồn tại
-os.makedirs("data", exist_ok=True)
 
 TOKEN = os.getenv("TOKEN")
 if not TOKEN:
@@ -109,14 +105,7 @@ async def on_ready():
         return
     bot._ready_once = True
 
-    # 1. KHÔI PHỤC TRÍ NHỚ
-    try:
-        await State.resync()
-        print("[STATE] Trí nhớ bền vững đã được khôi phục!", flush=True)
-    except Exception as e:
-        print(f"[STATE ERROR] {e}", flush=True)
-
-    # 2. SLASH SYNC
+    # 1. SLASH SYNC
     try:
         print("[SLASH] Đang đồng bộ hóa cây lệnh hợp nhất...", flush=True)
         synced = await bot.tree.sync()
@@ -145,5 +134,4 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         pass
     finally:
-        force_flush()
-        print("[EXIT] Bot đã tắt an toàn và đã lưu dữ liệu.")
+        print("[EXIT] Bot đã tắt an toàn.")
