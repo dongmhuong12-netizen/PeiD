@@ -89,6 +89,77 @@ class YiyiGroup(app_commands.Group):
         except Exception as e:
             print(f"[yiyi_iu error] {e}", flush=True)
 
+    # ==========================================
+    # LỆNH 3: SETTING (/yiyi setting)
+    # ==========================================
+    @app_commands.command(name="setting", description="kiểm tra chi tiết các cài đặt của server")
+    async def setting(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        guild = interaction.guild
+        guild_id = guild.id
+
+        # --- Nạp Trí Nhớ Cloud ---
+        from core.greet_storage import get_guild_config
+        from core.ticket_storage import get_ticket_config
+        from core.embed_storage import get_all_embeds
+        
+        # 1. Thu thập dữ liệu
+        greet_data = await get_guild_config(guild_id)
+        ticket_cfg = await get_ticket_config(guild_id)
+        all_embeds = await get_all_embeds(guild_id)
+        
+        def check_setup(module_data):
+            if not module_data or not any(module_data.values() if isinstance(module_data, dict) else [module_data]):
+                return "`chưa thiết lập`"
+            return f"{Emojis.YIYITIM} `đã sẵn sàng`"
+
+        # 2. Xây dựng nội dung hiển thị
+        embed = discord.Embed(
+            title=f"{Emojis.MATTRANG} Chi tiết các cài đặt của {guild.name}",
+            color=0xf8bbd0
+        )
+
+        # Nhánh Greet/Leave/Wellcome/Booster
+        booster_status = check_setup(greet_data.get('greet', {}).get('booster_channel'))
+        embed.add_field(
+            name=f"{Emojis.YIYITIM} HỆ THỐNG LỜI CHÀO",
+            value=(
+                f"• **greet:** {check_setup(greet_data.get('greet'))}\n"
+                f"• **leave:** {check_setup(greet_data.get('leave'))}\n"
+                f"• **wellcome:** {check_setup(greet_data.get('wellcome'))}\n"
+                f"• **booster:** {booster_status}"
+            ),
+            inline=False
+        )
+
+        # Nhánh Embed & Interaction
+        embed_count = len(all_embeds)
+        # Giữ đúng hạn mức 100k+ server của Nguyệt
+        embed.add_field(
+            name=f"{Emojis.MATTRANG} TƯƠNG TÁC & EMBED",
+            value=(
+                f"• **embed:** `{embed_count}/50` (số lượng đã tạo)\n"
+                f"• **reaction role:** (kiểm tra theo message id)\n"
+                f"• **button:** `tự động đồng bộ`"
+            ),
+            inline=False
+        )
+
+        # Nhánh Tính năng nâng cao
+        embed.add_field(
+            name=f"{Emojis.HOICHAM} TIỆN ÍCH HỆ THỐNG",
+            value=(
+                f"• **ticket:** {check_setup(ticket_cfg)}\n"
+                f"• **form:** (kiểm tra theo tên embed)\n"
+                f"• **identity:** `active`\n"
+                f"• **link:** `active`"
+            ),
+            inline=False
+        )
+
+        embed.set_footer(text="yiyi iu cậu • dữ liệu đã được Cloud hóa")
+        await interaction.followup.send(embed=embed)
+
 # ==========================================
 # INJECTION (ĐĂNG KÝ VÀO CÂY LỆNH TỔNG)
 # ==========================================
