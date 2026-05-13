@@ -7,7 +7,7 @@ import random
 # Nhập hệ Emojis của PeiD
 from utils.emojis import Emojis
 
-# [GIẢI PHÁP SỐNG CÒN] Đưa import ra ngoài để nạp sẵn khi bot onl, triệt tiêu độ trễ nạp module
+# [HỆ THỐNG QUÉT DỮ LIỆU] Nạp sẵn để đảm bảo tốc độ Industrial Grade
 from core.greet_storage import get_guild_config
 from core.ticket_storage import get_ticket_config
 from core.embed_storage import get_all_embeds
@@ -105,12 +105,15 @@ class YiyiGroup(app_commands.Group):
         guild_id = guild.id
 
         try:
-            # 1. Thu thập dữ liệu (Sử dụng các hàm nạp sẵn từ Cloud Atlas)
-            greet_data = await get_guild_config(guild_id)
-            ticket_cfg = await get_ticket_config(guild_id)
+            # --- Nạp Trí Nhớ Cloud ---
+            # Dùng or {} để bảo vệ logic khỏi lỗi dữ liệu trống
+            greet_data = await get_guild_config(guild_id) or {}
+            ticket_cfg = await get_ticket_config(guild_id) or {}
             all_embeds = await get_all_embeds(guild_id) 
+            if all_embeds is None:
+                all_embeds = []
             
-            # --- HELPER: SOI CHI TIẾT LINH KIỆN (GIỮ NGUYÊN GỐC) ---
+            # --- HELPER: SOI CHI TIẾT LINH KIỆN ---
             def get_detail(module_data):
                 if not module_data:
                     return "`chưa thiết lập`"
@@ -128,7 +131,7 @@ class YiyiGroup(app_commands.Group):
                 
                 return f"{Emojis.YIYITIM} (đã setup: " + ", ".join(comps) + ")"
 
-            # --- HELPER: ĐẾM NÚT BẤM (GIỮ NGUYÊN GỐC) ---
+            # --- HELPER: ĐẾM NÚT BẤM (BUTTON) ---
             total_btns = 0
             linked_embeds = 0
             for emb in all_embeds:
