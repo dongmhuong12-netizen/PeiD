@@ -1,8 +1,10 @@
 import copy
-from core.cache_manager import get_raw, mark_dirty, update
 
-# Sử dụng chung key để CacheManager tự động quản lý Disk I/O
-FILE_KEY = "greet_leave"
+# [TRÍ NHỚ ĐÃ BÓC TÁCH] Gỡ bỏ các import liên quan đến cache manager cục bộ
+# from core.cache_manager import get_raw, mark_dirty, update
+
+# Khởi tạo một bộ đệm RAM để duy trì vận hành Stateless
+_internal_greet_cache = {}
 
 # =========================
 # INTERNAL HELPERS
@@ -11,16 +13,10 @@ FILE_KEY = "greet_leave"
 def _get_cache():
     """
     Lấy dữ liệu trực tiếp từ RAM. 
-    Tự động sửa lỗi nếu cấu hình file bị hỏng (Self-healing).
+    Tự động sửa lỗi nếu cấu hình bị hỏng (Self-healing).
     """
-    cache = get_raw(FILE_KEY)
-
-    if not isinstance(cache, dict):
-        print(f"[STORAGE WARNING] Cache '{FILE_KEY}' không hợp lệ. Đang reset...", flush=True)
-        # [VÁ LỖI] Ép khởi tạo lại dict sạch và đồng bộ với CacheManager
-        cache = {}
-        update(FILE_KEY, cache)
-        mark_dirty(FILE_KEY)
+    # [TRÍ NHỚ ĐÃ BÓC TÁCH] Sử dụng biến RAM thay vì gọi qua cache_manager
+    cache = _internal_greet_cache
 
     return cache
 
@@ -42,7 +38,7 @@ def get_guild_config(guild_id: int):
 
 def update_guild_config(guild_id: int, section: str, key: str, value):
     """
-    Cập nhật cấu hình và kích hoạt hàng đợi ghi đĩa sau 5 giây.
+    Cập nhật cấu hình vào bộ nhớ RAM.
     section: "greet" | "leave"
     key: "channel" | "embed" | "message"
     """
@@ -59,9 +55,8 @@ def update_guild_config(guild_id: int, section: str, key: str, value):
     # Ghi trực tiếp vào reference trong RAM (Source of Truth)
     cache[gid][section][key] = value
 
-    # Đánh dấu dữ liệu đã thay đổi để CacheManager xử lý ghi đĩa ngầm
-    mark_dirty(FILE_KEY)
-    print(f"[STORAGE] Updated {section}.{key} for Guild {gid}", flush=True)
+    # [TRÍ NHỚ ĐÃ BÓC TÁCH] Gỡ bỏ lệnh đánh dấu dirty để ghi file cục bộ
+    print(f"[STORAGE] Updated {section}.{key} for Guild {gid} (Stateless Mode)", flush=True)
 
 
 def get_section(guild_id: int, section: str):
