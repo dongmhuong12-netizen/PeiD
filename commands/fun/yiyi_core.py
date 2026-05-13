@@ -15,7 +15,6 @@ from core.embed_storage import get_all_embeds
 
 class YiyiGroup(app_commands.Group):
     def __init__(self, bot: commands.Bot):
-        # Đặt tên lệnh cha là /yiyi
         super().__init__(name="yiyi", description="hệ thống tương tác cá nhân hóa của yiyi")
         self.bot = bot
 
@@ -25,15 +24,12 @@ class YiyiGroup(app_commands.Group):
     @app_commands.command(name="oi", description="gọi yiyi để kiểm tra tốc độ hệ thống")
     async def oi(self, interaction: discord.Interaction):
         try:
-            # [IT PRO] Đo API Latency siêu chuẩn xác qua Defer
             start_time = time.perf_counter()
             await interaction.response.defer(ephemeral=False)
             end_time = time.perf_counter()
             
             api_latency = round((end_time - start_time) * 1000)
             ws_latency = round(self.bot.latency * 1000)
-
-            # KIỂM TRA ĐẶC QUYỀN BOSS (NGUYỆT)
             is_boss = interaction.user.id == getattr(self.bot, "boss_id", 1055476307372294155)
 
             if is_boss:
@@ -54,16 +50,11 @@ class YiyiGroup(app_commands.Group):
                 description=f"tốc độ xử lý (api): **{api_latency}ms** • tín hiệu (ws): **{ws_latency}ms**",
                 color=0xf8bbd0
             )
-            
             shard_id = interaction.guild.shard_id if interaction.guild and self.bot.shard_count else 0
             embed.set_footer(text=f"hệ thống ổn định • shard: {shard_id}")
-            
             await interaction.followup.send(embed=embed)
-            
         except Exception as e:
             print(f"[yiyi_oi error] fail to fetch ping: {e}", flush=True)
-            if not interaction.response.is_done():
-                await interaction.followup.send("**yiyi** đang bị nghẽn mạng chút xíu nha!", ephemeral=True)
 
     # ==========================================
     # LỆNH 2: LOVE (/yiyi iu)
@@ -71,9 +62,7 @@ class YiyiGroup(app_commands.Group):
     @app_commands.command(name="iu", description="hỏi xem yiyi thương ai nhất")
     async def iu(self, interaction: discord.Interaction):
         try:
-            # KIỂM TRA ĐẶC QUYỀN BOSS (NGUYỆT)
             is_boss = interaction.user.id == getattr(self.bot, "boss_id", 1055476307372294155)
-
             if is_boss:
                 responses = [
                     f"**yiyi** yêu người nhấttt {Emojis.YIYITIM}",
@@ -87,10 +76,7 @@ class YiyiGroup(app_commands.Group):
                     f"ủa gì zạ {Emojis.HOICHAM}"
                 ]
 
-            embed = discord.Embed(
-                title=random.choice(responses),
-                color=0xf8bbd0
-            )
+            embed = discord.Embed(title=random.choice(responses), color=0xf8bbd0)
             await interaction.response.send_message(embed=embed)
         except Exception as e:
             print(f"[yiyi_iu error] {e}", flush=True)
@@ -106,14 +92,11 @@ class YiyiGroup(app_commands.Group):
         guild_id = guild.id
 
         try:
-            # --- [CƠ CHẾ ÉP TỐC ĐỘ CHỐNG TREO 10062] ---
+            # --- Tích hợp Parallel Loading để chống kẹt luồng Database ---
             greet_task = get_guild_config(guild_id)
             ticket_task = get_ticket_config(guild_id)
-            
-            # GỢI Ý MẠNH: Nếu hàm này trong core/embed_storage.py yêu cầu truyền cả bot thì sửa thành get_all_embeds(self.bot, guild_id)
             embed_task = get_all_embeds(guild_id) 
             
-            # Gom tất cả chạy song song
             results = await asyncio.gather(greet_task, ticket_task, embed_task, return_exceptions=True)
             
             greet_data = results[0] if not isinstance(results[0], Exception) and results[0] else {}
@@ -147,7 +130,6 @@ class YiyiGroup(app_commands.Group):
                     total_btns += len(btns)
                     linked_embeds += 1
 
-            # 2. Xây dựng nội dung hiển thị
             embed = discord.Embed(
                 title=f"{Emojis.MATTRANG} Chi tiết các cài đặt của {guild.name}",
                 color=0xf8bbd0
@@ -181,14 +163,10 @@ class YiyiGroup(app_commands.Group):
             ticket_status = "`chưa thiết lập`"
             if ticket_cfg:
                 t_comp = []
-                if ticket_cfg.get("category_id"):
-                    t_comp.append("category")
-                if ticket_cfg.get("staff_roles"):
-                    t_comp.append("staff")
-                if ticket_cfg.get("log_channel_id"):
-                    t_comp.append("logs")
-                if t_comp:
-                    ticket_status = f"{Emojis.YIYITIM} (đã setup: " + ", ".join(t_comp) + ")"
+                if ticket_cfg.get("category_id"): t_comp.append("category")
+                if ticket_cfg.get("staff_roles"): t_comp.append("staff")
+                if ticket_cfg.get("log_channel_id"): t_comp.append("logs")
+                if t_comp: ticket_status = f"{Emojis.YIYITIM} (đã setup: " + ", ".join(t_comp) + ")"
 
             embed.add_field(
                 name=f"{Emojis.HOICHAM} TIỆN ÍCH HỆ THỐNG",
@@ -206,9 +184,12 @@ class YiyiGroup(app_commands.Group):
 
         except Exception as e:
             # Ghi log lỗi chính xác để Nguyệt dễ debug
-            print(f"[yiyi_setting error] CHI TIẾT LỖI GÂY HỎNG DỮ LIỆU: {e}", flush=True)
-            if not interaction.response.is_done():
-                await interaction.followup.send(f"{Emojis.HOICHAM} yiyi gặp lỗi khi quét dữ liệu rồi (Kiểm tra log ngay Nguyệt ơi)!", ephemeral=True)
+            print(f"[yiyi_setting error] CHI TIẾT LỖI HỆ THỐNG: {e}", flush=True)
+            try:
+                # Đã fix: Bỏ cái kiểm tra is_done() sai lệch để log ném ra kịp thời
+                await interaction.followup.send(f"{Emojis.HOICHAM} yiyi gặp lỗi khi quét dữ liệu (Cậu soi log Render nhé)!", ephemeral=True)
+            except Exception:
+                pass
 
 # ==========================================
 # INJECTION (ĐĂNG KÝ VÀO CÂY LỆNH TỔNG)
