@@ -1,6 +1,8 @@
 import copy
 import asyncio
 from collections import defaultdict
+# [CẤY MỚI] Nạp State để truy cập vào bot.db
+from core.state import State
 
 # [TRÍ NHỚ ĐÃ BÓC TÁCH] Gỡ bỏ các import liên quan đến cache manager cục bộ
 # from core.cache_manager import get_raw, mark_dirty, save, update
@@ -19,7 +21,6 @@ def _get_cache():
     """
     Lấy reference gốc từ RAM. Tự sửa lỗi định dạng.
     """
-    # [TRÍ NHỚ ĐÃ BÓC TÁCH] Chuyển từ file cục bộ sang bộ đệm RAM
     return _internal_booster_storage
 
 # =========================
@@ -29,16 +30,24 @@ def _get_cache():
 async def get_guild_config(guild_id: int):
     """
     Lấy toàn bộ cấu hình server (role, channel, message...).
-    Đã gỡ bỏ hoàn toàn logic liên quan đến mốc levels.
+    Logic: Ưu tiên RAM (Max Ping). Nếu RAM hụt (do reboot), nạp từ MongoDB.
     """
     db = _get_cache()
     guild_id_str = str(guild_id)
     
+    # [CẤY MỚI] Cơ chế nạp từ MongoDB nếu RAM trống (Self-healing RAM)
+    if guild_id_str not in db and hasattr(State.bot, "db"):
+        doc = await State.bot.db.configs.find_one({
+            "guild_id": guild_id_str, 
+            "module": "booster"
+        })
+        if doc:
+            db[guild_id_str] = doc.get("settings", {})
+
     config = db.get(guild_id_str, {})
     if not isinstance(config, dict): config = {}
 
     # [VÁ LỖI NỘI SOI]: Đảm bảo các ID luôn là string/int sạch để Engine không bị crash
-    # Purge sạch các data rác từ hệ thống level cũ nếu còn sót lại
     clean_config = {
         "booster_role": config.get("booster_role"),
         "channel": config.get("channel"),
@@ -46,21 +55,26 @@ async def get_guild_config(guild_id: int):
         "embed": config.get("embed")
     }
     
-    # Trả về bản sao để an toàn cho RAM gốc
     return copy.deepcopy(clean_config)
 
 async def save_guild_config(guild_id: int, config: dict):
     """
-    Lưu cấu hình booster gốc vào bộ nhớ RAM.
+    Lưu cấu hình booster gốc vào bộ nhớ RAM + Đồng bộ Cloud.
     """
     db = _get_cache()
     guild_id_str = str(guild_id)
         
     db[guild_id_str] = config
     
-    # [TRÍ NHỚ ĐÃ BÓC TÁCH] Gỡ bỏ mark_dirty (không còn ghi đĩa cục bộ)
+    # [CẤY MỚI] Đồng bộ lên Cloud Atlas (Ngăn configs)
+    if hasattr(State.bot, "db"):
+        await State.bot.db.configs.update_one(
+            {"guild_id": guild_id_str, "module": "booster"},
+            {"$set": {"settings": config}},
+            upsert=True
+        )
     
-    print(f"[STORAGE] **yiyi** đã ghi nhận cấu hình Booster cho Guild {guild_id_str} (Stateless Mode)", flush=True)
+    print(f"[STORAGE] **yiyi** đã ghi nhận cấu hình Booster cho Guild {guild_id_str} (Cloud Synced)", flush=True)
 
 # =========================
 # INTERFACE (DÀNH CHO ENGINE)
