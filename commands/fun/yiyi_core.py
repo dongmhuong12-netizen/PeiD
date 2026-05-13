@@ -89,7 +89,7 @@ class YiyiGroup(app_commands.Group):
             gid = interaction.guild.id
             gid_str = str(gid)
 
-            # NẠP DATA ĐA LUỒNG
+            # NẠP DATA ĐA LUỒNG - BẢO VỆ CHẶT CHẼ
             try:
                 try: 
                     from core.forms_storage import get_forms_config
@@ -103,8 +103,10 @@ class YiyiGroup(app_commands.Group):
                     get_all_embeds(gid), form_task, get_all_identities(gid),
                     return_exceptions=True
                 )
-            except: results = [{}, {}, {}, {}, {}, {}]
+            except: 
+                results = [{}, {}, {}, {}, {}, {}]
 
+            # Gán dữ liệu (xử lý trường hợp Exception trong Gather)
             greet_full = results[0] if isinstance(results[0], dict) else {}
             boost_cfg = results[1] if isinstance(results[1], dict) else {}
             ticket_cfg = results[2] if isinstance(results[2], dict) else {}
@@ -112,15 +114,17 @@ class YiyiGroup(app_commands.Group):
             form_cfg = results[4] if isinstance(results[4], dict) else {}
             ident_data = results[5] if isinstance(results[5], dict) else {}
 
-            # --- VÁ LỖI ATTRIBUTEERROR: TRUY CẬP COLLECTION THEO KEY ---
+            # TRUY CẬP DB KIỂU KEY-INDEX ĐỂ TRÁNH ATTRIBUTEERROR
             rr_count = 0
-            db = getattr(State.bot, "db", None)
-            if db is not None:
-                # Dùng db['reactions'] thay vì db.reactions để an toàn tuyệt đối
-                collection = db['reactions']
-                rr_count = await collection.count_documents({"guild_id": gid_str})
+            try:
+                db = getattr(State.bot, "db", None)
+                if db is not None:
+                    # Sử dụng bracket notation db['reactions'] thay vì db.reactions
+                    rr_count = await db['reactions'].count_documents({"guild_id": gid_str})
+            except Exception as db_err:
+                print(f"[DB ERROR] Reaction Role Scan: {db_err}")
 
-            # --- HELPERS PHÂN TÍCH ---
+            # --- HELPERS ĐỊNH DẠNG ---
             def parse_module(module_key):
                 data = greet_full.get(module_key, {})
                 c_id, e_nm, msg = data.get("channel_id"), data.get("embed_name"), data.get("message")
@@ -128,7 +132,11 @@ class YiyiGroup(app_commands.Group):
                 return status, f"<#{c_id}>" if c_id else f"`none`", f"`{e_nm}`" if e_nm else f"`none`", f"`có`" if msg else f"`none`"
 
             def parse_booster():
-                c_id, e_nm, msg, r_id = boost_cfg.get("channel"), boost_cfg.get("embed"), boost_cfg.get("message"), boost_cfg.get("booster_role")
+                # Khớp chính xác Key từ booster_storage.py
+                c_id = boost_cfg.get("channel")
+                e_nm = boost_cfg.get("embed")
+                msg = boost_cfg.get("message")
+                r_id = boost_cfg.get("booster_role")
                 status = f"`ON`" if (c_id or e_nm or msg or r_id) else f"`OFF`"
                 return status, f"<#{c_id}>" if c_id else f"`none`", f"`{e_nm}`" if e_nm else f"`none`", f"`có`" if msg else f"`none`", f"<@&{r_id}>" if r_id else f"`none`"
 
@@ -139,6 +147,7 @@ class YiyiGroup(app_commands.Group):
             w_st, w_ch, w_eb, w_tx = parse_module("wellcome")
             b_st, b_ch, b_eb, b_tx, b_rl = parse_booster()
 
+            # Ticket & Form
             t_st = f"`ON`" if ticket_cfg.get("category_id") else f"`OFF`"
             s_roles = ticket_cfg.get("staff_roles", [])
             t_rl = f"<@&{s_roles[0]}>" if (isinstance(s_roles, list) and s_roles) else f"<@&{s_roles}>" if s_roles else f"`none`"
@@ -146,7 +155,7 @@ class YiyiGroup(app_commands.Group):
             f_st = f"`ON`" if form_cfg else f"`OFF`"
             f_th = f"`ON`" if form_cfg.get("thumbnail") else f"`OFF`"
 
-            # --- RÁP DASHBOARD CHI TIẾT ---
+            # ================= RÁP DASHBOARD CHI TIẾT TÁCH DÒNG =================
             desc = f"""{Emojis.MATTRANG} **hệ thống tiếp tân & tương tác**
 • **greet (chào mừng)**: {g_st}
   └ kênh: {g_ch} | embed: {g_eb} | text: {g_tx}
@@ -190,4 +199,4 @@ class YiyiGroup(app_commands.Group):
 
 async def setup(bot: commands.Bot):
     bot.tree.add_command(YiyiGroup(bot))
-    print("[load] success: commands.fun.yiyi_core (Fix Database Access Applied)")
+    print("[load] success: commands.fun.yiyi_core (Industrial Detail Dashboard Fixed)")
