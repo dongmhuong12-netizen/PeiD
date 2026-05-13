@@ -4,14 +4,14 @@ import copy
 import re
 from core.variable_engine import apply_variables
 from core.embed_storage import save_embed, delete_embed
-from core.cache_manager import load, mark_dirty, get_raw, save as force_save
+# [TRÍ NHỚ ĐÃ BÓC TÁCH] Gỡ bỏ các import liên quan đến cache manager cục bộ
 from core.state import State
 from utils.emojis import Emojis
 
 ACTIVE_EMBED_VIEWS = {}
 REACTION_FILE_KEY = "reaction_roles"
 
-# [VÁ LỖI] Lock để bảo vệ dữ liệu reaction role khi ghi đĩa
+# [VÁ LỖI] Lock để bảo vệ dữ liệu reaction role
 _reaction_lock = asyncio.Lock()
 
 # =========================
@@ -19,10 +19,19 @@ _reaction_lock = asyncio.Lock()
 # =========================
 
 async def load_reaction_data():
-    return get_raw(REACTION_FILE_KEY)
+    """
+    [TRÍ NHỚ ĐÃ BÓC TÁCH]
+    Logic nạp dữ liệu từ tệp cục bộ đã bị gỡ bỏ.
+    Dữ liệu sẽ được nạp thông qua lớp Storage mới của cậu.
+    """
+    return {}
 
 async def save_reaction_data(data):
-    mark_dirty(REACTION_FILE_KEY)
+    """
+    [TRÍ NHỚ ĐÃ BÓC TÁCH]
+    Vô hiệu hóa việc đánh dấu dirty để ghi file.
+    """
+    pass
 
 # =========================
 # MODALS
@@ -54,7 +63,6 @@ class EditInformationModal(discord.ui.Modal, title="edit information"):
             default=None if is_default_desc else curr_desc
         )
         
-        # ĐÃ SỬA LỖI: Bỏ logic ép None, trả lại default=curr_color_hex
         curr_color_hex = hex(self.view.data.get("color", 0xf8bbd0)).replace("0x", "").lower()
         
         self.color = discord.ui.TextInput(
@@ -69,7 +77,6 @@ class EditInformationModal(discord.ui.Modal, title="edit information"):
         self.add_item(self.color)
 
     async def on_submit(self, interaction: discord.Interaction):
-        # [GIA CỐ] Defer ngay lập tức để tránh lỗi "Đã xảy ra lỗi" đỏ lòm do timeout
         await interaction.response.defer(ephemeral=True)
 
         self.view.data["title"] = self.etitle.value or self.etitle.placeholder
@@ -80,7 +87,7 @@ class EditInformationModal(discord.ui.Modal, title="edit information"):
             self.view.data["color"] = int(val, 16)
             
             await save_embed(self.view.guild_id, self.view.name, self.view.data)
-            await force_save("embeds")
+            # [TRÍ NHỚ ĐÃ BÓC TÁCH] Gỡ bỏ ép ghi đĩa cục bộ
             
             await self.view.update_message(interaction)
         except:
@@ -116,7 +123,6 @@ class EditAuthorModal(discord.ui.Modal, title="edit author details"):
         self.add_item(self.url)
 
     async def on_submit(self, interaction: discord.Interaction):
-        # [GIA CỐ] Defer chống lỗi đỏ
         await interaction.response.defer(ephemeral=True)
         self.view.data["author"] = {
             "name": self.name.value,
@@ -125,8 +131,6 @@ class EditAuthorModal(discord.ui.Modal, title="edit author details"):
         }
         
         await save_embed(self.view.guild_id, self.view.name, self.view.data)
-        await force_save("embeds")
-        
         await self.view.update_message(interaction)
 
 class EditFooterModal(discord.ui.Modal, title="edit footer details"):
@@ -159,7 +163,6 @@ class EditFooterModal(discord.ui.Modal, title="edit footer details"):
         self.add_item(self.timestamp)
 
     async def on_submit(self, interaction: discord.Interaction):
-        # [GIA CỐ] Defer chống lỗi đỏ
         await interaction.response.defer(ephemeral=True)
         self.view.data["footer"] = {
             "text": self.text.value,
@@ -168,8 +171,6 @@ class EditFooterModal(discord.ui.Modal, title="edit footer details"):
         self.view.data["timestamp"] = self.timestamp.value.lower().strip()
         
         await save_embed(self.view.guild_id, self.view.name, self.view.data)
-        await force_save("embeds")
-        
         await self.view.update_message(interaction)
 
 class EditImageModal(discord.ui.Modal, title="set image & thumbnail url"):
@@ -177,7 +178,6 @@ class EditImageModal(discord.ui.Modal, title="set image & thumbnail url"):
         super().__init__()
         self.view = view
         
-        # Ô 1: Ảnh chính
         self.image_input = discord.ui.TextInput(
             label="url hình ảnh chính",
             placeholder="https://... hoặc dùng {user_avatar}",
@@ -185,7 +185,6 @@ class EditImageModal(discord.ui.Modal, title="set image & thumbnail url"):
             default=self.view.data.get("image") or ""
         )
         
-        # Ô 2: Thumbnail (Ảnh nhỏ góc phải)
         self.thumbnail = discord.ui.TextInput(
             label="thumbnail (avt góc phải)",
             placeholder="https://... hoặc dùng {user_avatar}",
@@ -197,14 +196,11 @@ class EditImageModal(discord.ui.Modal, title="set image & thumbnail url"):
         self.add_item(self.thumbnail)
 
     async def on_submit(self, interaction: discord.Interaction):
-        # [GIA CỐ] Defer chống lỗi đỏ
         await interaction.response.defer(ephemeral=True)
         self.view.data["image"] = self.image_input.value
         self.view.data["thumbnail"] = self.thumbnail.value
         
         await save_embed(self.view.guild_id, self.view.name, self.view.data)
-        await force_save("embeds")
-        
         await self.view.update_message(interaction)
 
 class ReactionRoleModal(discord.ui.Modal, title="reaction role setup"):
@@ -239,7 +235,6 @@ class ReactionRoleModal(discord.ui.Modal, title="reaction role setup"):
         self.add_item(self.mode)
 
     async def on_submit(self, interaction: discord.Interaction):
-        # [GIA CỐ] Defer chống lỗi đỏ cực quan trọng ở đây vì xử lý nặng nhất
         await interaction.response.defer(ephemeral=True)
 
         guild = interaction.guild
@@ -268,21 +263,13 @@ class ReactionRoleModal(discord.ui.Modal, title="reaction role setup"):
             )
             return await interaction.followup.send(embed=embed_err, ephemeral=True)
 
-        # [VÁ LỖI] Sử dụng Lock để tránh tranh chấp khi lưu reaction role
+        # [VÁ LỖI] Sử dụng Lock để tránh tranh chấp
         async with _reaction_lock:
-            db = await load_reaction_data()
-            key = f"{guild.id}:{self.view.name}"
-            db[key] = {
-                "guild_id": str(guild.id),
-                "embed_name": self.view.name,
-                "groups": [{"mode": mode, "emojis": emojis, "roles": parsed_role_ids}]
-            }
-            await save_reaction_data(db)
-            await force_save(REACTION_FILE_KEY)
+            # Logic lưu dữ liệu reaction role tại đây sẽ được cậu cấy MongoDB vào
+            pass
         
         self.view.temp_reaction_data = {"emojis": emojis, "roles_raw": roles_raw, "mode": mode}
         await save_embed(self.view.guild_id, self.view.name, self.view.data)
-        await force_save("embeds")
 
         from core.embed_sender import _enqueue_reaction
         if self.view.message:
@@ -302,7 +289,6 @@ class ReactionRoleModal(discord.ui.Modal, title="reaction role setup"):
 
 class EmbedUIView(discord.ui.View):
     def __init__(self, guild_id: int, name: str, data: dict, timeout: float = 600.0):
-        # Ép timeout=None để các nút bấm không bao giờ bị liệt theo lệnh sếp
         super().__init__(timeout=None)
         self.guild_id = str(guild_id)
         self.name = name
@@ -310,19 +296,8 @@ class EmbedUIView(discord.ui.View):
         self.message = None
         self.temp_reaction_data = None
         
-        db = get_raw(REACTION_FILE_KEY)
-        storage_key = f"{self.guild_id}:{self.name}"
-        if storage_key in db:
-            config = db[storage_key]
-            if config.get("groups"):
-                group = config["groups"][0]
-                self.temp_reaction_data = {
-                    "emojis": group.get("emojis", []),
-                    "roles_raw": group.get("roles", []),
-                    "mode": group.get("mode", "single")
-                }
-
-        # [VÁ LỖI] Cơ chế giải phóng RAM: Dọn dẹp các view cũ
+        # [TRÍ NHỚ ĐÃ BÓC TÁCH] Gỡ bỏ nạp reaction role từ cache cục bộ
+        
         key = f"{self.guild_id}:{name}"
         if key in ACTIVE_EMBED_VIEWS:
             for old_view in ACTIVE_EMBED_VIEWS[key]:
@@ -360,13 +335,10 @@ class EmbedUIView(discord.ui.View):
         return _build_embed(data_copy)
 
     async def update_message(self, interaction: discord.Interaction):
-        """Cập nhật lại Designer và phản hồi interaction thông minh"""
         embed = self.build_embed(interaction.guild, interaction.user)
         self.message = interaction.message or self.message
         
-        # IT Pro: Xử lý thông minh dựa trên trạng thái của interaction để tránh lỗi 404
         if interaction.response.is_done():
-            # Nếu đã defer, ta update qua edit_original_response hoặc edit trực tiếp tin nhắn
             try:
                 await interaction.edit_original_response(embed=embed, view=self)
             except:
@@ -379,7 +351,6 @@ class EmbedUIView(discord.ui.View):
         match = re.search(r'\d+', raw_str)
         return match.group() if match else None
 
-    # [FIX] Đã thêm custom_id cố định cho tất cả các nút bấm của sếp
     @discord.ui.button(label="edit information (tiêu đề / mô tả / màu sắc)", style=discord.ButtonStyle.secondary, row=0, custom_id="yiyi:embed:edit_info")
     async def edit_info(self, interaction, button):
         await interaction.response.send_modal(EditInformationModal(self))
@@ -399,5 +370,3 @@ class EmbedUIView(discord.ui.View):
     @discord.ui.button(label="reaction roles (cài đặt emoji và role)", style=discord.ButtonStyle.secondary, row=2, custom_id="yiyi:embed:reaction_roles")
     async def reaction_roles(self, interaction, button):
         await interaction.response.send_modal(ReactionRoleModal(self))
-
-
