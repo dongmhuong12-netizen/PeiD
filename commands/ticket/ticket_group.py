@@ -6,7 +6,7 @@ import re
 
 # Nạp công cụ Storage và Trí nhớ Ticket mới (Industrial Standard)
 from core.embed_storage import load_embed, atomic_update_button
-from core.ticket_storage import update_ticket_config, get_ticket_config # [CẤY MỚI]
+from core.ticket_storage import update_ticket_config, get_ticket_config
 from utils.emojis import Emojis
 
 class TicketGroup(app_commands.Group):
@@ -98,10 +98,11 @@ class TicketGroup(app_commands.Group):
     @app_commands.command(name="apply", description="Liên kết Ticket vào Embed")
     @app_commands.describe(embed_name="Tên embed gắn đơn")
     async def apply(self, interaction: discord.Interaction, embed_name: str):
+        # [GIA CỐ] Defer sớm để bảo vệ interaction
         await interaction.response.defer(ephemeral=True)
         guild_id = interaction.guild.id
         
-        # [KẾT NỐI MẠCH] Kiểm tra cấu hình Ticket từ MongoDB trước khi cho phép liên kết
+        # [KẾT NỐI MẠCH] Kiểm tra cấu hình Ticket
         config = await get_ticket_config(guild_id)
         if not config or not config.get("category_id"):
             embed_no_config = discord.Embed(
@@ -124,19 +125,22 @@ class TicketGroup(app_commands.Group):
             "system": "ticket"
         }
 
-        # [GIA CỐ] Cập nhật nút bấm thông qua Atomic Update (Async + MongoDB)
+        # [GIA CỐ] Cập nhật nút bấm
         updated = await atomic_update_button(guild_id, embed_name, action="update_by_id", custom_id="yiyi:ticket:open", button_data=btn_data)
         
         if not updated:
             success = await atomic_update_button(guild_id, embed_name, button_data=btn_data, action="add")
             if not success:
-                # [MỤC 10] Lỗi full slot
                 embed_full = discord.Embed(
                     title=f"{Emojis.HOICHAM} không thể liên kết.",
                     description="embed cậu muốn liên kết có thể đã full slot cấu hình, hãy thử chọn embed khác hoặc tạo mới nhé.",
                     color=0xf8bbd0
                 )
                 return await interaction.followup.send(embed=embed_full)
+
+        # [CHỐT HẠ] Cập nhật tên Embed vào Ticket Config để Dashboard (yiyi setting) lấy được data
+        # CHỈ LƯU TÊN (STRING), tuyệt đối không lưu Object để tránh lỗi <discord.embeds.Embed...>
+        await update_ticket_config(guild_id, {"embed_name": str(embed_name)})
 
         # [MỤC 11] Apply thành công
         embed_ok = discord.Embed(
@@ -152,4 +156,4 @@ async def setup(bot: commands.Bot):
         if existing: 
             p_cmd.remove_command("ticket")
         p_cmd.add_command(TicketGroup())
-        print("[LOAD] Success: commands.ticket.ticket_group", flush=True)
+        print("[LOAD] Success: commands.ticket.ticket_group (Industrial Fix Applied)", flush=True)
