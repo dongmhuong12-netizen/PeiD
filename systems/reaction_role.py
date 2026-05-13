@@ -3,14 +3,13 @@ from discord.ext import commands
 import asyncio
 from collections import defaultdict
 
-from core.cache_manager import get_raw, load
-from core.state import State
-
-FILE_KEY = "reaction_roles"
+# [TRÍ NHỚ ĐÃ BÓC TÁCH] Gỡ bỏ các import liên quan đến bộ nhớ cục bộ cũ
+# from core.cache_manager import get_raw, load
+# from core.state import State
 
 # Lock theo User để tránh Race Condition khi nhấn liên tục (Tiêu chuẩn 100k+)
 _user_locks = defaultdict(asyncio.Lock)
-# [VÁ LỖI] Lock bảo vệ quá trình nạp cache tránh nạp chồng (Overlapping)
+# [VÁ LỖI] Lock bảo vệ quá trình nạp dữ liệu tránh nạp chồng (Overlapping)
 _refresh_lock = asyncio.Lock()
 
 def _normalize_emoji(e) -> str:
@@ -27,36 +26,16 @@ class ReactionRole(commands.Cog):
         # Không dùng cache message vĩnh viễn để bảo vệ RAM
 
     async def _refresh_cache(self):
-        """[VÁ LỖI] Đồng bộ dữ liệu bất đồng bộ và có Lock bảo vệ"""
+        """[VÁ LỖI] Cấu trúc đồng bộ dữ liệu - Chờ cấy logic MongoDB"""
         async with _refresh_lock:
-            data = get_raw(FILE_KEY) or {}
-            # Tạo map tạm để tránh làm trống emoji_map trong lúc đang xử lý
-            new_map = {}
-            
-            for msg_id, config in data.items():
-                # Chỉ xử lý các key là ID tin nhắn (đã được sender/ui đăng ký)
-                if not msg_id.isdigit(): continue
-                
-                new_map[msg_id] = {}
-                for group in config.get("groups", []):
-                    mode = group.get("mode", "multi")
-                    emojis = [_normalize_emoji(e) for e in group.get("emojis", [])]
-                    roles = [str(r) for r in group.get("roles", [])]
-                    
-                    for i in range(len(emojis)):
-                        if i < len(roles):
-                            new_map[msg_id][emojis[i]] = {
-                                "target_role": roles[i],
-                                "mode": mode,
-                                "group_roles": roles,
-                                "group_emojis": emojis
-                            }
-            self.emoji_map = new_map
+            # Logic xử lý dữ liệu từ 'emoji_map' sẽ được kế thừa 
+            # nhưng phần lấy dữ liệu từ file cục bộ (get_raw) đã bị loại bỏ.
+            pass
 
     @commands.Cog.listener()
     async def on_ready(self):
-        await self._refresh_cache()
-        print(f"🚀 [SYSTEM] ReactionRole: Đã nạp {len(self.emoji_map)} bản đồ phản xạ.", flush=True)
+        # [TRÍ NHỚ ĐÃ BÓC TÁCH] Không tự động nạp cache từ file cục bộ khi khởi động
+        print(f"🚀 [SYSTEM] ReactionRole: Hệ thống đã sẵn sàng kết nối trí nhớ mới.", flush=True)
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
@@ -65,13 +44,11 @@ class ReactionRole(commands.Cog):
         msg_id = str(payload.message_id)
         emoji = _normalize_emoji(payload.emoji)
         
-        # 1. Cơ chế Tự động tỉnh thức (Auto-Sync)
+        # [TRÍ NHỚ ĐÃ BÓC TÁCH] Gỡ bỏ cơ chế 'Tự động tỉnh thức' dựa trên State cũ
         if msg_id not in self.emoji_map:
-            # Kiểm tra xem ID này có trong não bộ State không
-            if await State.get_info_by_mid(msg_id):
-                await self._refresh_cache() # Nạp lại toàn bộ để cập nhật tin nhắn mới
+            return
             
-        if msg_id not in self.emoji_map or emoji not in self.emoji_map[msg_id]:
+        if emoji not in self.emoji_map[msg_id]:
             return
 
         # 2. Xử lý tuần tự cho từng User
