@@ -4,6 +4,7 @@ from discord.ext import commands
 import time
 import random
 import asyncio
+import traceback # [CẤY MỚI] Công cụ dò lỗi tàng hình chuẩn IT Pro
 
 # Nhập hệ Emojis của PeiD
 from utils.emojis import Emojis
@@ -86,13 +87,13 @@ class YiyiGroup(app_commands.Group):
     # ==========================================
     @app_commands.command(name="setting", description="kiểm tra chi tiết các cài đặt của server")
     async def setting(self, interaction: discord.Interaction):
-        # [IT PRO] Luôn defer trước để phá vỡ bẫy 3 giây của Discord
-        await interaction.response.defer(ephemeral=True)
-        guild = interaction.guild
-        guild_id = guild.id
-
         try:
-            # --- Tích hợp Parallel Loading để chống kẹt luồng Database ---
+            # Đưa defer vào trong try để nếu văng lỗi 40060 nó cũng bị Traceback tóm cổ
+            await interaction.response.defer(ephemeral=True)
+            guild = interaction.guild
+            guild_id = guild.id
+
+            # --- Tích hợp Parallel Loading ---
             greet_task = get_guild_config(guild_id)
             ticket_task = get_ticket_config(guild_id)
             embed_task = get_all_embeds(guild_id) 
@@ -183,11 +184,15 @@ class YiyiGroup(app_commands.Group):
             await interaction.followup.send(embed=embed)
 
         except Exception as e:
-            # Ghi log lỗi chính xác để Nguyệt dễ debug
-            print(f"[yiyi_setting error] CHI TIẾT LỖI HỆ THỐNG: {e}", flush=True)
+            # [IT PRO] Dùng Traceback để in đích danh dòng lỗi ra log Render
+            print(f"\n[CRITICAL ERROR] --- BẮT ĐẦU DÒ LỖI YIYI SETTING ---", flush=True)
+            traceback.print_exc()
+            print(f"--- KẾT THÚC DÒ LỖI ---\n", flush=True)
+            
             try:
-                # Đã fix: Bỏ cái kiểm tra is_done() sai lệch để log ném ra kịp thời
-                await interaction.followup.send(f"{Emojis.HOICHAM} yiyi gặp lỗi khi quét dữ liệu (Cậu soi log Render nhé)!", ephemeral=True)
+                # Gửi nguyên cái tên lỗi ra kênh Discord để Nguyệt thấy ngay lập tức
+                error_name = repr(e)
+                await interaction.followup.send(f"{Emojis.HOICHAM} yiyi gặp lỗi khi quét dữ liệu! Mã lỗi: `{error_name}` (Soi log Render ngay sếp ơi)", ephemeral=True)
             except Exception:
                 pass
 
