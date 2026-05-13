@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 from utils.emojis import Emojis
+import asyncio
 
 class ButtonListener(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -73,10 +74,13 @@ class ButtonListener(commands.Cog):
                     ephemeral=True
                 )
         except Exception as e:
+            # IT Pro: In log chi tiết để debug Cloud Sync
             print(f"[ROUTER CRITICAL] Lỗi tại trạm trung tâm ({system_type}): {e}", flush=True)
             if not interaction.response.is_done():
-                try: await interaction.response.send_message(f"{Emojis.HOICHAM} lỗi đường truyền tín hiệu!", ephemeral=True)
-                except: pass
+                try: 
+                    await interaction.response.send_message(f"{Emojis.HOICHAM} lỗi đường truyền tín hiệu hoặc dữ liệu chưa kịp nạp!", ephemeral=True)
+                except: 
+                    pass
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(ButtonListener(bot))
