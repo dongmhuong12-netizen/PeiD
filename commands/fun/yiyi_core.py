@@ -38,7 +38,7 @@ class YiyiGroup(app_commands.Group):
                 ]
             else:
                 responses = [
-                    "haiii, **yiyi** đâyyy",
+                    "haiiii, **yiyi** đâyyy",
                     "**yiyi** có mặt",
                     f"gọi **yiyi** có chuyện gì hee? {Emojis.HOICHAM}"
                 ]
@@ -108,10 +108,32 @@ class YiyiGroup(app_commands.Group):
         ticket_cfg = await get_ticket_config(guild_id)
         all_embeds = await get_all_embeds(guild_id)
         
-        def check_setup(module_data):
-            if not module_data or not any(module_data.values() if isinstance(module_data, dict) else [module_data]):
+        # --- HELPER: SOI CHI TIẾT LINH KIỆN ---
+        def get_detail(module_data):
+            if not module_data:
                 return "`chưa thiết lập`"
-            return f"{Emojis.YIYITIM} `đã sẵn sàng`"
+            
+            comps = []
+            if module_data.get("channel_id"):
+                comps.append("channel")
+            if module_data.get("embed_name"):
+                comps.append("embed")
+            if module_data.get("message"):
+                comps.append("message")
+                
+            if not comps:
+                return "`chưa thiết lập`"
+            
+            return f"{Emojis.YIYITIM} (đã setup: " + ", ".join(comps) + ")"
+
+        # --- HELPER: ĐẾM NÚT BẤM (BUTTON) ---
+        total_btns = 0
+        linked_embeds = 0
+        for emb in all_embeds:
+            btns = emb.get("buttons", [])
+            if btns:
+                total_btns += len(btns)
+                linked_embeds += 1
 
         # 2. Xây dựng nội dung hiển thị
         embed = discord.Embed(
@@ -120,44 +142,51 @@ class YiyiGroup(app_commands.Group):
         )
 
         # Nhánh Greet/Leave/Wellcome/Booster
-        booster_status = check_setup(greet_data.get('greet', {}).get('booster_channel'))
+        booster_status = "`đã có channel`" if greet_data.get('greet', {}).get('booster_channel') else "`chưa thiết lập`"
         embed.add_field(
             name=f"{Emojis.YIYITIM} HỆ THỐNG LỜI CHÀO",
             value=(
-                f"• **greet:** {check_setup(greet_data.get('greet'))}\n"
-                f"• **leave:** {check_setup(greet_data.get('leave'))}\n"
-                f"• **wellcome:** {check_setup(greet_data.get('wellcome'))}\n"
+                f"• **greet:** {get_detail(greet_data.get('greet'))}\n"
+                f"• **leave:** {get_detail(greet_data.get('leave'))}\n"
+                f"• **wellcome:** {get_detail(greet_data.get('wellcome'))}\n"
                 f"• **booster:** {booster_status}"
             ),
             inline=False
         )
 
         # Nhánh Embed & Interaction
-        embed_count = len(all_embeds)
-        # Giữ đúng hạn mức 100k+ server của Nguyệt
         embed.add_field(
             name=f"{Emojis.MATTRANG} TƯƠNG TÁC & EMBED",
             value=(
-                f"• **embed:** `{embed_count}/50` (số lượng đã tạo)\n"
-                f"• **reaction role:** (kiểm tra theo message id)\n"
-                f"• **button:** `tự động đồng bộ`"
+                f"• **embed:** `{len(all_embeds)}/50` (số lượng đã tạo)\n"
+                f"• **button:** `{total_btns}` nút bấm trên `{linked_embeds}` embed\n"
+                f"• **reaction role:** (kiểm tra theo message id)"
             ),
             inline=False
         )
 
-        # Nhánh Tính năng nâng cao
+        # Nhánh Tính năng nâng cao (Soi Ticket)
+        ticket_status = "`chưa thiết lập`"
+        if ticket_cfg:
+            t_comp = []
+            if ticket_cfg.get("category_id"): t_comp.append("category")
+            if ticket_cfg.get("staff_roles"): t_comp.append("staff")
+            if ticket_cfg.get("log_channel_id"): t_comp.append("logs")
+            if t_comp:
+                ticket_status = f"{Emojis.YIYITIM} (đã setup: " + ", ".join(t_comp) + ")"
+
         embed.add_field(
             name=f"{Emojis.HOICHAM} TIỆN ÍCH HỆ THỐNG",
             value=(
-                f"• **ticket:** {check_setup(ticket_cfg)}\n"
-                f"• **form:** (kiểm tra theo tên embed)\n"
+                f"• **ticket:** {ticket_status}\n"
+                f"• **form:** (kiểm tra theo từng tên embed)\n"
                 f"• **identity:** `active`\n"
                 f"• **link:** `active`"
             ),
             inline=False
         )
 
-        embed.set_footer(text="yiyi iu cậu • dữ liệu đã được Cloud hóa")
+        embed.set_footer(text="yiyi iu cậu • báo cáo chi tiết linh kiện cloud")
         await interaction.followup.send(embed=embed)
 
 # ==========================================
