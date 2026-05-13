@@ -6,8 +6,6 @@ from discord.ext import commands, tasks
 
 # Import các công cụ quản lý bộ nhớ
 from core.state import State
-# [TRÍ NHỚ ĐÃ BÓC TÁCH] Gỡ bỏ các import liên quan đến cache manager cục bộ
-# from core.cache_manager import get_raw, mark_dirty, save
 from core.embed_storage import load_embed
 from core.greet_leave import send_config_message
 from core.booster_engine import assign_correct_level, sync_all_boosters
@@ -28,9 +26,12 @@ class BoostGroup(app_commands.Group):
     @app_commands.default_permissions(manage_guild=True)
     async def role(self, interaction: discord.Interaction, role: discord.Role):
         """(1) cập nhật role và kích hoạt truy quét chủ động"""
+        # [GIA CỐ] Defer ngay lập tức để tránh lỗi Unknown Interaction khi sync_all_boosters chạy nặng
+        await interaction.response.defer(ephemeral=False)
+        
         print(f"[BOOST] Đang setup role {role.name} cho server {interaction.guild.id}", flush=True)
         
-        # [GIA CỐ] Giữ nguyên DAL (Data Access Layer) để cậu cấy MongoDB vào booster_storage
+        # [GIA CỐ] DAL an toàn
         config = await get_guild_config(interaction.guild.id)
         config["booster_role"] = role.id
         await save_guild_config(interaction.guild.id, config)
@@ -39,15 +40,18 @@ class BoostGroup(app_commands.Group):
             title=f"{Emojis.MATTRANG} cập nhật role `booster` thành công: {role.name}",
             color=0xf8bbd0
         )
-        await interaction.response.send_message(embed=embed, ephemeral=False)
+        await interaction.followup.send(embed=embed)
 
         # LOGIC PROACTIVE: tự động quét toàn server để gán role cho người đang boost
+        # Chạy task ngầm để không làm nghẽn phản hồi chính
         asyncio.create_task(sync_all_boosters(interaction.guild))
 
     @app_commands.command(name="channel", description="đặt kênh thông báo khi có người boost")
     @app_commands.default_permissions(manage_guild=True)
     async def channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
         """(2) cập nhật kênh thông báo"""
+        await interaction.response.defer(ephemeral=False)
+        
         print(f"[BOOST] Đang setup channel {channel.name} cho server {interaction.guild.id}", flush=True)
         config = await get_guild_config(interaction.guild.id)
         config["channel"] = channel.id
@@ -57,12 +61,14 @@ class BoostGroup(app_commands.Group):
             title=f"{Emojis.MATTRANG} cập nhật kênh `boost` thành công: {channel.name}",
             color=0xf8bbd0
         )
-        await interaction.response.send_message(embed=embed, ephemeral=False)
+        await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="message", description="đặt nội dung tin nhắn khi có người boost")
     @app_commands.default_permissions(manage_guild=True)
     async def message(self, interaction: discord.Interaction, text: str):
         """(3) cập nhật nội dung tin nhắn"""
+        await interaction.response.defer(ephemeral=False)
+        
         config = await get_guild_config(interaction.guild.id)
         config["message"] = text
         await save_guild_config(interaction.guild.id, config)
@@ -72,19 +78,21 @@ class BoostGroup(app_commands.Group):
             title=f"{Emojis.MATTRANG} cập nhật tin nhắn `boost` thành công: {display_text}",
             color=0xf8bbd0
         )
-        await interaction.response.send_message(embed=embed, ephemeral=False)
+        await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="embed", description="gán embed chúc mừng khi có người boost")
     @app_commands.default_permissions(manage_guild=True)
     async def embed(self, interaction: discord.Interaction, name: str):
         """(4) & (5) gán embed mẫu"""
+        await interaction.response.defer(ephemeral=False)
+        
         if not await load_embed(interaction.guild.id, name):
             embed_err = discord.Embed(
                 title=f"{Emojis.HOICHAM} aree... có lỗi gì đó ở đây",
                 description=f"**yiyi** không tìm thấy embed có tên `{name}`. hãy kiểm tra lại bằng `/p embed edit` nhé",
                 color=0xf8bbd0
             )
-            return await interaction.response.send_message(embed=embed_err, ephemeral=False)
+            return await interaction.followup.send(embed=embed_err)
         
         config = await get_guild_config(interaction.guild.id)
         config["embed"] = name
@@ -94,7 +102,7 @@ class BoostGroup(app_commands.Group):
             title=f"{Emojis.MATTRANG} cập nhật embed `{name}` cho hệ thống `boost` thành công",
             color=0xf8bbd0
         )
-        await interaction.response.send_message(embed=embed_success, ephemeral=False)
+        await interaction.followup.send(embed=embed_success)
 
     @app_commands.command(name="test", description="gửi thử tin nhắn chúc mừng boost và bảo vệ role 5p")
     @app_commands.default_permissions(manage_guild=True)
@@ -118,6 +126,7 @@ class BoostGroup(app_commands.Group):
             except:
                 pass
         
+        # [GIA CỐ] Gọi send_config_message đảm bảo đồng bộ biến
         success = await send_config_message(interaction.guild, interaction.user, "booster")
         
         if success:
@@ -132,7 +141,7 @@ class BoostGroup(app_commands.Group):
                 description=f"hãy đảm bảo rằng cậu đã setup đủ cấu hình cho `booster`, hoặc xem lại quyền của **yiyi** và quyền của kênh nhé",
                 color=0xf8bbd0
             )
-        await interaction.followup.send(embed=embed, ephemeral=False)
+        await interaction.followup.send(embed=embed)
 
 # ======================
 # LISTENER & SYNC LOOP
@@ -154,7 +163,10 @@ class BoosterListener(commands.Cog):
     async def reconciliation_loop(self):
         """Vòng lặp đồng bộ: gán cho boost, gỡ cho không boost (Bypass 5p)"""
         for guild in self.bot.guilds:
-            await sync_all_boosters(guild)
+            try:
+                await sync_all_boosters(guild)
+            except:
+                continue
             await asyncio.sleep(0.5) 
 
     @reconciliation_loop.before_loop
@@ -168,10 +180,12 @@ class BoosterListener(commands.Cog):
         
         boost_changed = before.premium_since != after.premium_since
         if boost_changed:
+            # Gán role/Level mới
             task = asyncio.create_task(assign_correct_level(after))
             self._tasks.add(task)
             task.add_done_callback(self._tasks.discard)
 
+            # Gửi tin nhắn mừng nếu bắt đầu boost
             if before.premium_since is None and after.premium_since is not None:
                 task_welcome = asyncio.create_task(send_config_message(after.guild, after, "booster"))
                 self._tasks.add(task_welcome)
@@ -183,4 +197,4 @@ async def setup(bot: commands.Bot):
         if not any(c.name == "boost" for c in p_cmd.commands):
             p_cmd.add_command(BoostGroup())
     await bot.add_cog(BoosterListener(bot))
-    print("[load] success: core.booster (fixed variables and mention formatting)", flush=True)
+    print("[load] success: core.booster (Industrial Defer Applied)", flush=True)
