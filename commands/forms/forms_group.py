@@ -117,21 +117,31 @@ class FormsGroup(app_commands.Group):
             return await interaction.followup.send(f"{Emojis.HOICHAM} không tìm thấy embed `{embed_name}` để liên kết.")
 
         # Atomic Update đã được nâng cấp lên Async/MongoDB ở file core/embed_storage.py
-        success = await atomic_update_button(interaction.guild.id, embed_name, action="add", button_data=btn_data)
+        # Ưu tiên update_by_id nếu nút form đã tồn tại để tránh rác
+        updated = await atomic_update_button(interaction.guild.id, embed_name, action="update_by_id", custom_id=f"yiyi:forms:open:{embed_name}", button_data=btn_data)
         
-        if success:
-            embed_success = discord.Embed(
-                title=f"{Emojis.MATTRANG} liên kết với embed `{embed_name}` thành công",
-                color=0xf8bbd0
-            )
-            await interaction.followup.send(embed=embed_success)
-        else:
-            embed_err = discord.Embed(
-                title=f"{Emojis.HOICHAM} hmm...? có lỗi gì đó ở đây",
-                description=f"cậu hãy nhập lại tên embed hoặc kiểm tra lại trường nhập liệu nhé",
-                color=0xf8bbd0
-            )
-            await interaction.followup.send(embed=embed_err)
+        if not updated:
+            success = await atomic_update_button(interaction.guild.id, embed_name, action="add", button_data=btn_data)
+            if not success:
+                embed_err = discord.Embed(
+                    title=f"{Emojis.HOICHAM} hmm...? có lỗi gì đó ở đây",
+                    description=f"embed đã full nút hoặc không thể gắn thêm nút form vào lúc này.",
+                    color=0xf8bbd0
+                )
+                return await interaction.followup.send(embed=embed_err)
+
+        # [CHỐT HẠ] - Cập nhật trạng thái "embed_name" vào form_base để Dashboard nhận biết được form đã kích hoạt
+        # Tránh trường hợp Dashboard quét ra null khi form chưa apply
+        # Bắt buộc phải có vì form multi-instance quản lý qua embed_name
+        try:
+            await update_form_base(interaction.guild.id, embed_name, title=None, log_channel_id=None, show_thumbnail=None)
+        except: pass
+
+        embed_success = discord.Embed(
+            title=f"{Emojis.MATTRANG} liên kết với embed `{embed_name}` thành công",
+            color=0xf8bbd0
+        )
+        await interaction.followup.send(embed=embed_success)
 
 async def setup(bot: commands.Bot):
     p_cmd = bot.tree.get_command("p")
@@ -139,4 +149,4 @@ async def setup(bot: commands.Bot):
         existing = next((c for c in p_cmd.commands if c.name == "forms"), None)
         if existing: p_cmd.remove_command("forms")
         p_cmd.add_command(FormsGroup())
-        print("[LOAD] Success: commands.forms.forms_group (Stylized)", flush=True)
+        print("[LOAD] Success: commands.forms.forms_group (Industrial Fix Applied)", flush=True)
