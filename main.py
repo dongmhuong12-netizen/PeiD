@@ -5,6 +5,8 @@ import os
 from aiohttp import web
 
 from core.state import State
+# [CẤY MỚI] Nạp lớp MongoDB để khởi động cỗ máy dữ liệu
+from core.mongodb import MongoDB 
 
 TOKEN = os.getenv("TOKEN")
 if not TOKEN:
@@ -50,14 +52,17 @@ bot = commands.AutoShardedBot(
 # [CẤY ID BOSS - KHÔNG THAY ĐỔI LOGIC CŨ]
 bot.boss_id = 1055476307372294155
 
+# [CẤY MỚI] Gắn bot vào State để các module Storage có thể gọi bot.db
+State.bot = bot 
+
 # =========================
 # EXTENSIONS (QUY HOẠCH CHIẾN LƯỢC)
 # =========================
 
 EXTENSIONS = [
-    "core.root",                  # XƯƠNG: Tạo lệnh /p (Phải nạp đầu tiên)
-    "systems.button_listener",     # <--- Đã thêm để tiếp quản Interaction
-    "commands.embed.embed_group",  # THỊT: Create, Edit, Show...
+    "core.root",                  
+    "systems.button_listener",     
+    "commands.embed.embed_group",  
     "core.greet_leave",          
     "core.wellcome",             
     "core.booster",              
@@ -91,8 +96,6 @@ async def load_extensions():
 async def on_member_join(member: discord.Member):
     pass
 
-# [ĐÃ LƯỢC BỎ ON_INTERACTION THEO KẾ HOẠCH PHÂN TÁCH]
-
 # =========================
 # READY STATE
 # =========================
@@ -114,7 +117,6 @@ async def on_ready():
         print(f"[SLASH ERROR] {e}", flush=True)
 
     print(f"🚀 {bot.user} đã sẵn sàng phục vụ!", flush=True)
-    # [XÁC NHẬN BOSS]
     print(f"👑 Đã nhận diện thực thể tối cao: {bot.boss_id}", flush=True)
 
 # =========================
@@ -123,6 +125,16 @@ async def on_ready():
 
 async def main():
     discord.utils.setup_logging()
+    
+    # [CẤY MỚI] Khởi tạo kết nối MongoDB trước khi nạp Cogs
+    uri = os.getenv("MONGO_URI")
+    if uri:
+        bot.db = MongoDB(uri)
+        await bot.db.connect()
+        print("[DB] MongoDB Atlas đã kết nối thành công!", flush=True)
+    else:
+        print("[DB WARNING] Không tìm thấy MONGO_URI. Bot đang chạy chế độ RAM-Only!", flush=True)
+
     asyncio.create_task(run_web_server())
     await load_extensions()
     async with bot:
