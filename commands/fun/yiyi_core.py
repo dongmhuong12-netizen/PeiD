@@ -7,7 +7,8 @@ import random
 # Nhập hệ Emojis của PeiD
 from utils.emojis import Emojis
 
-# [HỆ THỐNG QUÉT DỮ LIỆU] Nạp sẵn để đảm bảo tốc độ Industrial Grade
+# [GIẢI PHÁP SỐNG CÒN] Đưa import ra ngoài để nạp sẵn khi bot onl
+# Triệt tiêu hoàn toàn độ trễ nạp module để tránh lỗi Unknown Interaction (10062)
 from core.greet_storage import get_guild_config
 from core.ticket_storage import get_ticket_config
 from core.embed_storage import get_all_embeds
@@ -99,21 +100,21 @@ class YiyiGroup(app_commands.Group):
     # ==========================================
     @app_commands.command(name="setting", description="kiểm tra chi tiết các cài đặt của server")
     async def setting(self, interaction: discord.Interaction):
-        # [IT PRO] Luôn defer trước khi gọi Storage để tránh timeout
+        # [IT PRO] Defer ngay lập tức để giữ kết nối với Discord trước khi nạp dữ liệu
         await interaction.response.defer(ephemeral=True)
         guild = interaction.guild
         guild_id = guild.id
 
         try:
             # --- Nạp Trí Nhớ Cloud ---
-            # Dùng or {} để bảo vệ logic khỏi lỗi dữ liệu trống
+            # Sử dụng các hàm đã import sẵn ở đầu file để đảm bảo tốc độ phản hồi
             greet_data = await get_guild_config(guild_id) or {}
             ticket_cfg = await get_ticket_config(guild_id) or {}
-            all_embeds = await get_all_embeds(guild_id) 
+            all_embeds = await get_all_embeds(guild_id)
             if all_embeds is None:
                 all_embeds = []
             
-            # --- HELPER: SOI CHI TIẾT LINH KIỆN ---
+            # --- HELPER: SOI CHI TIẾT LINH KIỆN (FULL LOGIC) ---
             def get_detail(module_data):
                 if not module_data:
                     return "`chưa thiết lập`"
@@ -131,7 +132,7 @@ class YiyiGroup(app_commands.Group):
                 
                 return f"{Emojis.YIYITIM} (đã setup: " + ", ".join(comps) + ")"
 
-            # --- HELPER: ĐẾM NÚT BẤM (BUTTON) ---
+            # --- HELPER: ĐẾM NÚT BẤM (FULL LOGIC) ---
             total_btns = 0
             linked_embeds = 0
             for emb in all_embeds:
