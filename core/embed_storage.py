@@ -138,9 +138,19 @@ async def delete_embed(guild_id, name):
 # =========================
 
 async def get_all_embeds(guild_id):
-    """lấy toàn bộ kho embed của server (trả về bản sao an toàn)"""
+    """
+    lấy toàn bộ kho embed của server (trả về bản sao an toàn).
+    [GIA CỐ] tự động khôi phục toàn bộ từ Cloud nếu RAM trống sau reboot.
+    """
     cache = _get_cache()
     gid = _gid(guild_id)
+
+    # Nếu RAM trống, thực hiện nạp hàng loạt từ Cloud Atlas (Industrial Logic)
+    if gid not in cache and hasattr(State.bot, "db"):
+        cursor = State.bot.db.embeds.find({"guild_id": gid})
+        async for doc in cursor:
+            if gid not in cache: cache[gid] = {}
+            cache[gid][doc["name"]] = doc["data"]
 
     guild_data = cache.get(gid) or cache.get(int(gid) if gid.isdigit() else None)
     if not isinstance(guild_data, dict):
@@ -153,10 +163,8 @@ async def get_all_embed_names(guild_id):
     if guild_id is None:
         return []
 
-    cache = _get_cache()
-    gid = _gid(guild_id)
-
-    guild_data = cache.get(gid) or cache.get(int(gid) if gid.isdigit() else None)
+    # Gọi get_all_embeds để đảm bảo RAM đã được nạp từ Cloud trước khi liệt kê tên
+    guild_data = await get_all_embeds(guild_id)
     
     if not isinstance(guild_data, dict):
         return []
@@ -181,10 +189,10 @@ async def atomic_update_button(guild_id, name, button_data: dict = None, action:
         name = _nid(name)
 
         if gid not in cache or name not in cache[gid]:
-            gid_int = int(gid) if gid.isdigit() else None
-            if gid_int not in cache or name not in cache[gid_int]:
+            # Đảm bảo RAM được nạp trước khi update nút bấm
+            await get_all_embeds(guild_id)
+            if gid not in cache or name not in cache[gid]:
                 return False
-            gid = gid_int
 
         data = cache[gid][name]
         
