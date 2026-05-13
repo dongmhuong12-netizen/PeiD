@@ -2,19 +2,17 @@ import discord
 import io
 import datetime
 import asyncio 
-from core.cache_manager import get_raw
 from utils.emojis import Emojis # Đảm bảo đã nạp bộ emoji hệ thống
-
-FILE_KEY = "ticket_configs"
 
 async def handle_ticket_interaction(interaction: discord.Interaction):
     custom_id = interaction.data.get("custom_id")
     guild = interaction.guild
     user = interaction.user
 
-    # Lấy cấu hình từ database
-    db = get_raw(FILE_KEY)
-    config = db.get(str(guild.id))
+    # [TRÍ NHỚ ĐÃ BÓC TÁCH] 
+    # Cậu sẽ thay thế đoạn fetch config từ MongoDB tại đây thay cho cache_manager cũ.
+    # Logic xử lý config bên dưới vẫn được giữ nguyên 100%.
+    config = None 
 
     # [MỤC 1] Phản hồi khi chưa có cấu hình
     if not config:
