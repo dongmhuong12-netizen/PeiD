@@ -1,5 +1,7 @@
 import asyncio
 import copy
+# [CẤY MỚI] Kết nối với não bộ bot.db thông qua State
+from core.state import State
 
 # [TRÍ NHỚ ĐÃ BÓC TÁCH] Gỡ bỏ các import liên quan đến cache manager cục bộ
 # from core.cache_manager import get_raw, mark_dirty, update
@@ -16,7 +18,6 @@ _lock = asyncio.Lock()
 
 def _get_cache():
     """Truy xuất kho dữ liệu từ bộ nhớ RAM"""
-    # [TRÍ NHỚ ĐÃ BÓC TÁCH] Chuyển từ file cục bộ sang bộ đệm RAM
     return _internal_identity_cache
 
 def _gid(guild_id):
@@ -33,7 +34,7 @@ def _nid(name):
 
 async def save_identity(guild_id: int, name: str, display_name: str = None, avatar_url: str = None, target_id: str = None, ident_type: str = "manual"):
     """
-    Lưu trữ danh tính vào kho RAM. Hỗ trợ cả 3 loại vỏ:
+    Lưu trữ danh tính vào kho RAM + Đồng bộ Cloud Atlas. Hỗ trợ cả 3 loại vỏ:
     - ident_type="manual": Dùng cho cả Loại 1 (Tĩnh) và Loại 2 (Biến số).
     - ident_type="target": Dùng cho Loại 3 (Mượn xác qua ID).
     """
@@ -55,34 +56,59 @@ async def save_identity(guild_id: int, name: str, display_name: str = None, avat
 
         cache[gid][nid] = identity_data
         
-        # [TRÍ NHỚ ĐÃ BÓC TÁCH] Vô hiệu hóa ghi đĩa cục bộ
+        # [CẤY MỚI] Đồng bộ dữ liệu lên ngăn 'identities' của Cloud
+        if hasattr(State.bot, "db"):
+            await State.bot.db.identities.update_one(
+                {"guild_id": gid, "name": nid},
+                {"$set": {"data": identity_data}},
+                upsert=True
+            )
+            
         return True
 
 async def load_identity(guild_id: int, name: str):
-    """Tải dữ liệu danh tính dựa trên ID Server và tên gợi nhớ"""
+    """Tải dữ liệu danh tính từ RAM (Max Ping) hoặc Cloud Atlas (Self-healing)"""
     cache = _get_cache()
     gid = _gid(guild_id)
     nid = _nid(name)
 
-    # Hỗ trợ tìm kiếm linh hoạt (String/Int)
+    # 1. Ưu tiên tìm trong RAM
     guild_data = cache.get(gid) or cache.get(int(gid) if gid.isdigit() else None)
-    if not guild_data:
-        return None
+    if guild_data and nid in guild_data:
+        return copy.deepcopy(guild_data[nid])
 
-    data = guild_data.get(nid)
-    # Deepcopy để tránh việc sửa đổi dữ liệu gốc trong Cache khi đang xử lý
-    return copy.deepcopy(data) if data else None
+    # 2. [CẤY MỚI] Nếu RAM hụt (do Reboot), truy vấn Cloud Atlas
+    if hasattr(State.bot, "db"):
+        doc = await State.bot.db.identities.find_one({"guild_id": gid, "name": nid})
+        if doc:
+            if gid not in cache: cache[gid] = {}
+            cache[gid][nid] = doc["data"]
+            return copy.deepcopy(doc["data"])
+
+    return None
 
 async def load_identity_raw(guild_id: int, name: str):
-    """Phiên bản lấy dữ liệu thô (Internal use)"""
+    """Phiên bản lấy dữ liệu thô (Internal use) - Tích hợp Cloud khôi phục"""
     cache = _get_cache()
     gid = _gid(guild_id)
     nid = _nid(name)
+    
     guild_data = cache.get(gid) or cache.get(int(gid) if gid.isdigit() else None)
-    return guild_data.get(nid) if guild_data else None
+    if guild_data and nid in guild_data:
+        return guild_data.get(nid)
+
+    # [CẤY MỚI] Khôi phục dữ liệu thô từ Cloud
+    if hasattr(State.bot, "db"):
+        doc = await State.bot.db.identities.find_one({"guild_id": gid, "name": nid})
+        if doc:
+            if gid not in cache: cache[gid] = {}
+            cache[gid][nid] = doc["data"]
+            return doc["data"]
+
+    return None
 
 async def delete_identity(guild_id: int, name: str):
-    """Xóa một danh tính khỏi kho RAM"""
+    """Xóa một danh tính khỏi RAM & Cloud Atlas"""
     async with _lock:
         cache = _get_cache()
         gid = _gid(guild_id)
@@ -90,7 +116,11 @@ async def delete_identity(guild_id: int, name: str):
 
         if gid in cache and nid in cache[gid]:
             del cache[gid][nid]
-            # [TRÍ NHỚ ĐÃ BÓC TÁCH] Vô hiệu hóa ghi đĩa cục bộ
+            
+            # [CẤY MỚI] Xóa vĩnh viễn trên Cloud Atlas
+            if hasattr(State.bot, "db"):
+                await State.bot.db.identities.delete_one({"guild_id": gid, "name": nid})
+                
             return True
         return False
 
