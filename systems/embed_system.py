@@ -33,6 +33,7 @@ class EmbedSystem:
                 clean_name = name.strip().lower()
 
                 # 2. EXISTS CHECK (IT Pro: Chống ghi đè dữ liệu cũ)
+                # [KẾT NỐI MẠCH] Phải await vì load_embed giờ đã truy vấn Cloud Atlas
                 if await load_embed(guild_id, clean_name):
                     # TRẢ VỀ EMBED LỖI ĐỂ HIỂN THỊ TRỰC QUAN
                     embed_err = discord.Embed(
@@ -42,6 +43,7 @@ class EmbedSystem:
                     return False, embed_err
 
                 # 3. ENFORCE LIMIT (IT Pro: Kiểm soát quy mô database)
+                # [KẾT NỐI MẠCH] Phải await để đếm chính xác số lượng từ Cloud
                 all_embeds = await get_all_embeds(guild_id)
                 if len(all_embeds) >= EmbedSystem.LIMIT:
                     embed_limit = discord.Embed(
@@ -65,6 +67,7 @@ class EmbedSystem:
                 }
 
                 # 5. SAVE (Đồng bộ vào Storage Atomic)
+                # [KẾT NỐI MẠCH] Ghi trực tiếp vào MongoDB thông qua Storage đã nâng cấp
                 await save_embed(guild_id, clean_name, default_data)
                 
                 print(f"[system] created new embed '{clean_name}' for guild {guild_id}", flush=True)
