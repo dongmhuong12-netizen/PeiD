@@ -22,12 +22,14 @@ async def send_wellcome(guild: discord.Guild, member: discord.Member):
     xử lý gửi tin nhắn wellcome phụ.
     gộp text và embed vào 1 request duy nhất để bảo vệ api discord.
     """
-    config = get_section(guild.id, "wellcome")
+    # [SỬA LỖI] Thêm await cho thao tác lấy data từ MongoDB
+    config = await get_section(guild.id, "wellcome")
     if not config: return False
 
-    channel_id = config.get("channel")
+    # [GIA CỐ] Hỗ trợ đọc key mới và key cũ
+    channel_id = config.get("channel_id") or config.get("channel")
     message_text = config.get("message")
-    embed_name = config.get("embed")
+    embed_name = config.get("embed_name") or config.get("embed")
 
     if not channel_id: return False
 
@@ -74,10 +76,13 @@ class WellcomeGroup(app_commands.Group):
     @app_commands.command(name="channel", description="đặt kênh gửi tin nhắn wellcome")
     @app_commands.default_permissions(manage_guild=True)
     async def channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
+        # [GIA CỐ] Defer chống treo
+        await interaction.response.defer(ephemeral=False)
         gid = interaction.guild.id
         lock = _config_locks[gid]
         async with lock:
-            update_guild_config(gid, "wellcome", "channel", channel.id)
+            # [SỬA LỖI] Thêm await và chuẩn hóa key thành channel_id
+            await update_guild_config(gid, "wellcome", "channel_id", channel.id)
         if gid in _config_locks and not lock.locked(): _config_locks.pop(gid, None)
         
         # [FIX] Dùng .name để tránh lộ mã ID thô trong Title
@@ -86,15 +91,17 @@ class WellcomeGroup(app_commands.Group):
             title=f"{Emojis.MATTRANG} đặt kênh `wellcome` thành công: {channel.name}",
             color=0xf8bbd0
         )
-        await interaction.response.send_message(embed=embed, ephemeral=False)
+        await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="message", description="đặt nội dung tin nhắn wellcome")
     @app_commands.default_permissions(manage_guild=True)
     async def message(self, interaction: discord.Interaction, message: str):
+        await interaction.response.defer(ephemeral=False)
         gid = interaction.guild.id
         lock = _config_locks[gid]
         async with lock:
-            update_guild_config(gid, "wellcome", "message", message)
+            # [SỬA LỖI] Thêm await
+            await update_guild_config(gid, "wellcome", "message", message)
         if gid in _config_locks and not lock.locked(): _config_locks.pop(gid, None)
         
         # [FIX] Dịch biến ngay lập tức để hiện mention tag trong phản hồi
@@ -104,12 +111,13 @@ class WellcomeGroup(app_commands.Group):
             title=f"{Emojis.MATTRANG} cập nhật tin nhắn `wellcome` thành công: {parsed_msg}",
             color=0xf8bbd0
         )
-        await interaction.response.send_message(embed=embed, ephemeral=False)
+        await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="embed", description="gán embed cho hệ thống wellcome")
     @app_commands.default_permissions(manage_guild=True)
     async def embed(self, interaction: discord.Interaction, name: str):
-        # FIX: PHẢI AWAIT load_embed
+        # FIX: PHẢI AWAIT load_embed VÀ DEFER
+        await interaction.response.defer(ephemeral=False)
         if not await load_embed(interaction.guild.id, name):
             # Văn phong mới: Title & Description
             embed_err = discord.Embed(
@@ -117,12 +125,13 @@ class WellcomeGroup(app_commands.Group):
                 description=f"hãy thử lại lần nữa nhé. **yiyi** không tìm thấy embed có tên `{name}`. xin hãy kiểm tra embed cậu muốn dùng cho wellcome bằng `/p embed edit`",
                 color=0xf8bbd0
             )
-            return await interaction.response.send_message(embed=embed_err, ephemeral=False)
+            return await interaction.followup.send(embed=embed_err)
         
         gid = interaction.guild.id
         lock = _config_locks[gid]
         async with lock:
-            update_guild_config(gid, "wellcome", "embed", name)
+            # [SỬA LỖI] Thêm await và chuẩn hóa key thành embed_name
+            await update_guild_config(gid, "wellcome", "embed_name", name)
         if gid in _config_locks and not lock.locked(): _config_locks.pop(gid, None)
         
         # Văn phong mới: Chuyển sang Title
@@ -130,7 +139,7 @@ class WellcomeGroup(app_commands.Group):
             title=f"{Emojis.MATTRANG} cập nhật embed `{name}` cho hệ thống `wellcome` thành công",
             color=0xf8bbd0
         )
-        await interaction.response.send_message(embed=embed_success, ephemeral=False)
+        await interaction.followup.send(embed=embed_success)
 
     @app_commands.command(name="test", description="gửi thử tin nhắn wellcome")
     async def test(self, interaction: discord.Interaction):
@@ -151,7 +160,7 @@ class WellcomeGroup(app_commands.Group):
                 description="hãy kiểm tra lại khi đã đầy đủ `channel` `embed` `message` trước khi test nhé",
                 color=0xf8bbd0
             )
-        await interaction.followup.send(embed=embed, ephemeral=False)
+        await interaction.followup.send(embed=embed)
 
 # ======================
 # LISTENER & INJECTION
@@ -183,4 +192,4 @@ async def setup(bot: commands.Bot):
             p_cmd.add_command(WellcomeGroup())
     
     await bot.add_cog(WellcomeListener(bot))
-    print("[load] success: core.wellcome (logic fixed & persona applied)", flush=True)
+    print("[load] success: core.wellcome (Industrial Sync Applied)", flush=True)
