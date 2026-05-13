@@ -3,7 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 import re
 
-# Nhập các lõi lưu trữ và engine biến số
+# Nhập các lõi lưu trữ và engine biến số đã được nâng cấp Async
 from core.identity_storage import save_identity, delete_identity, get_all_identity_names, load_identity
 from core.variable_engine import apply_variables
 from utils.emojis import Emojis
@@ -13,13 +13,21 @@ from utils.emojis import Emojis
 # =============================
 
 async def identity_autocomplete(interaction: discord.Interaction, current: str):
-    """Gợi ý tên vỏ để xóa hoặc quản lý"""
+    """
+    [VÁ LỖI CHÍ MẠNG] Gợi ý tên vỏ thần tốc từ Cloud Atlas.
+    Đảm bảo danh sách luôn hiện ra đầy đủ khi sếp gõ lệnh xóa/list.
+    """
     guild = interaction.guild
     if not guild: return []
     try:
+        # [KẾT NỐI MẠCH] Phải await để nạp danh sách từ MongoDB/RAM
         names = await get_all_identity_names(guild.id)
-        return [app_commands.Choice(name=n, value=n) for n in names if current.lower() in n.lower()][:25]
-    except: return []
+        return [
+            app_commands.Choice(name=n, value=n) 
+            for n in names if current.lower() in n.lower()
+        ][:25]
+    except: 
+        return []
 
 # =============================
 # IDENTITY COMMAND GROUP
@@ -45,6 +53,7 @@ class IdentityGroup(app_commands.Group):
         avatar_url: str = None, 
         target_id: str = None
     ):
+        # QUY TẮC 3S: Defer ngay lập tức để giữ mạch kết nối với Discord (Industrial Standard)
         await interaction.response.defer(ephemeral=True)
         
         guild = interaction.guild
@@ -57,7 +66,7 @@ class IdentityGroup(app_commands.Group):
                 return await interaction.followup.send(f"{Emojis.HOICHAM} ID không hợp lệ, hãy nhập số hoặc mention người dùng.")
             
             try:
-                # Fetch trực tiếp để lấy dữ liệu "sạch" từ Discord
+                # Fetch trực tiếp từ API Discord để lấy dữ liệu "sạch"
                 target_user = await interaction.client.fetch_user(int(clean_id))
                 display_name = target_user.display_name
                 avatar_url = target_user.display_avatar.url
@@ -76,7 +85,8 @@ class IdentityGroup(app_commands.Group):
             
             ident_type = "manual"
 
-        # 3. LƯU VÀO KHO
+        # 3. [KẾT NỐI MẠCH] LƯU VÀO KHO (MONGODB SYNC)
+        # Phải await để dữ liệu được khắc vào Cloud Atlas trước khi báo thành công
         success = await save_identity(
             guild_id=guild.id,
             name=id_name,
@@ -88,13 +98,11 @@ class IdentityGroup(app_commands.Group):
 
         if success:
             # --- LOGIC QUAN TRỌNG: DỊCH BIẾN SỐ ĐỂ PREVIEW ---
-            # Dịch thử tên hiển thị để Boss thấy kết quả thực tế (dạng chữ/mention)
             preview_name = apply_variables(display_name, guild, member)
             
             if ident_type == "target":
                 info_detail = f"Mượn xác: **{display_name}**"
             else:
-                # Nếu có dùng biến số, hiện cả mã và bản dịch thử
                 if "{" in display_name:
                     info_detail = f"Mã lưu: `{display_name}`\n> 👁️ Xem trước: **{preview_name}**"
                 else:
@@ -110,8 +118,12 @@ class IdentityGroup(app_commands.Group):
     @app_commands.command(name="delete", description="xóa một 'vỏ' khỏi kho lưu trữ")
     @app_commands.autocomplete(name=identity_autocomplete)
     async def delete_id(self, interaction: discord.Interaction, name: str):
+        # Industrial Defer
         await interaction.response.defer(ephemeral=True)
+        
+        # [KẾT NỐI MẠCH] Await xóa sạch cả RAM lẫn Cloud Atlas
         success = await delete_identity(interaction.guild.id, name)
+        
         if success:
             await interaction.followup.send(f"{Emojis.MATTRANG} Đã xóa sạch dấu vết của vỏ `{name}`!")
         else:
@@ -121,7 +133,10 @@ class IdentityGroup(app_commands.Group):
     @app_commands.command(name="list", description="xem danh sách các 'vỏ' đang có ở server này")
     async def list_identities(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
+        
+        # [KẾT NỐI MẠCH] Truy vấn toàn bộ danh sách từ Cloud/RAM
         names = await get_all_identity_names(interaction.guild.id)
+        
         if not names:
             return await interaction.followup.send(f"{Emojis.HOICHAM} Server mình chưa có cái 'vỏ' nào cả.")
 
@@ -132,9 +147,11 @@ class IdentityGroup(app_commands.Group):
         )
 
         for n in names:
+            # [KẾT NỐI MẠCH] Await nạp dữ liệu chi tiết từng vỏ
             data = await load_identity(interaction.guild.id, n)
+            if not data: continue
+            
             raw_dn = data.get("display_name", "Unknown")
-            # Hiển thị tên đã được dịch thử để Admin dễ hình dung
             preview_dn = apply_variables(raw_dn, interaction.guild, interaction.user)
             
             v_type = "🎯 Mượn xác" if data.get("type") == "target" else "🎭 Tùy chỉnh"
