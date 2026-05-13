@@ -137,7 +137,7 @@ class YiyiGroup(app_commands.Group):
 
         # 2. Xây dựng nội dung hiển thị
         embed = discord.Embed(
-            title=f"{Emojis.MATTRANG} Chi tiết các cài đặt của {guild.name}",
+            title=f"{Emojis.MATTRANG} chi tiết các cài đặt của {guild.name}",
             color=0xf8bbd0
         )
 
