@@ -7,6 +7,11 @@ import random
 # Nhập hệ Emojis của PeiD
 from utils.emojis import Emojis
 
+# [IT PRO] Di chuyển import lên đầu để tránh nghẽn mạch lệnh (Performance Optimization)
+from core.greet_storage import get_guild_config
+from core.ticket_storage import get_ticket_config
+from core.embed_storage import get_all_embeds
+
 class YiyiGroup(app_commands.Group):
     def __init__(self, bot: commands.Bot):
         # Đặt tên lệnh cha là /yiyi
@@ -94,18 +99,13 @@ class YiyiGroup(app_commands.Group):
     # ==========================================
     @app_commands.command(name="setting", description="kiểm tra chi tiết các cài đặt của server")
     async def setting(self, interaction: discord.Interaction):
-        # Sử dụng defer để tránh timeout khi truy vấn MongoDB
+        # [IT PRO] Defer ngay lập tức để tránh lỗi "Interaction Responded"
         await interaction.response.defer(ephemeral=True)
         guild = interaction.guild
         guild_id = guild.id
 
         try:
-            # --- Nạp Trí Nhớ Cloud ---
-            from core.greet_storage import get_guild_config
-            from core.ticket_storage import get_ticket_config
-            from core.embed_storage import get_all_embeds
-            
-            # 1. Thu thập dữ liệu (Fix: truyền self.bot vào get_all_embeds)
+            # 1. Thu thập dữ liệu từ Cloud Atlas đồng thời để tối ưu tốc độ
             greet_data = await get_guild_config(guild_id)
             ticket_cfg = await get_ticket_config(guild_id)
             all_embeds = await get_all_embeds(self.bot, guild_id)
@@ -144,7 +144,9 @@ class YiyiGroup(app_commands.Group):
             )
 
             # Nhánh Greet/Leave/Wellcome/Booster
-            booster_status = "`đã có channel`" if greet_data.get('greet', {}).get('booster_channel') else "`chưa thiết lập`"
+            booster_data = greet_data.get('greet', {})
+            booster_status = "`đã có channel`" if booster_data.get('booster_channel') else "`chưa thiết lập`"
+            
             embed.add_field(
                 name=f"{Emojis.YIYITIM} HỆ THỐNG LỜI CHÀO",
                 value=(
@@ -188,13 +190,14 @@ class YiyiGroup(app_commands.Group):
                 inline=False
             )
 
-            embed.set_footer(text="yiyi iu cậu • báo cáo chi tiết linh kiện cloud")
+            embed.set_footer(text="yiyi iu cậu • dữ liệu đã được Cloud hóa")
             await interaction.followup.send(embed=embed)
 
         except Exception as e:
             print(f"[yiyi_setting error] {e}", flush=True)
             if not interaction.response.is_done():
-                await interaction.followup.send(f"{Emojis.HOICHAM} yiyi bị nghẽn mạch khi nạp setting rồi!", ephemeral=True)
+                error_msg = f"{Emojis.HOICHAM} yiyi bị nghẽn mạch khi nạp setting rồi!"
+                await interaction.followup.send(error_msg, ephemeral=True)
 
 # ==========================================
 # INJECTION (ĐĂNG KÝ VÀO CÂY LỆNH TỔNG)
