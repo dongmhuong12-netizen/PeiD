@@ -6,16 +6,15 @@ from discord.ext import commands, tasks
 
 # Import các công cụ quản lý bộ nhớ
 from core.state import State
-from core.cache_manager import get_raw, mark_dirty, save
+# [TRÍ NHỚ ĐÃ BÓC TÁCH] Gỡ bỏ các import liên quan đến cache manager cục bộ
+# from core.cache_manager import get_raw, mark_dirty, save
 from core.embed_storage import load_embed
 from core.greet_leave import send_config_message
 from core.booster_engine import assign_correct_level, sync_all_boosters
 from core.booster_storage import get_guild_config, save_guild_config
-from core.variable_engine import apply_variables # FIX: Nạp engine để xử lý toàn bộ biến mention
+from core.variable_engine import apply_variables 
 # IMPORT EMOJI HỆ THỐNG
 from utils.emojis import Emojis
-
-FILE_KEY = "booster_levels"
 
 # ======================
 # BOOST GROUP (CHỈ GIỮ BOOSTER THƯỜNG)
@@ -30,11 +29,12 @@ class BoostGroup(app_commands.Group):
     async def role(self, interaction: discord.Interaction, role: discord.Role):
         """(1) cập nhật role và kích hoạt truy quét chủ động"""
         print(f"[BOOST] Đang setup role {role.name} cho server {interaction.guild.id}", flush=True)
+        
+        # [GIA CỐ] Giữ nguyên DAL (Data Access Layer) để cậu cấy MongoDB vào booster_storage
         config = await get_guild_config(interaction.guild.id)
         config["booster_role"] = role.id
         await save_guild_config(interaction.guild.id, config)
         
-        # [FIX] Dùng .name trong Title để không bị lộ mã ID thô
         embed = discord.Embed(
             title=f"{Emojis.MATTRANG} cập nhật role `booster` thành công: {role.name}",
             color=0xf8bbd0
@@ -51,10 +51,8 @@ class BoostGroup(app_commands.Group):
         print(f"[BOOST] Đang setup channel {channel.name} cho server {interaction.guild.id}", flush=True)
         config = await get_guild_config(interaction.guild.id)
         config["channel"] = channel.id
-        # [FIX CHÍ MẠNG]: Phải lưu config (dict), không được lưu channel (object) gây crash db
         await save_guild_config(interaction.guild.id, config)
         
-        # [FIX] Title Embed dùng .name
         embed = discord.Embed(
             title=f"{Emojis.MATTRANG} cập nhật kênh `boost` thành công: {channel.name}",
             color=0xf8bbd0
@@ -69,7 +67,6 @@ class BoostGroup(app_commands.Group):
         config["message"] = text
         await save_guild_config(interaction.guild.id, config)
         
-        # FIX: Sử dụng apply_variables để hiển thị đầy đủ các biến mention thay vì chỉ mỗi {user}
         display_text = apply_variables(text, interaction.guild, interaction.user)
         embed = discord.Embed(
             title=f"{Emojis.MATTRANG} cập nhật tin nhắn `boost` thành công: {display_text}",
@@ -108,29 +105,22 @@ class BoostGroup(app_commands.Group):
         
         config = await get_guild_config(interaction.guild.id)
         role_id = config.get("booster_role")
-        # [AN TOÀN]: Ép int() để đảm bảo get_role chạy đúng nếu dữ liệu json là string
         role_obj = interaction.guild.get_role(int(role_id)) if role_id else None
-        # [FIX] Đảm bảo rolesetup hiện mention chuẩn trong description
         rolesetup = role_obj.mention if role_obj else "`none`"
 
         # [KIM BÀI MIỄN TỬ] Kích hoạt bảo vệ 5 phút trong State
         bypass_key = f"boost_test_{interaction.guild.id}_{interaction.user.id}"
         await State.set_ui(bypass_key, {"expiry": time.time() + 300})
         
-        # Gán role ngay lập tức cho người test
         if role_obj:
             try:
                 await interaction.user.add_roles(role_obj, reason="Virtual Boost Test (5m Bypass)")
-                print(f"[DEBUG] Đã gán role test thành công", flush=True)
-            except Exception as e:
-                print(f"[DEBUG] Lỗi gán role: {e}", flush=True)
+            except:
                 pass
         
-        # Gửi thử tin nhắn chúc mừng
         success = await send_config_message(interaction.guild, interaction.user, "booster")
         
         if success:
-            # [RESTORE]: Trả lại chính xác văn phong Nguyệt yêu cầu
             embed = discord.Embed(
                 title=f"{Emojis.MATTRANG} test hệ thống `boost` thành công",
                 description=f"yiyi sẽ cho phép cậu giữ role {rolesetup} trong 5 phút tới để kiểm tra cấu hình. sau 5 phút, yiyi sẽ gỡ role nếu cậu không có boost nhé",
@@ -152,7 +142,6 @@ class BoosterListener(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self._tasks = set()
-        # [QUY CHUẨN IT] Khởi động vòng lặp đồng bộ định kỳ 5 phút
         self.reconciliation_loop.start()
 
     def cog_unload(self):
@@ -165,7 +154,6 @@ class BoosterListener(commands.Cog):
     async def reconciliation_loop(self):
         """Vòng lặp đồng bộ: gán cho boost, gỡ cho không boost (Bypass 5p)"""
         for guild in self.bot.guilds:
-            # IT Pro: Chạy cuốn chiếu từng server để tránh Rate Limit API
             await sync_all_boosters(guild)
             await asyncio.sleep(0.5) 
 
@@ -180,12 +168,10 @@ class BoosterListener(commands.Cog):
         
         boost_changed = before.premium_since != after.premium_since
         if boost_changed:
-            # Gán hoặc gỡ role dựa trên trạng thái boost thực tế
             task = asyncio.create_task(assign_correct_level(after))
             self._tasks.add(task)
             task.add_done_callback(self._tasks.discard)
 
-            # Gửi tin nhắn chào mừng nếu là boost mới
             if before.premium_since is None and after.premium_since is not None:
                 task_welcome = asyncio.create_task(send_config_message(after.guild, after, "booster"))
                 self._tasks.add(task_welcome)
