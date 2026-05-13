@@ -1,5 +1,7 @@
 import copy
 import asyncio
+# [CẤY MỚI] Nạp State để truy cập vào cỗ máy bot.db
+from core.state import State
 
 # [TRÍ NHỚ ĐÃ BÓC TÁCH] Gỡ bỏ các import liên quan đến cache manager cục bộ
 # from core.cache_manager import get_raw, mark_dirty, update
@@ -19,10 +21,7 @@ def _get_cache():
     lấy reference gốc từ bộ nhớ RAM. 
     sử dụng cơ chế tự phục hồi nếu dữ liệu bị lỗi format (tiêu chuẩn 100k+).
     """
-    # [TRÍ NHỚ ĐÃ BÓC TÁCH] Sử dụng biến RAM thay vì cache_manager
-    cache = _internal_embed_cache
-
-    return cache
+    return _internal_embed_cache
 
 # =========================
 # HELPERS (INTERNAL)
@@ -44,11 +43,10 @@ def _nid(name):
 # =========================
 
 async def save_embed(guild_id, name, data):
-    """lưu embed vào ram"""
+    """lưu embed vào ram + đồng bộ Cloud Atlas"""
     if not name or data is None:
         return False
 
-    # [VÁ LỖI] Khóa bộ nhớ tạm để thao tác khởi tạo key không bị đè nhau
     async with _lock:
         cache = _get_cache()
         gid = _gid(guild_id)
@@ -59,7 +57,15 @@ async def save_embed(guild_id, name, data):
 
         cache[gid][name] = copy.deepcopy(data)
 
-    print(f"[storage] đã lưu embed '{name}' cho server {gid} vào bộ nhớ tạm.", flush=True)
+        # [CẤY MỚI] Đồng bộ dữ liệu lên ngăn 'embeds' của Cloud
+        if hasattr(State.bot, "db"):
+            await State.bot.db.embeds.update_one(
+                {"guild_id": gid, "name": name},
+                {"$set": {"data": data}},
+                upsert=True
+            )
+
+    print(f"[storage] đã lưu embed '{name}' cho server {gid} vào bộ nhớ tạm & Cloud.", flush=True)
     return True
 
 # =========================
@@ -67,7 +73,7 @@ async def save_embed(guild_id, name, data):
 # =========================
 
 async def load_embed(guild_id, name):
-    """tải embed từ ram với tốc độ cao"""
+    """tải embed từ ram (Max Ping) hoặc khôi phục từ Cloud nếu RAM trống"""
     if name is None:
         return None
 
@@ -75,33 +81,38 @@ async def load_embed(guild_id, name):
     gid = _gid(guild_id)
     name = _nid(name)
 
-    # IT Pro: Tìm kiếm thông minh ở cả String ID và Int ID (Tương thích ngược dữ liệu cũ)
+    # 1. Ưu tiên RAM: Tìm kiếm ở cả String ID và Int ID
     guild_data = cache.get(gid) or cache.get(int(gid) if gid.isdigit() else None)
     
-    if not isinstance(guild_data, dict):
-        return None
+    if isinstance(guild_data, dict) and name in guild_data:
+        return copy.deepcopy(guild_data[name])
 
-    data = guild_data.get(name)
+    # 2. [CẤY MỚI] Nếu RAM hụt (do Reboot trên Render), truy vấn Cloud Atlas
+    if hasattr(State.bot, "db"):
+        doc = await State.bot.db.embeds.find_one({"guild_id": gid, "name": name})
+        if doc:
+            # Khôi phục lại RAM để các lần gọi sau đạt tốc độ Max Ping
+            if gid not in cache: cache[gid] = {}
+            cache[gid][name] = doc["data"]
+            return copy.deepcopy(doc["data"])
     
-    return copy.deepcopy(data) if data is not None else None
+    return None
 
 # =========================
 # DELETE EMBED (PUBLIC API)
 # =========================
 
 async def delete_embed(guild_id, name):
-    """xóa embed vĩnh viễn khỏi ram"""
+    """xóa embed vĩnh viễn khỏi ram & Cloud Atlas"""
     if name is None:
         return False
 
-    # [VÁ LỖI] Khóa bộ nhớ khi thao tác xóa nhánh
     async with _lock:
         cache = _get_cache()
         gid = _gid(guild_id)
         name = _nid(name)
 
         if gid not in cache:
-            # Thử tìm hòm theo Int ID
             gid_int = int(gid) if gid.isdigit() else None
             if gid_int not in cache: return False
             gid = gid_int
@@ -112,10 +123,14 @@ async def delete_embed(guild_id, name):
 
         del guild_data[name]
 
+        # [CẤY MỚI] Xóa vĩnh viễn trên Cloud Atlas
+        if hasattr(State.bot, "db"):
+            await State.bot.db.embeds.delete_one({"guild_id": str(gid), "name": name})
+
         if not guild_data:
             cache.pop(gid, None)
         
-    print(f"[storage] đã xóa embed '{name}' khỏi server {gid}.", flush=True)
+    print(f"[storage] đã xóa embed '{name}' khỏi server {gid} (RAM & Cloud).", flush=True)
     return True
 
 # =========================
@@ -141,7 +156,6 @@ async def get_all_embed_names(guild_id):
     cache = _get_cache()
     gid = _gid(guild_id)
 
-    # IT Pro: Check cả dạng String và Int để đảm bảo danh sách ko bao giờ trắng xóa
     guild_data = cache.get(gid) or cache.get(int(gid) if gid.isdigit() else None)
     
     if not isinstance(guild_data, dict):
@@ -156,7 +170,7 @@ async def get_all_embed_names(guild_id):
 async def atomic_update_button(guild_id, name, button_data: dict = None, action: str = "add", index: int = -1, custom_id: str = None):
     """
     [MULTI-IT] Thao tác an toàn tuyệt đối với mảng nút bấm.
-    Ngăn chặn Race Condition (xóa đè dữ liệu) khi nhiều thao tác diễn ra cùng 1 miligiây.
+    Gia cố: Đồng bộ mọi thay đổi nút bấm lên Cloud ngay lập tức.
     """
     if not name:
         return False
@@ -166,7 +180,6 @@ async def atomic_update_button(guild_id, name, button_data: dict = None, action:
         gid = _gid(guild_id)
         name = _nid(name)
 
-        # Kiểm tra tính toàn vẹn của nhánh dữ liệu (Support cả 2 loại ID)
         if gid not in cache or name not in cache[gid]:
             gid_int = int(gid) if gid.isdigit() else None
             if gid_int not in cache or name not in cache[gid_int]:
@@ -175,66 +188,61 @@ async def atomic_update_button(guild_id, name, button_data: dict = None, action:
 
         data = cache[gid][name]
         
-        # Vá cấu trúc an toàn (Phòng khi file hệ thống chưa update kịp)
         if "buttons" not in data or not isinstance(data["buttons"], list):
             data["buttons"] = []
 
         # --- XỬ LÝ CÁC HÀNH ĐỘNG (ATOMIC ACTIONS) ---
+        changed = False
 
         if action == "add" and button_data:
-            # Multi-IT: Bảo vệ giới hạn 25 linh kiện của Discord API tại tầng Storage
-            if len(data["buttons"]) >= 25:
-                return False
-            
-            # [GIA CỐ THẨM MỸ] Tự động thêm khoảng trắng nếu có Emoji để tránh dính chữ
+            if len(data["buttons"]) >= 25: return False
             btn = copy.deepcopy(button_data)
             if btn.get("emoji") and "label" in btn:
                 lbl = str(btn["label"])
-                if lbl and not lbl.startswith(" "):
-                    btn["label"] = f" {lbl}"
-            
+                if lbl and not lbl.startswith(" "): btn["label"] = f" {lbl}"
             data["buttons"].append(btn)
+            changed = True
             
         elif action == "remove":
-            # Multi-IT: Xóa an toàn không văng lỗi IndexError
             if 0 <= index < len(data["buttons"]):
                 data["buttons"].pop(index)
-            else:
-                return False
+                changed = True
+            else: return False
 
         elif action == "edit" and button_data:
-            # IT Pro: Sửa trực tiếp nút tại index mà không thay đổi thứ tự
             if 0 <= index < len(data["buttons"]):
-                # [GIA CỐ THẨM MỸ] Chuẩn hóa thẩm mỹ trước khi sửa
                 btn = copy.deepcopy(button_data)
                 if btn.get("emoji") and "label" in btn:
                     lbl = str(btn["label"])
-                    if lbl and not lbl.startswith(" "):
-                        btn["label"] = f" {lbl}"
+                    if lbl and not lbl.startswith(" "): btn["label"] = f" {lbl}"
                 data["buttons"][index] = btn
-            else:
-                return False
+                changed = True
+            else: return False
 
         elif action == "update_by_id" and custom_id and button_data:
-            # [GIA CỐ THẨM MỸ] Chuẩn hóa thẩm mỹ cho hệ thống Update ID
             btn_fixed = copy.deepcopy(button_data)
             if btn_fixed.get("emoji") and "label" in btn_fixed:
                 lbl = str(btn_fixed["label"])
-                if lbl and not lbl.startswith(" "):
-                    btn_fixed["label"] = f" {lbl}"
-
+                if lbl and not lbl.startswith(" "): btn_fixed["label"] = f" {lbl}"
             found = False
             for i, btn in enumerate(data["buttons"]):
                 if btn.get("custom_id") == custom_id:
                     data["buttons"][i] = btn_fixed
                     found = True
+                    changed = True
                     break
             if not found: return False
                 
         elif action == "clear":
             data["buttons"] = []
+            changed = True
 
-        else:
-            return False
+        # [CẤY MỚI] Nếu có thay đổi, đồng bộ ngay toàn bộ Embed Data lên Cloud
+        if changed and hasattr(State.bot, "db"):
+            await State.bot.db.embeds.update_one(
+                {"guild_id": str(gid), "name": name},
+                {"$set": {"data": data}},
+                upsert=True
+            )
         
     return True
