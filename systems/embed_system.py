@@ -3,8 +3,6 @@ import discord
 import asyncio
 from collections import defaultdict
 from core.embed_storage import save_embed, load_embed, get_all_embeds
-# [VÁ LỖI] Import mạch ghi đĩa vĩnh viễn để bot không bao giờ quên
-from core.cache_manager import save as force_save
 # IMPORT EMOJI HỆ THỐNG
 from utils.emojis import Emojis
 
@@ -69,15 +67,10 @@ class EmbedSystem:
                 # 5. SAVE (Đồng bộ vào Storage Atomic)
                 await save_embed(guild_id, clean_name, default_data)
                 
-                # [CỰC QUAN TRỌNG] Chốt hạ ghi đĩa ngay lập tức để bot không bao giờ quên
-                await force_save("embeds")
-                
-                print(f"[system] created new embed '{clean_name}' for guild {guild_id} and forced cache sync", flush=True)
+                print(f"[system] created new embed '{clean_name}' for guild {guild_id}", flush=True)
 
                 return True, None
             finally:
                 # [VÁ LỖI] Dọn dẹp RAM: Xóa Lock khỏi bộ nhớ sau khi xử lý xong để tránh Memory Leak
                 if guild_id in _guild_locks and not lock.locked():
                     _guild_locks.pop(guild_id, None)
-
-
