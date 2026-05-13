@@ -3,9 +3,9 @@ from discord.ext import commands
 import asyncio
 from collections import defaultdict
 
-# [TRÍ NHỚ ĐÃ BÓC TÁCH] Gỡ bỏ các import liên quan đến bộ nhớ cục bộ cũ
-# from core.cache_manager import get_raw, load
-# from core.state import State
+# Nạp công cụ Storage mới để truy xuất cấu hình từ MongoDB
+from core.reaction_storage import get_reaction_config # [CẤY MỚI]
+from utils.emojis import Emojis
 
 # Lock theo User để tránh Race Condition khi nhấn liên tục (Tiêu chuẩn 100k+)
 _user_locks = defaultdict(asyncio.Lock)
@@ -22,19 +22,25 @@ def _normalize_emoji(e) -> str:
 class ReactionRole(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        # emoji_map sẽ được dùng làm Local Cache để truy xuất thần tốc (O(1))
         self.emoji_map = {} 
-        # Không dùng cache message vĩnh viễn để bảo vệ RAM
 
-    async def _refresh_cache(self):
-        """[VÁ LỖI] Cấu trúc đồng bộ dữ liệu - Chờ cấy logic MongoDB"""
-        async with _refresh_lock:
-            # Logic xử lý dữ liệu từ 'emoji_map' sẽ được kế thừa 
-            # nhưng phần lấy dữ liệu từ file cục bộ (get_raw) đã bị loại bỏ.
-            pass
+    async def _get_msg_config(self, guild_id: int, message_id: str):
+        """
+        [GIA CỐ] Mạch nạp trí nhớ linh hoạt.
+        Nếu RAM chưa có, Bot sẽ tự động 'tỉnh thức' bằng cách nạp từ MongoDB.
+        """
+        if message_id not in self.emoji_map:
+            async with _refresh_lock:
+                # Kiểm tra lại lần nữa sau khi có Lock để tránh Double-Fetching
+                if message_id not in self.emoji_map:
+                    config = await get_reaction_config(guild_id, message_id)
+                    if config:
+                        self.emoji_map[message_id] = config
+        return self.emoji_map.get(message_id)
 
     @commands.Cog.listener()
     async def on_ready(self):
-        # [TRÍ NHỚ ĐÃ BÓC TÁCH] Không tự động nạp cache từ file cục bộ khi khởi động
         print(f"🚀 [SYSTEM] ReactionRole: Hệ thống đã sẵn sàng kết nối trí nhớ mới.", flush=True)
 
     @commands.Cog.listener()
@@ -44,14 +50,12 @@ class ReactionRole(commands.Cog):
         msg_id = str(payload.message_id)
         emoji = _normalize_emoji(payload.emoji)
         
-        # [TRÍ NHỚ ĐÃ BÓC TÁCH] Gỡ bỏ cơ chế 'Tự động tỉnh thức' dựa trên State cũ
-        if msg_id not in self.emoji_map:
-            return
-            
-        if emoji not in self.emoji_map[msg_id]:
+        # [KẾT NỐI MẠCH] Tự động lấy cấu hình từ Cloud nếu chưa có trong RAM
+        msg_config = await self._get_msg_config(payload.guild_id, msg_id)
+        if not msg_config or emoji not in msg_config:
             return
 
-        # 2. Xử lý tuần tự cho từng User
+        # 2. Xử lý tuần tự cho từng User (Atomic Operations)
         lock = _user_locks[payload.user_id]
         async with lock:
             try:
@@ -61,7 +65,7 @@ class ReactionRole(commands.Cog):
                 member = payload.member or guild.get_member(payload.user_id)
                 if not member or member.bot: return
 
-                config = self.emoji_map[msg_id][emoji]
+                config = msg_config[emoji]
                 target_role = guild.get_role(int(config["target_role"]))
                 if not target_role: return
 
@@ -73,8 +77,8 @@ class ReactionRole(commands.Cog):
                         print(f"[ERROR] Thiếu quyền gán role tại Guild {guild.id}", flush=True)
                     except Exception: pass
 
-                # Xử lý Single Mode (Chỉ được chọn 1)
-                if config["mode"] == "single":
+                # Xử lý Single Mode (Chỉ được chọn 1 trong nhóm)
+                if config.get("mode") == "single":
                     asyncio.create_task(self._handle_single_mode(payload, config, member, target_role.id))
             finally:
                 # [VÁ LỖI] Dọn dẹp RAM: Xóa Lock khỏi bộ nhớ nếu không còn tác vụ nào chờ
@@ -86,8 +90,9 @@ class ReactionRole(commands.Cog):
         guild = member.guild
         
         # Gỡ các role khác trong cùng Group
+        group_roles = config.get("group_roles", [])
         roles_to_remove = [
-            guild.get_role(int(rid)) for rid in config["group_roles"] 
+            guild.get_role(int(rid)) for rid in group_roles 
             if int(rid) != current_role_id
         ]
         roles_to_remove = [r for r in roles_to_remove if r and r in member.roles]
@@ -96,17 +101,19 @@ class ReactionRole(commands.Cog):
             try: await member.remove_roles(*roles_to_remove)
             except: pass
 
-        # Gỡ Reaction cũ trên UI Discord
+        # Gỡ Reaction cũ trên UI Discord để đồng bộ trạng thái
         try:
             channel = self.bot.get_channel(payload.channel_id)
+            if not channel: channel = await self.bot.fetch_channel(payload.channel_id)
             message = await channel.fetch_message(payload.message_id)
             
+            group_emojis = config.get("group_emojis", [])
             for r in message.reactions:
                 e_str = _normalize_emoji(r.emoji)
-                if e_str in config["group_emojis"] and e_str != _normalize_emoji(payload.emoji):
+                if e_str in group_emojis and e_str != _normalize_emoji(payload.emoji):
                     try:
                         await r.remove(member)
-                        await asyncio.sleep(0.2) # Chống Rate Limit
+                        await asyncio.sleep(0.2) # Chống Rate Limit (Industrial Standard)
                     except: pass
         except: pass
 
@@ -115,7 +122,9 @@ class ReactionRole(commands.Cog):
         msg_id = str(payload.message_id)
         emoji = _normalize_emoji(payload.emoji)
         
-        if msg_id not in self.emoji_map or emoji not in self.emoji_map[msg_id]:
+        # [KẾT NỐI MẠCH] Nạp cấu hình từ Cloud nếu RAM bị trống sau khi Reboot
+        msg_config = await self._get_msg_config(payload.guild_id, msg_id)
+        if not msg_config or emoji not in msg_config:
             return
 
         guild = self.bot.get_guild(payload.guild_id)
@@ -123,15 +132,13 @@ class ReactionRole(commands.Cog):
         member = guild.get_member(payload.user_id)
         if not member or member.bot: return
 
-        config = self.emoji_map[msg_id][emoji]
-        # Chỉ gỡ role nếu ở chế độ Multi (Single mode thường gỡ bằng tay hoặc giữ nguyên)
+        config = msg_config[emoji]
+        # Chỉ gỡ role nếu ở chế độ Multi hoặc logic yêu cầu gỡ khi bỏ reaction
         role = guild.get_role(int(config["target_role"]))
         
         if role and role in member.roles:
             try:
-                role_obj = guild.get_role(role.id)
-                if role_obj:
-                    await member.remove_roles(role_obj, reason="PeiD Reaction Role: Removed")
+                await member.remove_roles(role, reason="PeiD Reaction Role: Removed")
             except: pass
 
 async def setup(bot: commands.Bot):
