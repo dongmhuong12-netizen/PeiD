@@ -9,7 +9,7 @@ import traceback
 # Nhập hệ Emojis của PeiD
 from utils.emojis import Emojis
 
-# Nạp Storage thực tế
+# Nạp Storage thực tế - Tuyệt đối giữ nguyên logic gốc của Nguyệt
 from core.greet_storage import get_guild_config as get_greet_cfg
 from core.booster_storage import get_guild_config as get_booster_cfg
 from core.ticket_storage import get_ticket_config
@@ -50,8 +50,7 @@ class YiyiGroup(app_commands.Group):
             )
             embed.set_footer(text=f"hệ thống ổn định • shard: 0")
             await interaction.followup.send(embed=embed)
-        except Exception as e:
-            print(f"[yiyi_oi error] {e}", flush=True)
+        except Exception: pass
 
     # ==========================================
     # LỆNH 2: LOVE (/yiyi iu) - GIỮ 100% GỐC
@@ -60,37 +59,35 @@ class YiyiGroup(app_commands.Group):
     async def iu(self, interaction: discord.Interaction):
         try:
             is_boss = interaction.user.id == 1055476307372294155
-            if is_boss:
-                responses = [
-                    f"**yiyi** yêu người nhấttt {Emojis.YIYITIM}", 
-                    f"**yiyi** cũng iu cậu nhất {Emojis.YIYITIM}", 
-                    f"iu **Vương Dỹ Nguyệt** nhất luôn {Emojis.YIYITIM}"
-                ]
-            else:
-                responses = [
-                    f"**yiyi** cũng iu **yiyi** lắm {Emojis.YIYITIM}", 
-                    "ehe ₍₍ (̨̡⸝⸝´꒳`⸝⸝)̧̢ ₎₎", 
-                    f"ủa gì zạ {Emojis.HOICHAM}"
-                ]
-            
-            await interaction.response.send_message(
-                embed=discord.Embed(title=random.choice(responses), color=0xf8bbd0)
-            )
-        except Exception as e:
-            print(f"[yiyi_iu error] {e}", flush=True)
+            responses = [
+                f"**yiyi** yêu người nhấttt {Emojis.YIYITIM}", 
+                f"**yiyi** cũng iu cậu nhất {Emojis.YIYITIM}", 
+                f"iu **Vương Dỹ Nguyệt** nhất luôn {Emojis.YIYITIM}"
+            ] if is_boss else [
+                f"**yiyi** cũng iu **yiyi** lắm {Emojis.YIYITIM}", 
+                "ehe ₍₍ (̨̡⸝⸝´꒳`⸝⸝)̧̢ ₎₎", 
+                f"ủa gì zạ {Emojis.HOICHAM}"
+            ]
+            await interaction.response.send_message(embed=discord.Embed(title=random.choice(responses), color=0xf8bbd0))
+        except Exception: pass
 
     # ==========================================
-    # LỆNH 3: SETTING (/yiyi setting) - BẢN DÀI TÁCH DÒNG & FIX UPDATE
+    # LỆNH 3: SETTING (/yiyi setting) - FIX TIMEOUT & LAYOUT DÀI
     # ==========================================
     @app_commands.command(name="setting", description="kiểm tra chi tiết các cài đặt của server")
     async def setting(self, interaction: discord.Interaction):
+        # KHẮC PHỤC LỖI 10062: Kiểm tra trạng thái interaction trước khi defer
         try:
-            # Defer ngay lập tức để tránh Unknown Interaction khi nạp database chậm
-            await interaction.response.defer(ephemeral=True)
+            if not interaction.response.is_done():
+                await interaction.response.defer(ephemeral=True)
+            else: return
+        except Exception: return
+
+        try:
             gid = interaction.guild.id
             gid_str = str(gid)
 
-            # NẠP DATA ĐA LUỒNG
+            # NẠP DATA ĐA LUỒNG - BỌC LÓT CẨN THẬN
             try:
                 try: 
                     from core.forms_storage import get_forms_config
@@ -104,10 +101,9 @@ class YiyiGroup(app_commands.Group):
                     get_all_embeds(gid), form_task, get_all_identities(gid),
                     return_exceptions=True
                 )
-            except: 
-                results = [{}, {}, {}, {}, {}, {}]
+            except: results = [{}, {}, {}, {}, {}, {}]
 
-            # Lấy đúng nhánh settings để fix lỗi không update
+            # Gán dữ liệu & Truy cập nhánh settings để fix lỗi không update
             greet_root = results[0] if isinstance(results[0], dict) else {}
             greet_settings = greet_root.get("settings", {})
             
@@ -118,13 +114,11 @@ class YiyiGroup(app_commands.Group):
             ident_data = results[5] if isinstance(results[5], dict) else {}
 
             rr_count = 0
-            try:
-                db = getattr(State.bot, "db", None)
-                if db is not None:
-                    rr_count = await db['reactions'].count_documents({"guild_id": gid_str})
-            except: pass
+            db = getattr(State.bot, "db", None)
+            if db is not None:
+                rr_count = await db['reactions'].count_documents({"guild_id": gid_str})
 
-            # --- HELPER ĐỊNH DẠNG TÁCH DÒNG ---
+            # --- HELPERS ĐỊNH DẠNG TÁCH DÒNG CỰC DÀI ---
             def parse_module(module_key):
                 data = greet_settings.get(module_key, {})
                 c_id, e_nm, msg = data.get("channel_id"), data.get("embed_name"), data.get("message")
@@ -132,10 +126,7 @@ class YiyiGroup(app_commands.Group):
                 return status, f"<#{c_id}>" if c_id else f"`none`", f"`{e_nm}`" if e_nm else f"`none`", f"`có`" if msg else f"`none`"
 
             def parse_booster():
-                c_id = boost_cfg.get("channel")
-                e_nm = boost_cfg.get("embed")
-                msg = boost_cfg.get("message")
-                r_id = boost_cfg.get("booster_role")
+                c_id, e_nm, msg, r_id = boost_cfg.get("channel"), boost_cfg.get("embed"), boost_cfg.get("message"), boost_cfg.get("booster_role")
                 status = f"`ON`" if (c_id or e_nm or msg or r_id) else f"`OFF`"
                 return status, f"<#{c_id}>" if c_id else f"`none`", f"`{e_nm}`" if e_nm else f"`none`", f"`có`" if msg else f"`none`", f"<@&{r_id}>" if r_id else f"`none`"
 
@@ -178,19 +169,19 @@ class YiyiGroup(app_commands.Group):
   └ role hỗ trợ: {t_rl}
   └ danh mục: <#{ticket_cfg.get('category_id', 'none')}>
   └ kênh gửi log: <#{ticket_cfg.get('log_channel_id', 'none')}>
-• **form (tuỳ chọn)**: {f_st}
+• **form (tuỳ chọn)**: {f"`ON`" if form_cfg else f"`OFF`"}
   └ embed: `{form_cfg.get('embed_name', 'none')}`
   └ số ô nhập liệu: `{len(form_cfg.get('fields', []))}`
   └ tiêu đề: `{form_cfg.get('title', 'none')}`
-  └ thumbnail: {f_th}
+  └ thumbnail: {f"`ON`" if form_cfg.get("thumbnail") else f"`OFF`"}
   └ kênh gửi log: <#{form_cfg.get('log_channel_id', 'none')}>
 • **identity (giả danh)**:
-  └ số vỏ: `{len(ident_data)}`"""
+  └ số vỏ: `{len(ident_data) if isinstance(ident_data, dict) else 0}`"""
 
             report = discord.Embed(title=f"{Emojis.MATTRANG} **chi tiết cấu hình của** {interaction.guild.name}", description=desc, color=0xf8bbd0)
             report.set_footer(text="yiyi iu cậu • báo cáo chi tiết linh kiện cloud")
             await interaction.followup.send(embed=report)
-        except Exception as e:
+        except Exception:
             traceback.print_exc()
 
 async def setup(bot: commands.Bot):
