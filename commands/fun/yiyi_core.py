@@ -3,13 +3,12 @@ from discord import app_commands
 from discord.ext import commands
 import time
 import random
-import asyncio # [BỔ SUNG] Để chạy song song các tác vụ nạp dữ liệu
+import asyncio
 
 # Nhập hệ Emojis của PeiD
 from utils.emojis import Emojis
 
-# [GIẢI PHÁP SỐNG CÒN] Đưa import ra ngoài để nạp sẵn khi bot onl
-# Triệt tiêu hoàn toàn độ trễ nạp module để tránh lỗi Unknown Interaction (10062)
+# Nạp sẵn Storage để tối ưu tốc độ phản hồi 
 from core.greet_storage import get_guild_config
 from core.ticket_storage import get_ticket_config
 from core.embed_storage import get_all_embeds
@@ -101,27 +100,27 @@ class YiyiGroup(app_commands.Group):
     # ==========================================
     @app_commands.command(name="setting", description="kiểm tra chi tiết các cài đặt của server")
     async def setting(self, interaction: discord.Interaction):
-        # [IT PRO] Defer ngay lập tức để giữ kết nối với Discord trước khi nạp dữ liệu
+        # [IT PRO] Luôn defer trước để phá vỡ bẫy 3 giây của Discord
         await interaction.response.defer(ephemeral=True)
         guild = interaction.guild
         guild_id = guild.id
 
         try:
-            # --- [INDUSTRIAL UPGRADE] Nạp Trí Nhớ Cloud Song Song ---
-            # Gọi cả 3 hàm cùng lúc để triệt tiêu thời gian chờ đợi Database
+            # --- [CƠ CHẾ ÉP TỐC ĐỘ CHỐNG TREO 10062] ---
             greet_task = get_guild_config(guild_id)
             ticket_task = get_ticket_config(guild_id)
-            embed_task = get_all_embeds(guild_id)
             
-            # Đợi cả 3 hoàn thành đồng thời
+            # GỢI Ý MẠNH: Nếu hàm này trong core/embed_storage.py yêu cầu truyền cả bot thì sửa thành get_all_embeds(self.bot, guild_id)
+            embed_task = get_all_embeds(guild_id) 
+            
+            # Gom tất cả chạy song song
             results = await asyncio.gather(greet_task, ticket_task, embed_task, return_exceptions=True)
             
-            # Gán kết quả và bảo vệ dữ liệu khỏi NoneType
             greet_data = results[0] if not isinstance(results[0], Exception) and results[0] else {}
             ticket_cfg = results[1] if not isinstance(results[1], Exception) and results[1] else {}
             all_embeds = results[2] if not isinstance(results[2], Exception) and results[2] else []
             
-            # --- HELPER: SOI CHI TIẾT LINH KIỆN (FULL LOGIC) ---
+            # --- HELPER: SOI CHI TIẾT LINH KIỆN ---
             def get_detail(module_data):
                 if not module_data:
                     return "`chưa thiết lập`"
@@ -139,7 +138,7 @@ class YiyiGroup(app_commands.Group):
                 
                 return f"{Emojis.YIYITIM} (đã setup: " + ", ".join(comps) + ")"
 
-            # --- HELPER: ĐẾM NÚT BẤM (FULL LOGIC) ---
+            # --- HELPER: ĐẾM NÚT BẤM (BUTTON) ---
             total_btns = 0
             linked_embeds = 0
             for emb in all_embeds:
@@ -207,9 +206,9 @@ class YiyiGroup(app_commands.Group):
 
         except Exception as e:
             # Ghi log lỗi chính xác để Nguyệt dễ debug
-            print(f"[yiyi_setting error] critical failure: {e}", flush=True)
+            print(f"[yiyi_setting error] CHI TIẾT LỖI GÂY HỎNG DỮ LIỆU: {e}", flush=True)
             if not interaction.response.is_done():
-                await interaction.followup.send(f"{Emojis.HOICHAM} yiyi bị nghẽn mạch khi nạp dữ liệu rồi...", ephemeral=True)
+                await interaction.followup.send(f"{Emojis.HOICHAM} yiyi gặp lỗi khi quét dữ liệu rồi (Kiểm tra log ngay Nguyệt ơi)!", ephemeral=True)
 
 # ==========================================
 # INJECTION (ĐĂNG KÝ VÀO CÂY LỆNH TỔNG)
