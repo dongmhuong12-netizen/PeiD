@@ -82,7 +82,7 @@ class YiyiGroup(app_commands.Group):
             print(f"[yiyi_iu error] {e}", flush=True)
 
     # ==========================================
-    # LỆNH 3: SETTING (/yiyi setting) - BẢN TÁCH DÒNG CỰC DÀI & FIX UPDATE
+    # LỆNH 3: SETTING (/yiyi setting) - BẢN TÁCH DÒNG & FIX UPDATE
     # ==========================================
     @app_commands.command(name="setting", description="kiểm tra chi tiết các cài đặt của server")
     async def setting(self, interaction: discord.Interaction):
@@ -100,7 +100,10 @@ class YiyiGroup(app_commands.Group):
                 )
             except: results = [{}, {}, {}, {}, {}]
 
-            greet_full = results[0] if isinstance(results[0], dict) else {}
+            greet_data_root = results[0] if isinstance(results[0], dict) else {}
+            # Dữ liệu thực tế nằm trong doc['settings'] của greet_storage
+            greet_full = greet_data_root.get("settings", {}) if greet_data_root else {}
+            
             boost_cfg = results[1] if isinstance(results[1], dict) else {}
             ticket_cfg = results[2] if isinstance(results[2], dict) else {}
             embed_data = results[3] if isinstance(results[3], dict) else {}
@@ -112,7 +115,7 @@ class YiyiGroup(app_commands.Group):
             if db is not None:
                 rr_count = await db['reactions'].count_documents({"guild_id": gid_str})
 
-            # Helper bóc tách đúng Key từ GreetStorage (Fix lỗi không update)
+            # Helper bóc tách đúng Key từ nhánh settings (Fix lỗi không update)
             def parse_greet(section_key):
                 data = greet_full.get(section_key, {})
                 c_id = data.get("channel_id")
