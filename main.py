@@ -19,7 +19,8 @@ if not TOKEN:
 async def health(request):
     return web.Response(text="PeiD Bot is online and healthy!")
 
-async def run_web_server():
+# [FIX] Đổi thành start_web_server, bỏ asyncio.Event().wait() để tránh tạo Zombie Task
+async def start_web_server():
     app = web.Application()
     app.router.add_get("/", health)
     runner = web.AppRunner(app)
@@ -28,7 +29,7 @@ async def run_web_server():
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
     print(f"[WEB] Service started on port {port}", flush=True)
-    await asyncio.Event().wait()
+    return runner
 
 # =========================
 # BOT SETUP (SHARDING FOR 100K+)
@@ -135,8 +136,12 @@ async def main():
     else:
         print("[DB WARNING] Không tìm thấy MONGO_URI. Bot đang chạy chế độ RAM-Only!", flush=True)
 
-    asyncio.create_task(run_web_server())
+    # [FIX CỐT LÕI] Gọi await trực tiếp, không dùng create_task để tránh phá vỡ Event Loop
+    await start_web_server()
+    
     await load_extensions()
+    
+    # bot.start() sẽ tự động giữ cho chương trình chạy vô tận, không cần Event().wait() nữa
     async with bot:
         await bot.start(TOKEN)
 
