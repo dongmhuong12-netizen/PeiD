@@ -82,11 +82,11 @@ class YiyiGroup(app_commands.Group):
             print(f"[yiyi_iu error] {e}", flush=True)
 
     # ==========================================
-    # LỆNH 3: SETTING (/yiyi setting) - FIX TIMEOUT & TÁCH DÒNG CỰC DÀI
+    # LỆNH 3: SETTING (/yiyi setting) - SIÊU DÀI & FIX TREO PHẢN HỒI
     # ==========================================
     @app_commands.command(name="setting", description="kiểm tra chi tiết các cài đặt của server")
     async def setting(self, interaction: discord.Interaction):
-        # ƯU TIÊN 1: Defer ngay lập tức để chống Unknown Interaction
+        # ƯU TIÊN 1: Defer ngay lập tức để giữ kết nối Discord (Fix 10062)
         try:
             await interaction.response.defer(ephemeral=True)
         except: return
@@ -95,14 +95,14 @@ class YiyiGroup(app_commands.Group):
             gid = interaction.guild.id
             gid_str = str(gid)
 
-            # Nạp data đa luồng chuẩn công nghiệp
+            # Nạp data đa luồng chuẩn Industrial
             results = await asyncio.gather(
                 get_greet_cfg(gid), get_booster_cfg(gid), get_ticket_config(gid),
                 get_all_embeds(gid), get_all_identities(gid),
                 return_exceptions=True
             )
 
-            # Xử lý kết quả nạp dữ liệu
+            # Xử lý kết quả nạp dữ liệu - Chọc đúng settings để fix lỗi không update
             greet_raw = results[0] if isinstance(results[0], dict) else {}
             greet_full = greet_raw.get("settings", {})
             
@@ -111,13 +111,13 @@ class YiyiGroup(app_commands.Group):
             embed_data = results[3] if isinstance(results[3], dict) else {}
             ident_data = results[4] if isinstance(results[4], dict) else {}
 
-            # Truy cập DB Reactions an toàn
+            # Truy cập DB Reactions an toàn tuyệt đối
             rr_count = 0
             db = getattr(State.bot, "db", None)
             if db is not None:
                 rr_count = await db['reactions'].count_documents({"guild_id": gid_str})
 
-            # Helper định dạng tách dòng chi tiết
+            # Helper định dạng tách dòng (Kéo dài Dashboard theo ý Nguyệt)
             def parse_greet(section_key):
                 data = greet_full.get(section_key, {})
                 c_id = data.get("channel_id")
@@ -142,7 +142,7 @@ class YiyiGroup(app_commands.Group):
 
             embed_with_buttons = sum(1 for e in embed_data.values() if isinstance(e, dict) and e.get("buttons"))
 
-            # Ticket mapping
+            # Ticket mapping chuẩn
             t_st = f"`ON`" if ticket_cfg.get("category_id") else f"`OFF`"
             s_roles = ticket_cfg.get("staff_roles", [])
             t_rl = f"<@&{s_roles[0]}>" if (isinstance(s_roles, list) and s_roles) else f"<@&{s_roles}>" if s_roles else f"`none`"
