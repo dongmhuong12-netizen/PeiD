@@ -106,7 +106,7 @@ class YiyiGroup(app_commands.Group):
             
             # --- HELPER: SOI CHI TIẾT LINH KIỆN ---
             def get_detail(module_data):
-                if not module_data:
+                if not module_data or not isinstance(module_data, dict):
                     return "`chưa thiết lập`"
                 
                 comps = []
@@ -122,47 +122,57 @@ class YiyiGroup(app_commands.Group):
                 
                 return f"{Emojis.YIYITIM} (đã setup: " + ", ".join(comps) + ")"
 
-            # --- HELPER: ĐẾM NÚT BẤM (BUTTON) ---
+            # --- [ĐÃ VÁ LỖI] HELPER: ĐẾM NÚT BẤM (BUTTON) ---
             total_btns = 0
             linked_embeds = 0
-            for emb in all_embeds:
-                btns = emb.get("buttons", [])
-                if btns:
-                    total_btns += len(btns)
-                    linked_embeds += 1
+            
+            # Chuyển đổi dữ liệu về dạng List nếu Database trả về dạng Dictionary
+            embed_list = all_embeds.values() if isinstance(all_embeds, dict) else all_embeds
+            
+            for emb in embed_list:
+                # Bảo vệ chắc chắn emb phải là Từ điển mới gọi lệnh .get()
+                if isinstance(emb, dict):
+                    btns = emb.get("buttons", [])
+                    if btns:
+                        total_btns += len(btns)
+                        linked_embeds += 1
 
             embed = discord.Embed(
                 title=f"{Emojis.MATTRANG} Chi tiết các cài đặt của {guild.name}",
                 color=0xf8bbd0
             )
 
-            # Nhánh Greet/Leave/Wellcome/Booster
-            booster_status = "`đã có channel`" if greet_data.get('greet', {}).get('booster_channel') else "`chưa thiết lập`"
+            # [ĐÃ VÁ LỖI] Nhánh Greet/Leave/Wellcome/Booster
+            greet_sec = greet_data.get('greet', {}) if isinstance(greet_data, dict) else {}
+            greet_sec = greet_sec if isinstance(greet_sec, dict) else {}
+            booster_status = "`đã có channel`" if greet_sec.get('booster_channel') else "`chưa thiết lập`"
+            
             embed.add_field(
                 name=f"{Emojis.YIYITIM} HỆ THỐNG LỜI CHÀO",
                 value=(
-                    f"• **greet:** {get_detail(greet_data.get('greet'))}\n"
-                    f"• **leave:** {get_detail(greet_data.get('leave'))}\n"
-                    f"• **wellcome:** {get_detail(greet_data.get('wellcome'))}\n"
+                    f"• **greet:** {get_detail(greet_data.get('greet') if isinstance(greet_data, dict) else None)}\n"
+                    f"• **leave:** {get_detail(greet_data.get('leave') if isinstance(greet_data, dict) else None)}\n"
+                    f"• **wellcome:** {get_detail(greet_data.get('wellcome') if isinstance(greet_data, dict) else None)}\n"
                     f"• **booster:** {booster_status}"
                 ),
                 inline=False
             )
 
             # Nhánh Embed & Interaction
+            total_embeds_count = len(all_embeds) if isinstance(all_embeds, (dict, list)) else 0
             embed.add_field(
                 name=f"{Emojis.MATTRANG} TƯƠNG TÁC & EMBED",
                 value=(
-                    f"• **embed:** `{len(all_embeds)}/50` (số lượng đã tạo)\n"
+                    f"• **embed:** `{total_embeds_count}/50` (số lượng đã tạo)\n"
                     f"• **button:** `{total_btns}` nút bấm trên `{linked_embeds}` embed\n"
                     f"• **reaction role:** (kiểm tra theo message id)"
                 ),
                 inline=False
             )
 
-            # Nhánh Tính năng nâng cao (Soi Ticket)
+            # [ĐÃ VÁ LỖI] Nhánh Tính năng nâng cao (Soi Ticket)
             ticket_status = "`chưa thiết lập`"
-            if ticket_cfg:
+            if isinstance(ticket_cfg, dict):
                 t_comp = []
                 if ticket_cfg.get("category_id"): t_comp.append("category")
                 if ticket_cfg.get("staff_roles"): t_comp.append("staff")
