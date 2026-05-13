@@ -1,12 +1,12 @@
 import discord
 import copy
-import os
 import asyncio
 from typing import Union
 from collections import deque
 from core.variable_engine import apply_variables
 from core.state import State
-from core.cache_manager import get_raw, mark_dirty
+# [TRÍ NHỚ ĐÃ BÓC TÁCH] Gỡ bỏ mark_dirty (không còn ghi đĩa cục bộ)
+from core.cache_manager import get_raw
 
 # Key chuẩn cho hệ thống phản xạ 100k+
 REACTION_FILE_KEY = "reaction_roles"
@@ -176,26 +176,22 @@ async def send_embed(
                     _safe_buttons.append(_b)
                     _view_weight += _w
             buttons_data = _safe_buttons
-            # [KẾT THÚC THÊM MỚI]
 
             if buttons_data:
                 view = discord.ui.View(timeout=None)
                 for btn in buttons_data:
                     # [THÊM MỚI] TIÊM BIẾN SỐ VÀO LINH KIỆN (LABEL/PLACEHOLDER)
-                    # IT Pro: Clone dữ liệu linh kiện để xử lý biến số mà không hỏng dữ liệu gốc
                     btn_v = copy.deepcopy(btn)
                     btn_v = apply_variables(btn_v, guild, member)
                     
-                    # ---> ĐOẠN CODE GỐC 100% CỦA SẾP (CẬP NHẬT SỬ DỤNG BIẾN ĐÃ TIÊM) <---
                     if btn_v.get("type") == "link":
                         view.add_item(discord.ui.Button(label=btn_v["label"], url=btn_v["url"]))
                     
-                    # [THÊM MỚI] XỬ LÝ 9 HỆ THỐNG TƯƠNG TÁC (NÚT & MENU MỚI)
                     elif btn_v.get("type") == "button":
                         try:
                             _style_val = btn_v.get("style", 1)
                             _style = discord.ButtonStyle(_style_val) if isinstance(_style_val, int) and 1 <= _style_val <= 4 else discord.ButtonStyle.primary
-                            _label = str(btn_v.get("label", "Nút bấm"))[:80] # Max 80 ký tự
+                            _label = str(btn_v.get("label", "Nút bấm"))[:80] 
                             _custom_id = str(btn_v.get("custom_id")) if btn_v.get("custom_id") else None
                             
                             if _custom_id:
@@ -213,12 +209,11 @@ async def send_embed(
                             _custom_id = str(btn_v.get("custom_id")) if btn_v.get("custom_id") else None
                             
                             if _custom_id and isinstance(_opts, list) and len(_opts) > 0:
-                                _safe_opts = _opts[:25] # Max 25 lựa chọn
+                                _safe_opts = _opts[:25] 
                                 _select_options = []
                                 
                                 for i, opt in enumerate(_safe_opts):
                                     if isinstance(opt, dict):
-                                        # IT Pro: Tiêm biến số vào từng Option trong menu
                                         opt_v = apply_variables(copy.deepcopy(opt), guild, member)
                                         _select_options.append(discord.SelectOption(
                                             label=str(opt_v.get("label", f"Option {i+1}"))[:100],
@@ -236,7 +231,6 @@ async def send_embed(
                                         options=_select_options
                                     ))
                         except Exception: pass
-                    # [KẾT THÚC THÊM MỚI]
 
         # 3. gửi tin nhắn an toàn
         message = None
@@ -247,7 +241,6 @@ async def send_embed(
                 await destination.response.send_message(embed=embed, view=view)
                 message = await destination.original_response()
         else:
-            # check quyền gửi embed trước khi gửi
             perms = destination.permissions_for(guild.me)
             if not perms.send_messages or not perms.embed_links:
                 print(f"[send error] bot thiếu quyền gửi embed tại channel {destination.id}", flush=True)
@@ -267,9 +260,8 @@ async def send_embed(
         config = reaction_db.get(storage_key)
 
         if config:
-            # chép cấu hình sang id tin nhắn để listener tra cứu thần tốc
+            # [TRÍ NHỚ ĐÃ BÓC TÁCH] Chép cấu hình sang RAM để listener tra cứu
             reaction_db[str(message.id)] = config
-            mark_dirty(REACTION_FILE_KEY)
 
             # thả reaction vào hàng đợi
             for group in config.get("groups", []):
@@ -282,7 +274,6 @@ async def send_embed(
         print(f"[embed send error] {e}", flush=True)
         return False
 
-# [VÁ LỖI] Giải phóng RAM và tác vụ ngầm khi reload
 async def teardown(bot):
     """dọn dẹp worker khi module bị unload/reload để tránh rò rỉ tác vụ"""
     global _worker_task
@@ -293,5 +284,3 @@ async def teardown(bot):
         except asyncio.CancelledError:
             pass
     print("[unload] success: core.embed_sender", flush=True)
-
-
