@@ -2,7 +2,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 import asyncio
-from collections import defaultdict # [VÁ LỖI]
+from collections import defaultdict
 
 from core.greet_storage import get_section, update_guild_config
 from core.embed_storage import load_embed
@@ -21,8 +21,8 @@ async def send_config_message(guild: discord.Guild, member: discord.Member, sect
     """
     xử lý gửi tin nhắn greet/leave/booster tập trung.
     """
-    # 1. nạp cấu hình từ bộ nhớ
-    config = get_section(guild.id, section)
+    # 1. nạp cấu hình từ bộ nhớ - [SỬA LỖI] Await để đợi MongoDB phản hồi
+    config = await get_section(guild.id, section)
     
     # [TRÍ NHỚ ĐÃ BÓC TÁCH] 
     # Logic nạp thủ công từ "booster_levels" qua cache_manager đã bị gỡ bỏ.
@@ -82,7 +82,8 @@ class GreetGroup(app_commands.Group):
         gid = interaction.guild.id
         lock = _config_locks[gid]
         async with lock:
-            update_guild_config(gid, "greet", "channel", channel.id)
+            # [SỬA LỖI] Thêm await để thực thi lệnh ghi vào MongoDB
+            await update_guild_config(gid, "greet", "channel", channel.id)
         if gid in _config_locks and not lock.locked(): _config_locks.pop(gid, None)
         
         embed = discord.Embed(
@@ -97,7 +98,8 @@ class GreetGroup(app_commands.Group):
         gid = interaction.guild.id
         lock = _config_locks[gid]
         async with lock:
-            update_guild_config(gid, "greet", "message", message)
+            # [SỬA LỖI] Thêm await
+            await update_guild_config(gid, "greet", "message", message)
         if gid in _config_locks and not lock.locked(): _config_locks.pop(gid, None)
         
         display_msg = apply_variables(message, interaction.guild, interaction.user)
@@ -121,7 +123,8 @@ class GreetGroup(app_commands.Group):
         gid = interaction.guild.id
         lock = _config_locks[gid]
         async with lock:
-            update_guild_config(gid, "greet", "embed", name)
+            # [SỬA LỖI] Thêm await
+            await update_guild_config(gid, "greet", "embed", name)
         if gid in _config_locks and not lock.locked(): _config_locks.pop(gid, None)
         
         embed_success = discord.Embed(
@@ -159,7 +162,8 @@ class LeaveGroup(app_commands.Group):
         gid = interaction.guild.id
         lock = _config_locks[gid]
         async with lock:
-            update_guild_config(gid, "leave", "channel", channel.id)
+            # [SỬA LỖI] Thêm await
+            await update_guild_config(gid, "leave", "channel", channel.id)
         if gid in _config_locks and not lock.locked(): _config_locks.pop(gid, None)
         
         embed = discord.Embed(
@@ -174,7 +178,8 @@ class LeaveGroup(app_commands.Group):
         gid = interaction.guild.id
         lock = _config_locks[gid]
         async with lock:
-            update_guild_config(gid, "leave", "message", message)
+            # [SỬA LỖI] Thêm await
+            await update_guild_config(gid, "leave", "message", message)
         if gid in _config_locks and not lock.locked(): _config_locks.pop(gid, None)
         
         display_msg = apply_variables(message, interaction.guild, interaction.user)
@@ -193,12 +198,13 @@ class LeaveGroup(app_commands.Group):
                 description=f"hãy thử lại lần nữa nhé. **yiyi** không tìm thấy embed có tên `{name}`. xin hãy kiểm tra embed cậu muốn dùng cho leave bằng `/p embed edit`",
                 color=0xf8bbd0
             )
-            return await interaction.response.send_message(embed=embed_err, ephemeral=False)
+            return await interaction.response.send_message(embed=err, ephemeral=False)
         
         gid = interaction.guild.id
         lock = _config_locks[gid]
         async with lock:
-            update_guild_config(gid, "leave", "embed", name)
+            # [SỬA LỖI] Thêm await
+            await update_guild_config(gid, "leave", "embed", name)
         if gid in _config_locks and not lock.locked(): _config_locks.pop(gid, None)
         
         embed_success = discord.Embed(
