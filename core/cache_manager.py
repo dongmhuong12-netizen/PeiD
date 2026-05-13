@@ -1,189 +1,76 @@
 import asyncio
-import json
-import os
-import time
 import copy
-import shutil
-import aiofiles # [VÁ LỖI] Bổ sung thư viện đã khai báo ở requirements.txt
 from typing import Dict, Any
 
+# [TRÍ NHỚ ĐÃ BÓC TÁCH] Chỉ giữ lại dictionary trong RAM, gỡ bỏ toàn bộ logic liên quan đến file vật lý
 _cache: Dict[str, Dict[str, Any]] = {}
 _dirty_keys: set[str] = set()
 
 _lock = asyncio.Lock()
 _started = False
 
-DATA_DIR = "data"
-FLUSH_INTERVAL = 5  # Kiểm tra dirty định kỳ
-BACKUP_INTERVAL = 300 # 5 phút backup một lần
-
-_last_flush_time = 0
-
 # =========================
-# FILE HELPERS (Tiêu chuẩn an toàn cao)
-# =========================
-
-def _file_path(key: str):
-    return os.path.join(DATA_DIR, f"{key}.json")
-
-def _ensure_dir():
-    if not os.path.exists(DATA_DIR):
-        os.makedirs(DATA_DIR, exist_ok=True)
-
-def _load_file(key: str):
-    path = _file_path(key)
-    if not os.path.exists(path):
-        return {}
-
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            return data if isinstance(data, dict) else {}
-    except Exception as e:
-        print(f"[DISK READ ERROR] {key}: {e}", flush=True)
-        return {}
-
-def _write_file_sync(key: str, data: dict):
-    """Ghi file an toàn (Atomic Write) - Dùng cho force_flush đồng bộ"""
-    _ensure_dir()
-    path = _file_path(key)
-    tmp = path + ".tmp"
-
-    if os.path.exists(path):
-        try:
-            bak_path = path + ".bak"
-            shutil.copy2(path, bak_path)
-        except:
-            pass
-
-    try:
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-        os.replace(tmp, path)
-    except Exception as e:
-        print(f"[DISK WRITE ERROR] {key}: {e}", flush=True)
-
-async def _write_file_async(key: str, data: dict):
-    """[VÁ LỖI] Ghi file bất đồng bộ bằng aiofiles để chống nghẽn RAM"""
-    await asyncio.to_thread(_ensure_dir)
-    path = _file_path(key)
-    tmp = path + ".tmp"
-
-    if os.path.exists(path):
-        try:
-            bak_path = path + ".bak"
-            await asyncio.to_thread(shutil.copy2, path, bak_path)
-        except:
-            pass
-
-    try:
-        async with aiofiles.open(tmp, "w", encoding="utf-8") as f:
-            # json.dumps chạy trên thread để không block async loop
-            json_str = await asyncio.to_thread(json.dumps, data, indent=2, ensure_ascii=False)
-            await f.write(json_str)
-        await asyncio.to_thread(os.replace, tmp, path)
-        return True # [BỔ SUNG] Trả về trạng thái để worker xử lý hồi phục
-    except Exception as e:
-        print(f"[DISK WRITE ERROR] {key}: {e}", flush=True)
-        return False # [BỔ SUNG] Đánh dấu thất bại
-
-# =========================
-# PUBLIC API
+# PUBLIC API (Giữ nguyên Interface để không hỏng Import)
 # =========================
 
 def load(key: str) -> dict:
+    """Lấy dữ liệu từ RAM. Nếu không có trả về dict rỗng."""
     if key not in _cache:
-        _cache[key] = _load_file(key)
+        _cache[key] = {}
     return copy.deepcopy(_cache[key])
 
 def get_raw(key: str) -> dict:
+    """Lấy reference trực tiếp từ RAM."""
     if key not in _cache:
-        _cache[key] = _load_file(key)
+        _cache[key] = {}
     return _cache[key]
 
 def mark_dirty(key: str):
+    """Giữ nguyên hàm để các module khác không bị lỗi, nhưng không còn ghi đĩa."""
     _dirty_keys.add(key)
-    _ensure_loop()
 
 def update(key: str, value: dict):
+    """Cập nhật dữ liệu trong RAM."""
     _cache[key] = value
     mark_dirty(key)
 
 async def save(key: str):
     """
-    ÉP LƯU NGAY LẬP TỨC (Dùng cho các lệnh quan trọng như Set Role).
-    Không cần chờ 5 giây của flush worker.
+    [TRÍ NHỚ ĐÃ BÓC TÁCH] 
+    Vô hiệu hóa việc ép lưu xuống đĩa. MongoDB sẽ tiếp quản logic này.
     """
-    if key in _cache:
-        data = copy.deepcopy(_cache[key])
-        # [VÁ LỖI] Khóa Luồng (Lock) để chống Race Condition với _flush_worker
-        async with _lock:
-            await _write_file_async(key, data)
-        if key in _dirty_keys:
-            _dirty_keys.remove(key)
-        print(f"[CACHE] Đã ép lưu khẩn cấp: {key}.json", flush=True)
+    if key in _dirty_keys:
+        _dirty_keys.remove(key)
+    # print(f"[CACHE] Stateless Mode: Lệnh lưu '{key}' đã được chuyển tiếp.", flush=True)
 
 # =========================
-# FLUSH ENGINE
+# FLUSH ENGINE (VÔ HIỆU HÓA)
 # =========================
 
 async def _flush_worker():
-    global _last_flush_time
+    """Hàm chạy nền nhưng không còn thực hiện ghi file."""
     while True:
-        await asyncio.sleep(FLUSH_INTERVAL)
-        if not _dirty_keys:
-            continue
-
-        async with _lock:
-            keys_to_flush = list(_dirty_keys)
-            _dirty_keys.clear()
-
-            for key in keys_to_flush:
-                data = _cache.get(key)
-                if data is not None:
-                    # [VÁ LỖI] Dùng aiofiles thay vì open() sync
-                    success = await _write_file_async(key, copy.deepcopy(data))
-                    
-                    # [BỔ SUNG] RECOVERY LOGIC: Nếu lưu thất bại, đưa key trở lại set dirty để thử lại sau
-                    if not success:
-                        _dirty_keys.add(key)
-                        print(f"[CACHE RECOVERY] Đã đưa {key} trở lại hàng đợi lưu do lỗi đĩa.", flush=True)
-
-            _last_flush_time = time.time()
-            # Tính toán số lượng thực tế đã lưu thành công
-            saved_count = len(keys_to_flush) - len([k for k in keys_to_flush if k in _dirty_keys])
-            if saved_count > 0:
-                print(f"[CACHE] Đã tự động lưu {saved_count} tệp.", flush=True)
+        await asyncio.sleep(3600) # Ngủ dài để không tốn tài nguyên
 
 async def _backup_worker():
+    """Vô hiệu hóa hoàn toàn việc backup file cục bộ."""
     while True:
-        await asyncio.sleep(BACKUP_INTERVAL)
-        async with _lock:
-            for key, data in _cache.items():
-                if data:
-                    # [VÁ LỖI] copy.deepcopy data để tránh RuntimeError khi dict bị thay đổi trên RAM
-                    await _write_file_async(f"{key}.auto", copy.deepcopy(data))
+        await asyncio.sleep(3600)
 
 # =========================
 # CONTROL CENTER
 # =========================
 
 def _ensure_loop():
+    """Giữ lại để đảm bảo cấu trúc bot không thay đổi."""
     global _started
     if _started:
         return
-    try:
-        loop = asyncio.get_running_loop()
-        loop.create_task(_flush_worker())
-        loop.create_task(_backup_worker())
-        _started = True
-    except RuntimeError:
-        pass
+    _started = True
 
 def force_flush():
-    """Ghi đĩa khẩn cấp toàn bộ RAM (Dùng khi tắt Bot)"""
-    print("[CACHE] Bắt đầu ghi khẩn cấp toàn bộ dữ liệu...", flush=True)
-    # Ghi cả những thứ đang dirty và cả những thứ đang có trong RAM cho chắc chắn
-    for key, data in _cache.items():
-        _write_file_sync(key, data)
-    print("[CACHE] Toàn bộ dữ liệu đã được bảo vệ.", flush=True)
+    """
+    [TRÍ NHỚ ĐÃ BÓC TÁCH] 
+    Không còn ghi khẩn cấp vào tệp tin khi tắt Bot.
+    """
+    print("[CACHE] Stateless Mode: Toàn bộ dữ liệu RAM đã được giải phóng.", flush=True)
