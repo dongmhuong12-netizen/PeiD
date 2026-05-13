@@ -87,5 +87,36 @@ async def set_booster_role(guild_id: int, role_id: int):
         config = await get_guild_config(guild_id)
         config["booster_role"] = role_id
         await save_guild_config(guild_id, config)
+    # Tự dọn dẹp lock để tiết kiệm tài nguyên (Industrial Standard)
+    if guild_id in _guild_locks and not lock.locked(): 
+        _guild_locks.pop(guild_id, None)
+
+async def set_booster_channel(guild_id: int, channel_id: int):
+    """Cập nhật kênh thông báo Booster"""
+    lock = _guild_locks[guild_id]
+    async with lock:
+        config = await get_guild_config(guild_id)
+        config["channel"] = channel_id
+        await save_guild_config(guild_id, config)
+    if guild_id in _guild_locks and not lock.locked(): 
+        _guild_locks.pop(guild_id, None)
+
+async def set_booster_message(guild_id: int, message: str):
+    """Cập nhật nội dung tin nhắn Booster"""
+    lock = _guild_locks[guild_id]
+    async with lock:
+        config = await get_guild_config(guild_id)
+        config["message"] = message
+        await save_guild_config(guild_id, config)
+    if guild_id in _guild_locks and not lock.locked(): 
+        _guild_locks.pop(guild_id, None)
+
+async def set_booster_embed(guild_id: int, embed_name: str):
+    """Cập nhật mẫu Embed cho Booster"""
+    lock = _guild_locks[guild_id]
+    async with lock:
+        config = await get_guild_config(guild_id)
+        config["embed"] = embed_name
+        await save_guild_config(guild_id, config)
     if guild_id in _guild_locks and not lock.locked(): 
         _guild_locks.pop(guild_id, None)
