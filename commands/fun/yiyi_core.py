@@ -94,7 +94,7 @@ class YiyiGroup(app_commands.Group):
         guild_id = guild.id
 
         try:
-            # Nạp dữ liệu đa luồng
+            # Nạp dữ liệu đa luồng chống nghẽn
             results = await asyncio.gather(
                 get_guild_config(guild_id),
                 get_ticket_config(guild_id),
@@ -106,20 +106,24 @@ class YiyiGroup(app_commands.Group):
             ticket_cfg = results[1] if isinstance(results[1], dict) else {}
             all_embeds = results[2] if isinstance(results[2], (dict, list)) else []
             
-            # --- HELPER: KHAI QUẬT CHI TIẾT TỪNG LINH KIỆN ---
-            def get_detail(module_data):
-                if not module_data or not isinstance(module_data, dict):
-                    return "`chưa thiết lập`"
+            # --- HELPER MỚI: LIỆT KÊ TỪNG CẤU HÌNH (ON/OFF, KÊNH, EMBED, TEXT) ---
+            def format_module(name, module_data):
+                if not isinstance(module_data, dict):
+                    module_data = {}
                 
-                comps = []
-                if module_data.get("channel_id"): comps.append("kênh (channel)")
-                if module_data.get("embed_name"): comps.append("giao diện (embed)")
-                if module_data.get("message"): comps.append("tin nhắn (text)")
-                if module_data.get("ping_role"): comps.append("thẻ (role)")
-                    
-                return f"{Emojis.YIYITIM} (đã kích hoạt: " + ", ".join(comps) + ")" if comps else "`chưa thiết lập`"
+                c_id = module_data.get("channel_id")
+                channel = f"<#{c_id}>" if c_id else "`trống`"
+                embed_name = f"`{module_data.get('embed_name')}`" if module_data.get("embed_name") else "`trống`"
+                text_msg = "`có`" if module_data.get("message") else "`trống`"
+                
+                status = module_data.get("status")
+                is_on = bool(status) if status is not None else bool(c_id)
+                status_icon = "🟢 `ON`" if is_on else "🔴 `OFF`"
+                
+                # Trình bày phân cấp cực kỳ rõ ràng
+                return f"• **{name}:** {status_icon}\n  └ kênh: {channel} ⟡ embed: {embed_name} ⟡ text: {text_msg}"
 
-            # --- HELPER: ĐẾM NÚT BẤM VÀ EMBED (CHỐNG LỖI CẤU TRÚC DB) ---
+            # --- ĐẾM NÚT BẤM VÀ EMBED (CHỐNG LỖI CẤU TRÚC DB) ---
             total_btns = 0
             linked_embeds = 0
             
@@ -137,24 +141,26 @@ class YiyiGroup(app_commands.Group):
                 color=0xf8bbd0
             )
 
-            # Nhánh Greet/Leave/Wellcome/Booster
+            # --- LẮP RÁP HỆ THỐNG LỜI CHÀO ---
             greet_sec = greet_data.get('greet', {}) if isinstance(greet_data, dict) else {}
-            greet_sec = greet_sec if isinstance(greet_sec, dict) else {}
-            booster_data = greet_sec.get('booster_channel')
-            booster_status = f"{Emojis.YIYITIM} (đã kích hoạt kênh thông báo)" if booster_data else "`chưa thiết lập`"
+            booster_channel_id = greet_sec.get('booster_channel') if isinstance(greet_sec, dict) else None
             
+            b_chan = f"<#{booster_channel_id}>" if booster_channel_id else "`trống`"
+            b_status = "🟢 `ON`" if booster_channel_id else "🔴 `OFF`"
+            booster_str = f"• **booster (tri ân):** {b_status}\n  └ kênh: {b_chan}"
+
             embed.add_field(
                 name=f"{Emojis.YIYITIM} HỆ THỐNG LỜI CHÀO & TƯƠNG TÁC",
                 value=(
-                    f"• **greet (chào mừng):** {get_detail(greet_data.get('greet') if isinstance(greet_data, dict) else None)}\n"
-                    f"• **leave (tạm biệt):** {get_detail(greet_data.get('leave') if isinstance(greet_data, dict) else None)}\n"
-                    f"• **wellcome (xác thực):** {get_detail(greet_data.get('wellcome') if isinstance(greet_data, dict) else None)}\n"
-                    f"• **booster (tri ân):** {booster_status}"
+                    f"{format_module('greet (chào mừng)', greet_data.get('greet') if isinstance(greet_data, dict) else None)}\n"
+                    f"{format_module('leave (tạm biệt)', greet_data.get('leave') if isinstance(greet_data, dict) else None)}\n"
+                    f"{format_module('wellcome (xác thực)', greet_data.get('wellcome') if isinstance(greet_data, dict) else None)}\n"
+                    f"{booster_str}"
                 ),
                 inline=False
             )
 
-            # Nhánh Embed & Interaction
+            # --- LẮP RÁP HỆ THỐNG EMBED ---
             total_embeds_count = len(all_embeds) if isinstance(all_embeds, (dict, list)) else 0
             embed.add_field(
                 name=f"{Emojis.MATTRANG} KHO LƯU TRỮ EMBED",
@@ -166,22 +172,21 @@ class YiyiGroup(app_commands.Group):
                 inline=False
             )
 
-            # Nhánh Tính năng nâng cao (Ticket, Form)
-            ticket_status = "`chưa thiết lập`"
-            if isinstance(ticket_cfg, dict):
-                t_comp = []
-                if ticket_cfg.get("category_id"): t_comp.append("danh mục (category)")
-                if ticket_cfg.get("staff_roles"): t_comp.append("nhân viên (staff)")
-                if ticket_cfg.get("log_channel_id"): t_comp.append("nhật ký (logs)")
-                if t_comp: ticket_status = f"{Emojis.YIYITIM} (đã kích hoạt: " + ", ".join(t_comp) + ")"
+            # --- LẮP RÁP HỆ THỐNG TICKET ---
+            t_cfg = ticket_cfg if isinstance(ticket_cfg, dict) else {}
+            t_cat = f"<#{t_cfg.get('category_id')}>" if t_cfg.get("category_id") else "`trống`"
+            t_staff = "`đã cài`" if t_cfg.get("staff_roles") else "`trống`"
+            t_log = f"<#{t_cfg.get('log_channel_id')}>" if t_cfg.get("log_channel_id") else "`trống`"
+            t_on = "🟢 `ON`" if t_cfg.get("category_id") else "🔴 `OFF`"
+            ticket_str = f"• **ticket (hỗ trợ):** {t_on}\n  └ danh mục: {t_cat} ⟡ staff: {t_staff} ⟡ logs: {t_log}"
 
             embed.add_field(
                 name=f"{Emojis.HOICHAM} TIỆN ÍCH QUẢN TRỊ CAO CẤP",
                 value=(
-                    f"• **ticket (hỗ trợ):** {ticket_status}\n"
+                    f"{ticket_str}\n"
                     f"• **form (biểu mẫu):** `tự động đồng bộ theo tên embed`\n"
-                    f"• **identity (hồ sơ):** `active` (đang hoạt động)\n"
-                    f"• **link (mạng lưới):** `active` (đang hoạt động)"
+                    f"• **identity (hồ sơ):** 🟢 `ON`\n"
+                    f"• **link (mạng lưới):** 🟢 `ON`"
                 ),
                 inline=False
             )
