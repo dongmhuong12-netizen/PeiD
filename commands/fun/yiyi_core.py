@@ -82,40 +82,42 @@ class YiyiGroup(app_commands.Group):
             print(f"[yiyi_iu error] {e}", flush=True)
 
     # ==========================================
-    # LỆNH 3: SETTING (/yiyi setting) - BẢN TÁCH DÒNG & FIX UPDATE
+    # LỆNH 3: SETTING (/yiyi setting) - FIX TIMEOUT & TÁCH DÒNG CỰC DÀI
     # ==========================================
     @app_commands.command(name="setting", description="kiểm tra chi tiết các cài đặt của server")
     async def setting(self, interaction: discord.Interaction):
+        # ƯU TIÊN 1: Defer ngay lập tức để chống Unknown Interaction
         try:
             await interaction.response.defer(ephemeral=True)
+        except: return
+
+        try:
             gid = interaction.guild.id
             gid_str = str(gid)
 
-            # Nạp data đa luồng
-            try:
-                results = await asyncio.gather(
-                    get_greet_cfg(gid), get_booster_cfg(gid), get_ticket_config(gid),
-                    get_all_embeds(gid), get_all_identities(gid),
-                    return_exceptions=True
-                )
-            except: results = [{}, {}, {}, {}, {}]
+            # Nạp data đa luồng chuẩn công nghiệp
+            results = await asyncio.gather(
+                get_greet_cfg(gid), get_booster_cfg(gid), get_ticket_config(gid),
+                get_all_embeds(gid), get_all_identities(gid),
+                return_exceptions=True
+            )
 
-            greet_data_root = results[0] if isinstance(results[0], dict) else {}
-            # Dữ liệu thực tế nằm trong doc['settings'] của greet_storage
-            greet_full = greet_data_root.get("settings", {}) if greet_data_root else {}
+            # Xử lý kết quả nạp dữ liệu
+            greet_raw = results[0] if isinstance(results[0], dict) else {}
+            greet_full = greet_raw.get("settings", {})
             
             boost_cfg = results[1] if isinstance(results[1], dict) else {}
             ticket_cfg = results[2] if isinstance(results[2], dict) else {}
             embed_data = results[3] if isinstance(results[3], dict) else {}
             ident_data = results[4] if isinstance(results[4], dict) else {}
 
-            # Reaction Role từ DB
+            # Truy cập DB Reactions an toàn
             rr_count = 0
             db = getattr(State.bot, "db", None)
             if db is not None:
                 rr_count = await db['reactions'].count_documents({"guild_id": gid_str})
 
-            # Helper bóc tách đúng Key từ nhánh settings (Fix lỗi không update)
+            # Helper định dạng tách dòng chi tiết
             def parse_greet(section_key):
                 data = greet_full.get(section_key, {})
                 c_id = data.get("channel_id")
@@ -124,7 +126,6 @@ class YiyiGroup(app_commands.Group):
                 status = f"`ON`" if (c_id or e_nm or msg) else f"`OFF`"
                 return status, f"<#{c_id}>" if c_id else f"`none`", f"`{e_nm}`" if e_nm else f"`none`", f"`có`" if msg else f"`none`"
 
-            # Helper bóc tách đúng Key từ BoosterStorage
             def parse_booster():
                 c_id = boost_cfg.get("channel")
                 e_nm = boost_cfg.get("embed")
@@ -133,24 +134,20 @@ class YiyiGroup(app_commands.Group):
                 status = f"`ON`" if (c_id or e_nm or msg or r_id) else f"`OFF`"
                 return status, f"<#{c_id}>" if c_id else f"`none`", f"`{e_nm}`" if e_nm else f"`none`", f"`có`" if msg else f"`none`", f"<@&{r_id}>" if r_id else f"`none`"
 
-            # Đếm số lượng identity (vỏ)
-            id_count = len(ident_data) if isinstance(ident_data, dict) else 0
-
-            # Phân tách Greet/Leave/Wellcome/Booster
+            # Phân tách từng module
             g_st, g_ch, g_eb, g_tx = parse_greet("greet")
             l_st, l_ch, l_eb, l_tx = parse_greet("leave")
             w_st, w_ch, w_eb, w_tx = parse_greet("wellcome")
             b_st, b_ch, b_eb, b_tx, b_rl = parse_booster()
 
-            # Đếm embed có nút
             embed_with_buttons = sum(1 for e in embed_data.values() if isinstance(e, dict) and e.get("buttons"))
 
-            # Ticket Mapping
+            # Ticket mapping
             t_st = f"`ON`" if ticket_cfg.get("category_id") else f"`OFF`"
             s_roles = ticket_cfg.get("staff_roles", [])
             t_rl = f"<@&{s_roles[0]}>" if (isinstance(s_roles, list) and s_roles) else f"<@&{s_roles}>" if s_roles else f"`none`"
 
-            # ================= RÁP DASHBOARD SIÊU DÀI - DNA NGUYÊN BẢN =================
+            # ================= DASHBOARD SIÊU DÀI - MỖI THÔNG SỐ 1 DÒNG =================
             desc = f"""{Emojis.MATTRANG} **hệ thống tiếp tân & tương tác**
 • **greet (chào mừng)**: {g_st}
   └ kênh: {g_ch}
@@ -182,14 +179,16 @@ class YiyiGroup(app_commands.Group):
   └ danh mục: <#{ticket_cfg.get('category_id', 'none')}>
   └ kênh gửi log: <#{ticket_cfg.get('log_channel_id', 'none')}>
 • **identity (giả danh)**:
-  └ số vỏ: `{id_count}`"""
+  └ số vỏ: `{len(ident_data) if isinstance(ident_data, dict) else 0}`"""
 
             report = discord.Embed(title=f"{Emojis.MATTRANG} **chi tiết cấu hình của** {interaction.guild.name}", description=desc, color=0xf8bbd0)
             report.set_footer(text="yiyi iu cậu • báo cáo chi tiết linh kiện cloud")
+            
             await interaction.followup.send(embed=report)
-        except: 
+
+        except Exception:
             traceback.print_exc()
 
 async def setup(bot: commands.Bot):
     bot.tree.add_command(YiyiGroup(bot))
-    print("[load] success: commands.fun.yiyi_core (Full DNA + Long Dashboard)")
+    print("[load] success: commands.fun.yiyi_core (Final Industrial Fix)")
