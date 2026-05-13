@@ -4,46 +4,53 @@ from discord.ext import commands
 import asyncio
 import re
 
+# Nạp công cụ Storage và Trí nhớ Ticket mới (Industrial Standard)
 from core.embed_storage import load_embed, atomic_update_button
-# [TRÍ NHỚ ĐÃ BÓC TÁCH] Gỡ bỏ các import liên quan đến cache manager cục bộ
+from core.ticket_storage import update_ticket_config, get_ticket_config # [CẤY MỚI]
 from utils.emojis import Emojis
 
 class TicketGroup(app_commands.Group):
     def __init__(self):
-        # [MỤC 1] Bỏ chữ "chuyên nghiệp"
+        # [MỤC 1] Giữ nguyên mô tả đã gọt
         super().__init__(name="ticket", description="Hệ thống hỗ trợ và quản lý Ticket")
 
+    def _sanitize(self, text): 
+        return re.sub(r'\D', '', text)
+
     # =========================
-    # LỆNH 1: SETUP (Đã gọt văn phong & đóng khung code)
+    # LỆNH 1: SETUP (Đã hàn mạch MongoDB)
     # =========================
-    @app_commands.command(name="setup", description="Cấu hình Ticket") # [MỤC 2]
+    @app_commands.command(name="setup", description="Cấu hình Ticket")
     @app_commands.describe(
         category_id="ID danh mục hoặc Tag danh mục",
-        staff_roles="ID role hoặc Tag các role nhân viên", # [MỤC 3]
+        staff_roles="ID role hoặc Tag các role nhân viên",
         log_channel_id="ID kênh hoặc Tag kênh gửi transcript"
     )
     async def setup_ticket(self, interaction: discord.Interaction, category_id: str, staff_roles: str, log_channel_id: str):
+        # QUY TẮC 3S: Defer ngay lập tức để giữ mạch kết nối (Industrial Standard)
         await interaction.response.defer(ephemeral=True)
         guild = interaction.guild
         
-        def sanitize(text): return re.sub(r'\D', '', text)
-        clean_cat_id = sanitize(category_id)
-        clean_log_id = sanitize(log_channel_id)
+        clean_cat_id = self._sanitize(category_id)
+        clean_log_id = self._sanitize(log_channel_id)
         
         raw_parts = re.split(r'[/,\s]+', staff_roles)
-        clean_staff_ids = [sanitize(p) for p in raw_parts if sanitize(p)]
+        clean_staff_ids = [self._sanitize(p) for p in raw_parts if self._sanitize(p)]
 
         try:
             cat = guild.get_channel(int(clean_cat_id)) if clean_cat_id else None
             log = guild.get_channel(int(clean_log_id)) if clean_log_id else None
             
-            valid_roles = []
+            valid_roles_ids = []
+            valid_roles_obj = []
             for r_id in clean_staff_ids:
                 role = guild.get_role(int(r_id))
-                if role: valid_roles.append(role)
+                if role: 
+                    valid_roles_ids.append(r_id)
+                    valid_roles_obj.append(role)
             
-            # [MỤC 4] Lỗi không tìm thấy nội dung
-            if not cat or not log or not valid_roles:
+            # [MỤC 4] Kiểm tra tính hợp lệ của nội dung
+            if not cat or not log or not valid_roles_obj:
                 embed_err = discord.Embed(
                     title=f"{Emojis.HOICHAM} hmm...? có lỗi gì đó ở đây",
                     description=f"**yiyi** không tìm thấy kênh hoặc role có nội dung tương tự, cậu hãy thử nhập lại lần nữa nhé.",
@@ -59,45 +66,65 @@ class TicketGroup(app_commands.Group):
             )
             return await interaction.followup.send(embed=embed_err)
 
-        # [TRÍ NHỚ ĐÃ BÓC TÁCH] 
-        # Cậu sẽ thay thế logic lấy/cập nhật config vào MongoDB tại đây.
-        # Logic chuẩn hóa dữ liệu cat/log/roles vẫn được giữ nguyên 100%.
+        # [KẾT NỐI MẠCH] Đồng bộ cấu hình Ticket lên Cloud Atlas
+        config_data = {
+            "category_id": clean_cat_id,
+            "staff_roles": valid_roles_ids,
+            "log_channel_id": clean_log_id
+        }
         
-        # [MỤC 6] Setup thành công
-        role_mentions = "\n".join([f"• {r.mention}" for r in valid_roles])
-        embed_res = discord.Embed(
-            title=f"{Emojis.MATTRANG} cập nhật cấu hình Ticket thành công",
-            description=(
-                f"• danh mục: `{cat.name}`\n"
-                f"• staff role (`{len(valid_roles)}`):\n{role_mentions}\n"
-                f"• kênh trả nội dung: `{log.name}`"
-            ),
-            color=0xf8bbd0
-        )
-        await interaction.followup.send(embed=embed_res)
+        # Lưu vào MongoDB thông qua Storage đã bóc tách
+        success = await update_ticket_config(interaction.guild.id, config_data)
+        
+        if success:
+            # [MỤC 6] Setup thành công với văn phong của Nguyệt
+            role_mentions = "\n".join([f"• {r.mention}" for r in valid_roles_obj])
+            embed_res = discord.Embed(
+                title=f"{Emojis.MATTRANG} cập nhật cấu hình Ticket thành công",
+                description=(
+                    f"• danh mục: `{cat.name}`\n"
+                    f"• staff role (`{len(valid_roles_obj)}`):\n{role_mentions}\n"
+                    f"• kênh trả nội dung: `{log.name}`"
+                ),
+                color=0xf8bbd0
+            )
+            await interaction.followup.send(embed=embed_res)
+        else:
+            await interaction.followup.send(f"{Emojis.HOICHAM} Lỗi: Không thể kết nối với Cloud Atlas để lưu cấu hình.")
 
     # =========================
     # LỆNH 2: APPLY (Liên kết Ticket)
     # =========================
-    @app_commands.command(name="apply", description="Liên kết Ticket vào Embed") # [MỤC 7]
+    @app_commands.command(name="apply", description="Liên kết Ticket vào Embed")
     @app_commands.describe(embed_name="Tên embed gắn đơn")
     async def apply(self, interaction: discord.Interaction, embed_name: str):
         await interaction.response.defer(ephemeral=True)
         guild_id = interaction.guild.id
         
-        # [TRÍ NHỚ ĐÃ BÓC TÁCH]
-        # Xóa bỏ các lệnh gọi _get_config. 
-        # Cần kiểm tra config từ MongoDB tại đây trước khi thực hiện cấy nút bấm.
+        # [KẾT NỐI MẠCH] Kiểm tra cấu hình Ticket từ MongoDB trước khi cho phép liên kết
+        config = await get_ticket_config(guild_id)
+        if not config or not config.get("category_id"):
+            embed_no_config = discord.Embed(
+                title=f"{Emojis.HOICHAM} chưa có cấu hình.",
+                description="cậu cần thực hiện lệnh `/p ticket setup` trước khi liên kết vào embed nhé.",
+                color=0xf8bbd0
+            )
+            return await interaction.followup.send(embed=embed_no_config)
+
+        # Kiểm tra sự tồn tại của Embed
+        if not await load_embed(guild_id, embed_name):
+            return await interaction.followup.send(f"{Emojis.HOICHAM} không tìm thấy embed `{embed_name}`.")
 
         btn_data = {
             "type": "button",
             "style": "primary",
-            "label": "Ticket", # Nhãn gọn theo ý sếp
-            "emoji": f"{Emojis.MATTRANG}", # [MỤC 9] Dùng emoji sếp dặn
+            "label": "Ticket",
+            "emoji": f"{Emojis.MATTRANG}", 
             "custom_id": "yiyi:ticket:open",
             "system": "ticket"
         }
 
+        # [GIA CỐ] Cập nhật nút bấm thông qua Atomic Update (Async + MongoDB)
         updated = await atomic_update_button(guild_id, embed_name, action="update_by_id", custom_id="yiyi:ticket:open", button_data=btn_data)
         
         if not updated:
