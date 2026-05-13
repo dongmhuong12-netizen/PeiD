@@ -21,23 +21,13 @@ async def send_config_message(guild: discord.Guild, member: discord.Member, sect
     """
     xử lý gửi tin nhắn greet/leave/booster tập trung.
     """
-    # 1. nạp cấu hình từ bộ nhớ mặc định
+    # 1. nạp cấu hình từ bộ nhớ
     config = get_section(guild.id, section)
     
-    # [LOGIC FIX]: Nếu là booster, ép buộc nạp thêm từ booster_levels để tránh sót data setup
-    if section == "booster":
-        from core.cache_manager import get_raw
-        db = get_raw("booster_levels")
-        boost_data = db.get(str(guild.id), {})
-        
-        # Hợp nhất dữ liệu: ưu tiên dữ liệu từ booster_levels nếu greet_storage bị rỗng
-        if not config or not config.get("channel"):
-            config = boost_data
-        else:
-            # Hợp nhất các trường còn thiếu
-            for key in ["channel", "message", "embed", "booster_role"]:
-                if key not in config and key in boost_data:
-                    config[key] = boost_data[key]
+    # [TRÍ NHỚ ĐÃ BÓC TÁCH] 
+    # Logic nạp thủ công từ "booster_levels" qua cache_manager đã bị gỡ bỏ.
+    # Cậu hãy xử lý việc hợp nhất (merge) dữ liệu này ngay trong lớp Storage (greet_storage) 
+    # khi nạp từ MongoDB để file Engine này hoàn toàn Stateless.
 
     if not config: return False
 
@@ -95,7 +85,6 @@ class GreetGroup(app_commands.Group):
             update_guild_config(gid, "greet", "channel", channel.id)
         if gid in _config_locks and not lock.locked(): _config_locks.pop(gid, None)
         
-        # Văn phong (1)
         embed = discord.Embed(
             title=f"{Emojis.MATTRANG} đặt kênh `greet` thành công: {channel.mention}",
             color=0xf8bbd0
@@ -111,9 +100,7 @@ class GreetGroup(app_commands.Group):
             update_guild_config(gid, "greet", "message", message)
         if gid in _config_locks and not lock.locked(): _config_locks.pop(gid, None)
         
-        # [FIX] Dùng apply_variables để render biến ngay trong phản hồi cho Admin
         display_msg = apply_variables(message, interaction.guild, interaction.user)
-        # Văn phong (2)
         embed = discord.Embed(
             title=f"{Emojis.MATTRANG} cập nhật tin nhắn `greet` thành công: {display_msg}",
             color=0xf8bbd0
@@ -124,7 +111,6 @@ class GreetGroup(app_commands.Group):
     @app_commands.default_permissions(manage_guild=True)
     async def embed(self, interaction: discord.Interaction, name: str):
         if not await load_embed(interaction.guild.id, name):
-            # Văn phong (3)
             embed_err = discord.Embed(
                 title=f"{Emojis.HOICHAM} aree... có lỗi gì đó ở đây",
                 description=f"hãy thử lại lần nữa nhé. **yiyi** không tìm thấy embed có tên `{name}`. xin hãy kiểm tra embed cậu muốn dùng cho greet bằng `/p embed edit`",
@@ -138,7 +124,6 @@ class GreetGroup(app_commands.Group):
             update_guild_config(gid, "greet", "embed", name)
         if gid in _config_locks and not lock.locked(): _config_locks.pop(gid, None)
         
-        # Văn phong (4)
         embed_success = discord.Embed(
             title=f"{Emojis.MATTRANG} cập nhật embed `{name}` cho hệ thống `greet` thành công",
             color=0xf8bbd0
@@ -151,14 +136,12 @@ class GreetGroup(app_commands.Group):
         success = await send_config_message(interaction.guild, interaction.user, "greet")
         
         if success:
-            # Văn phong (5)
             embed = discord.Embed(
                 title=f"{Emojis.MATTRANG} test `greet` thành công",
                 description="hãy kiểm tra tại kênh được setup nhé. nếu không thấy embed, hãy kiểm tra lại quyền của **yiyi** hoặc quyền của kênh",
                 color=0xf8bbd0
             )
         else:
-            # Văn phong (6)
             embed = discord.Embed(
                 title=f"{Emojis.HOICHAM} hmm..? có vẻ có lỗi về cấu hình kênh hoặc embed",
                 description="hãy kiểm tra lại khi đã đầy đủ `channel` `embed` `message` trước khi test nhé",
@@ -179,7 +162,6 @@ class LeaveGroup(app_commands.Group):
             update_guild_config(gid, "leave", "channel", channel.id)
         if gid in _config_locks and not lock.locked(): _config_locks.pop(gid, None)
         
-        # Mirror Greet Style
         embed = discord.Embed(
             title=f"{Emojis.MATTRANG} đặt kênh `leave` thành công: {channel.mention}",
             color=0xf8bbd0
@@ -195,9 +177,7 @@ class LeaveGroup(app_commands.Group):
             update_guild_config(gid, "leave", "message", message)
         if gid in _config_locks and not lock.locked(): _config_locks.pop(gid, None)
         
-        # [FIX] Dịch biến cho Admin xem preview
         display_msg = apply_variables(message, interaction.guild, interaction.user)
-        # Mirror Greet Style
         embed = discord.Embed(
             title=f"{Emojis.MATTRANG} cập nhật tin nhắn `leave` thành công: {display_msg}",
             color=0xf8bbd0
@@ -208,7 +188,6 @@ class LeaveGroup(app_commands.Group):
     @app_commands.default_permissions(manage_guild=True)
     async def embed(self, interaction: discord.Interaction, name: str):
         if not await load_embed(interaction.guild.id, name):
-            # Mirror Greet Style
             embed_err = discord.Embed(
                 title=f"{Emojis.HOICHAM} aree... có lỗi gì đó ở đây",
                 description=f"hãy thử lại lần nữa nhé. **yiyi** không tìm thấy embed có tên `{name}`. xin hãy kiểm tra embed cậu muốn dùng cho leave bằng `/p embed edit`",
@@ -222,7 +201,6 @@ class LeaveGroup(app_commands.Group):
             update_guild_config(gid, "leave", "embed", name)
         if gid in _config_locks and not lock.locked(): _config_locks.pop(gid, None)
         
-        # Mirror Greet Style
         embed_success = discord.Embed(
             title=f"{Emojis.MATTRANG} cập nhật embed `{name}` cho hệ thống `leave` thành công",
             color=0xf8bbd0
@@ -235,14 +213,12 @@ class LeaveGroup(app_commands.Group):
         success = await send_config_message(interaction.guild, interaction.user, "leave")
         
         if success:
-            # Mirror Greet Style
             embed = discord.Embed(
                 title=f"{Emojis.MATTRANG} test `leave` thành công",
                 description="hãy kiểm tra tại kênh được setup nhé. nếu không thấy embed, hãy kiểm tra lại quyền của **yiyi** hoặc quyền của kênh",
                 color=0xf8bbd0
             )
         else:
-            # Mirror Greet Style
             embed = discord.Embed(
                 title=f"{Emojis.HOICHAM} hmm..? có vẻ có lỗi về cấu hình kênh hoặc embed",
                 description="hãy kiểm tra lại khi đã đầy đủ `channel` `embed` `message` trước khi test nhé",
@@ -257,7 +233,7 @@ class LeaveGroup(app_commands.Group):
 class GreetLeaveListener(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        # [VÁ LỖI] Hệ thống quản lý tác vụ ngầm chống Zombie Task rò rỉ RAM
+        # [VÁ LỖI] Hệ thống quản lý tác vụ ngầm
         self._tasks = set()
 
     def cog_unload(self):
@@ -268,7 +244,7 @@ class GreetLeaveListener(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
-        # [VÁ LỖI] Đăng ký tác vụ vào bộ quản lý để giải phóng Member object kịp thời
+        # [VÁ LỖI] Đăng ký tác vụ vào bộ quản lý
         task = asyncio.create_task(send_config_message(member.guild, member, "greet"))
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
