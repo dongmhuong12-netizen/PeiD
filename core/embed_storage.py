@@ -1,8 +1,11 @@
-from core.cache_manager import get_raw, mark_dirty, update
 import copy
 import asyncio
 
-FILE_KEY = "embeds"
+# [TRÍ NHỚ ĐÃ BÓC TÁCH] Gỡ bỏ các import liên quan đến cache manager cục bộ
+# from core.cache_manager import get_raw, mark_dirty, update
+
+# Khởi tạo một dictionary cục bộ để duy trì dữ liệu trong RAM
+_internal_embed_cache = {}
 
 # [VÁ LỖI] Bổ sung Lock để chống Race Condition (mất dữ liệu khi lưu đồng thời)
 _lock = asyncio.Lock()
@@ -13,17 +16,11 @@ _lock = asyncio.Lock()
 
 def _get_cache():
     """
-    lấy reference gốc từ cachemanager. 
+    lấy reference gốc từ bộ nhớ RAM. 
     sử dụng cơ chế tự phục hồi nếu dữ liệu bị lỗi format (tiêu chuẩn 100k+).
     """
-    cache = get_raw(FILE_KEY)
-
-    if not isinstance(cache, dict):
-        print(f"[storage warning] cache '{FILE_KEY}' bị sai định dạng. đang khởi động lại...", flush=True)
-        # [VÁ LỖI] Ép khởi tạo vùng nhớ mới và đồng bộ ngược về cache_manager
-        cache = {}
-        update(FILE_KEY, cache)
-        mark_dirty(FILE_KEY)
+    # [TRÍ NHỚ ĐÃ BÓC TÁCH] Sử dụng biến RAM thay vì cache_manager
+    cache = _internal_embed_cache
 
     return cache
 
@@ -47,7 +44,7 @@ def _nid(name):
 # =========================
 
 async def save_embed(guild_id, name, data):
-    """lưu embed vào ram và kích hoạt hàng đợi ghi đĩa"""
+    """lưu embed vào ram"""
     if not name or data is None:
         return False
 
@@ -62,11 +59,6 @@ async def save_embed(guild_id, name, data):
 
         cache[gid][name] = copy.deepcopy(data)
 
-        # [CỰC QUAN TRỌNG - TRỊ MẤT TRÍ NHỚ] 
-        # Chốt dữ liệu vào bộ não trung tâm để module khác (Show/Edit) thấy ngay
-        update(FILE_KEY, cache)
-        mark_dirty(FILE_KEY)
-    
     print(f"[storage] đã lưu embed '{name}' cho server {gid} vào bộ nhớ tạm.", flush=True)
     return True
 
@@ -98,7 +90,7 @@ async def load_embed(guild_id, name):
 # =========================
 
 async def delete_embed(guild_id, name):
-    """xóa embed vĩnh viễn khỏi ram và disk"""
+    """xóa embed vĩnh viễn khỏi ram"""
     if name is None:
         return False
 
@@ -122,10 +114,6 @@ async def delete_embed(guild_id, name):
 
         if not guild_data:
             cache.pop(gid, None)
-
-        # [CẬP NHẬT] Chốt hạ việc xóa vào hệ thống
-        update(FILE_KEY, cache)
-        mark_dirty(FILE_KEY)
         
     print(f"[storage] đã xóa embed '{name}' khỏi server {gid}.", flush=True)
     return True
@@ -247,11 +235,6 @@ async def atomic_update_button(guild_id, name, button_data: dict = None, action:
             data["buttons"] = []
 
         else:
-            # Hành động không hợp lệ
             return False
-
-        # [CẬP NHẬT] Chốt thay đổi vào hệ thống cache toàn cục
-        update(FILE_KEY, cache)
-        mark_dirty(FILE_KEY)
         
     return True
