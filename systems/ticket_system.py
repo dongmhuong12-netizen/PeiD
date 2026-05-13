@@ -2,17 +2,16 @@ import discord
 import io
 import datetime
 import asyncio 
-from utils.emojis import Emojis # Đảm bảo đã nạp bộ emoji hệ thống
+from core.ticket_storage import get_ticket_config # [CẤY MỚI] Trí nhớ Cloud Atlas
+from utils.emojis import Emojis
 
 async def handle_ticket_interaction(interaction: discord.Interaction):
     custom_id = interaction.data.get("custom_id")
     guild = interaction.guild
     user = interaction.user
 
-    # [TRÍ NHỚ ĐÃ BÓC TÁCH] 
-    # Cậu sẽ thay thế đoạn fetch config từ MongoDB tại đây thay cho cache_manager cũ.
-    # Logic xử lý config bên dưới vẫn được giữ nguyên 100%.
-    config = None 
+    # [KẾT NỐI MẠCH] Truy vấn cấu hình Ticket từ Cloud Atlas
+    config = await get_ticket_config(guild.id) 
 
     # [MỤC 1] Phản hồi khi chưa có cấu hình
     if not config:
@@ -27,10 +26,15 @@ async def handle_ticket_interaction(interaction: discord.Interaction):
     # LOGIC 1: MỞ TICKET
     # =========================
     if custom_id == "yiyi:ticket:open":
+        # QUY TẮC 3S: Defer ngay lập tức để giữ mạch kết nối (Industrial Standard)
         await interaction.response.defer(ephemeral=True)
         
         category_id = config.get("category_id")
+        # IT Pro: Đảm bảo lấy channel chính xác từ Cache hoặc API
         category = guild.get_channel(int(category_id)) if category_id else None
+        if not category and category_id:
+            try: category = await guild.fetch_channel(int(category_id))
+            except: category = None
 
         # [MỤC 2] Lỗi không tìm thấy danh mục/lỗi hệ thống
         if not category:
@@ -44,8 +48,9 @@ async def handle_ticket_interaction(interaction: discord.Interaction):
             )
             return await interaction.followup.send(embed=embed_err, ephemeral=True)
 
-        # [MỤC 3] Kiểm tra ticket trùng (Đóng khung code kênh)
-        existing_channel = discord.utils.get(guild.channels, name=f"ticket-{user.name.lower()}")
+        # [MỤC 3] Kiểm tra ticket trùng (Dựa trên tên kênh sếp dặn)
+        ticket_name = f"ticket-{user.name.lower()}"
+        existing_channel = discord.utils.get(guild.channels, name=ticket_name)
         if existing_channel:
             embed_exist = discord.Embed(
                 description=f"{Emojis.MATTRANG} cậu đã có sẵn một Ticket đang mở sẵn từ chính cậu ở kênh {existing_channel.mention} rồi nhee, không được tạo thêm đâu.",
@@ -60,13 +65,14 @@ async def handle_ticket_interaction(interaction: discord.Interaction):
             guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True, manage_channels=True)
         }
 
-        staff_ids = config.get("staff_role_ids", [])
+        # Nạp danh sách Staff từ cấu hình Cloud
+        staff_ids = config.get("staff_roles", [])
         for r_id in staff_ids:
             role = guild.get_role(int(r_id))
             if role:
                 overwrites[role] = discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True)
 
-        # [MỤC 4] Tạo kênh (Giữ nguyên định dạng tên)
+        # [MỤC 4] Tạo kênh (Giữ nguyên định dạng tên của sếp)
         channel = await guild.create_text_channel(
             name=f"ticket-{user.name}",
             category=category,
@@ -74,7 +80,7 @@ async def handle_ticket_interaction(interaction: discord.Interaction):
             topic=f"Ticket hỗ trợ của {user.name} (ID: {user.id})"
         )
 
-        # [MỤC 5] Embed Lời Chào (Stylized theo ý sếp)
+        # [MỤC 5] Embed Lời Chào (Stylized theo DNA của sếp)
         welcome_embed = discord.Embed(
             title=f"{Emojis.MATTRANG} TICKET HỖ TRỢ",
             description=(
@@ -87,7 +93,7 @@ async def handle_ticket_interaction(interaction: discord.Interaction):
         )
         
         view = discord.ui.View(timeout=None)
-        # [MỤC 7] Nút đóng Ticket (Giữ nguyên)
+        # [MỤC 7] Nút đóng Ticket
         close_btn = discord.ui.Button(label="Đóng Ticket", style=discord.ButtonStyle.danger, custom_id="yiyi:ticket:close", emoji="🔒")
         view.add_item(close_btn)
 
@@ -108,13 +114,17 @@ async def handle_ticket_interaction(interaction: discord.Interaction):
         
         log_id = config.get("log_channel_id")
         log_channel = guild.get_channel(int(log_id)) if log_id else None
+        if not log_channel and log_id:
+            try: log_channel = await guild.fetch_channel(int(log_id))
+            except: log_channel = None
         
-        # [MỤC 9] Transcript Header mới
+        # [MỤC 9] Transcript Header
         transcript_content = f"--- NỘI DUNG TICKET: {interaction.channel.name} ---\n"
         transcript_content += f"Người mở: {interaction.channel.name.replace('ticket-', '')}\n"
         transcript_content += f"Thời gian đóng: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
         transcript_content += "------------------------------------------\n\n"
 
+        # Thu thập toàn bộ lịch sử tin nhắn (Industrial Standard for Transcripts)
         async for message in interaction.channel.history(limit=None, oldest_first=True):
             time = message.created_at.strftime("%Y-%m-%d %H:%M")
             content = message.content if message.content else "[Tin nhắn không có nội dung văn bản]"
@@ -124,14 +134,14 @@ async def handle_ticket_interaction(interaction: discord.Interaction):
         file = discord.File(file_data, filename=f"transcript-{interaction.channel.name}.txt")
 
         if log_channel:
-            # [MỤC 10] Embed Log khi đóng Ticket (Đóng khung tên kênh)
+            # [MỤC 10] Embed Log khi đóng Ticket
             log_embed = discord.Embed(
                 description=f"{Emojis.MATTRANG} **Ticket Closed:** `{interaction.channel.name}` đã được đóng bởi {user.mention}. nội dung Ticket đã được lưu.",
                 color=0xf8bbd0
             )
             await log_channel.send(embed=log_embed, file=file)
 
-        # [MỤC 11] Thông báo đếm ngược (Giữ nguyên)
+        # [MỤC 11] Thông báo đếm ngược và Xóa kênh
         await interaction.followup.send("🔒 Đang đóng và xóa kênh trong 5 giây...")
         await asyncio.sleep(5)
         await interaction.channel.delete()
