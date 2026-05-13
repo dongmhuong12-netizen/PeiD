@@ -27,7 +27,7 @@ async def embed_name_autocomplete(interaction: discord.Interaction, current: str
     if not guild: return []
     
     try:
-        # IT Pro: Lấy danh sách tên từ bộ nhớ cache
+        # [KẾT NỐI MẠCH] Phải await vì storage giờ đã lên Cloud Atlas
         names = await get_all_embed_names(guild.id)
         
         # Logic lọc tên của sếp (Giữ nguyên văn phong logic)
@@ -52,7 +52,6 @@ def _cleanup_views(key: str):
     ACTIVE_EMBED_VIEWS[key] = []
 
 # [BỔ SUNG PHASE 3] Hàm tạo View nút bấm từ dữ liệu lưu trữ
-# IT Pro: Giữ nguyên hàm này để đảm bảo tính tương thích ngược tuyệt đối theo lệnh sếp
 def create_embed_view(data):
     buttons_data = data.get("buttons", [])
     if not buttons_data: return None
@@ -90,14 +89,13 @@ class EmbedGroup(app_commands.Group):
 
     @app_commands.command(name="create", description="tạo embed thiết kế mới")
     async def create(self, interaction: discord.Interaction, name: str):
-        # QUY TẮC 3S: Defer ngay lập tức - ephemeral=False để người khác có thể thấy banner đang thiết kế
+        # QUY TẮC 3S: Defer ngay lập tức để giữ mạch kết nối với Discord (Industrial Standard)
         await interaction.response.defer(ephemeral=False)
         
         guild = interaction.guild
         
-        # Validation chuẩn IT Pro
+        # [KẾT NỐI MẠCH] Load từ Cloud phải dùng await
         if await load_embed(guild.id, name):
-            # Nhóm 1a: Phản hồi Embed
             embed_exists = discord.Embed(
                 title=f"{Emojis.MATTRANG} embed tên `{name}` đã tồn tại",
                 description=f"nếu cậu không tìm thấy embed, hãy thử dùng `/p embed edit` để tìm lại nhé",
@@ -108,21 +106,19 @@ class EmbedGroup(app_commands.Group):
         key = f"{guild.id}:{name}"
         _cleanup_views(key)
 
-        # Khởi tạo bản ghi ban đầu
-        # Nhóm 1b: Giữ nguyên logic/phản hồi lỗi
+        # [KẾT NỐI MẠCH] Logic tạo bản ghi ban đầu trên Cloud
         success, error = await EmbedSystem.create_embed(guild.id, name)
         
         if not success:
             return await interaction.followup.send(f"phát sinh lỗi khi tạo embed `{error}`")
 
-        # Nạp dữ liệu vừa tạo
+        # Nạp dữ liệu vừa tạo từ Cloud
         embed_data = await load_embed(guild.id, name)
         
         # [VÁ LỖI] Khởi tạo View (View sẽ tự đăng ký vào ACTIVE_EMBED_VIEWS để quản lý RAM)
         view = EmbedUIView(guild.id, name, embed_data, timeout=600.0)
         embed = view.build_embed()
 
-        # Nhóm 1c: Giữ nguyên văn phong thành công
         msg = await interaction.followup.send(
             content=(
                 f"• đã tạo embed với tên `{name}`\n"
@@ -138,12 +134,12 @@ class EmbedGroup(app_commands.Group):
     @app_commands.command(name="edit", description="chỉnh sửa embed hiện có")
     @app_commands.autocomplete(name=embed_name_autocomplete)
     async def edit(self, interaction: discord.Interaction, name: str):
-        # IT Standard Defer
+        # IT Standard Defer: Tránh lỗi "Interaction Failed" khi Cloud phản hồi chậm
         await interaction.response.defer(ephemeral=False)
         
+        # [KẾT NỐI MẠCH] Await để nạp linh hồn embed từ MongoDB
         data = await load_embed(interaction.guild.id, name)
         if not data:
-            # Nhóm 1d: Phản hồi Embed Title & Description
             embed_none = discord.Embed(
                 title=f"{Emojis.HOICHAM} hmm...?",
                 description=f"**yiyi** không tìm thấy embed có tên `{name}`, xin hãy nhập lại lần nữa",
@@ -154,11 +150,10 @@ class EmbedGroup(app_commands.Group):
         key = f"{interaction.guild.id}:{name}"
         _cleanup_views(key)
 
-        # [VÁ LỖI] Đăng ký View vào bộ nhớ được xử lý tự động trong EmbedUIView
+        # Khởi tạo UI Editor
         view = EmbedUIView(interaction.guild.id, name, data, timeout=600.0)
         embed = view.build_embed()
 
-        # Nhóm 1e: Text thuần sửa cẩn thận
         msg = await interaction.followup.send(
             content=f" **yiyi** mang embed về rồi, xin hãy tiếp tục chỉnh sửa {Emojis.YIYITIM}", 
             embed=embed, 
@@ -169,10 +164,9 @@ class EmbedGroup(app_commands.Group):
     @app_commands.command(name="show", description="gửi embed vào channel")
     @app_commands.autocomplete(name=embed_name_autocomplete)
     async def show(self, interaction: discord.Interaction, name: str):
-        # Async fetch
+        # [KẾT NỐI MẠCH] Nạp dữ liệu từ Cloud Atlas
         data = await load_embed(interaction.guild.id, name)
         if not data: 
-            # Nhóm 2a: Split Title/Description
             embed_err = discord.Embed(
                 title=f"{Emojis.HOICHAM} aree...hãy thử lại lần nữa nhé.",
                 description=f"**yiyi** không tìm thấy embed có tên `{name}`. xin hãy kiểm tra embed cậu muốn show bằng `/p embed edit`",
@@ -180,26 +174,22 @@ class EmbedGroup(app_commands.Group):
             )
             return await interaction.response.send_message(embed=embed_err, ephemeral=False)
         
-        # Nhóm 2b: Văn phong phản hồi thành công (Chuyển ephemeral=True để tối ưu UX)
+        # Phản hồi nhẹ nhàng cho Admin
         await interaction.response.send_message(f"{Emojis.MATTRANG} embed `{name}` gửi đi thành công", ephemeral=True)
         
-        # [CẬP NHẬT] Kiểm tra và gắn nút bấm (nếu có) khi hiển thị
-        # IT Pro: Giữ nguyên dòng này của sếp để bảo tồn DNA cấu trúc
+        # Giữ nguyên DNA: Tạo View nút bấm Link/Emoji của sếp
         view = create_embed_view(data)
         
-        # [THÊM MỚI] Multi-IT: Ép view về None để nhường quyền xử lý UI cho Xưởng View vạn năng tại embed_sender.py
-        # Logic này giúp tự động lắp ráp 9 loại nút tương tác (Role, Gacha, Ticket, Verify,...) từ storage.
-        # view = None  <-- Tạm tắt dòng này để hiển thị nút Link có Emoji (Emoji Fix)
-        
+        # [THỰC THI] Gửi embed thông qua Engine vạn năng
         await send_embed(interaction.channel, data, interaction.guild, interaction.user, embed_name=name, view=view)
 
     @app_commands.command(name="delete", description="xóa embed vĩnh viễn")
     @app_commands.autocomplete(name=embed_name_autocomplete)
     async def delete(self, interaction: discord.Interaction, name: str):
-        # Await delete task
+        # [KẾT NỐI MẠCH] Await để lệnh xóa thực thi xong trên Cloud mới báo thành công
         await delete_embed(interaction.guild.id, name)
         _cleanup_views(f"{interaction.guild.id}:{name}")
-        # Nhóm 2c: Text thuần
+        
         await interaction.response.send_message(f"{Emojis.MATTRANG} embed `{name}` đã được xoá thành công. có thể tạo lại embed mới bằng tên của embed này", ephemeral=False)
 
 # =============================
@@ -217,7 +207,6 @@ async def setup(bot: commands.Bot):
         
         # 1. Khôi phục nhóm lệnh /p embed ...
         p_cmd.add_command(EmbedGroup())
-        # Bảo tồn DNA log của sếp
         print("[load] success: commands.embed.embed_group", flush=True)
         
         # 2. Đăng ký lệnh /p image (Hệ thống CDN)
@@ -225,5 +214,4 @@ async def setup(bot: commands.Bot):
             p_cmd.add_command(p_image_cmd)
             print("[load] success: commands.p.image (cdn engine)", flush=True)
     else:
-        # IT Standard Error Log
         print("[error] không tìm thấy khung /p! hãy đảm bảo command /p đã được khởi tạo trước.", flush=True)
