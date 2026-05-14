@@ -63,7 +63,7 @@ async def resources_cmd(interaction: discord.Interaction):
 
         # 3. Tạo Embed báo cáo
         embed = discord.Embed(
-            title=f"{Emojis.MATTRANG} báo cáo tài nguyên hệ thống peiD",
+            title=f"{Emojis.MATTRANG} báo cáo tài nguyên hệ thống PeiD",
             description=(
                 f"trạng thái kết nối với **MongoDB Atlas** hiện đang rất ổn định.\n"
                 f"mọi dữ liệu đang được đồng bộ hóa thời gian thực."
@@ -78,7 +78,7 @@ async def resources_cmd(interaction: discord.Interaction):
         
         # --- Thông tin Dung lượng ---
         embed.add_field(
-            name="📊 Quản lý lưu trữ (Giới hạn Free: 512MB)", 
+            name="📊 Quản lý lưu trữ (Giới hạn: 512MB)", 
             value=(
                 f"• Dữ liệu thô: **{data_size:.2f} MB / {MAX_STORAGE:.0f} MB** `({data_pct:.2f}%)`\n"
                 f"• Thực tế chiếm dụng: **{storage_size:.2f} MB / {MAX_STORAGE:.0f} MB** `({storage_pct:.2f}%)`\n"
@@ -92,14 +92,14 @@ async def resources_cmd(interaction: discord.Interaction):
         embed.add_field(name="📝 Tổng bản ghi", value=f"**{objects:,}** docs", inline=True)
         embed.add_field(name="📏 Kích thước trung bình", value=f"**{avg_obj_size:.2f} KB**/doc", inline=True)
         
-        embed.set_footer(text=f"yiyi resource engine • chuẩn multi-it industrial")
+        embed.set_footer(text=f"yiyi resource engine")
         embed.set_thumbnail(url=interaction.client.user.display_avatar.url)
         
         await interaction.followup.send(embed=embed)
 
     except Exception as e:
         print(f"[resources error] {e}", flush=True)
-        await interaction.followup.send(content=f"{Emojis.HOICHAM} **yiyi** bị 'nghẽn mạch' khi đọc Cloud Atlas. (Lỗi: `{type(e).__name__}` - {str(e)})")
+        await interaction.followup.send(content=f"{Emojis.HOICHAM} **yiyi** bị `nghẽn mạch` khi đọc Cloud Atlas. (Lỗi: `{type(e).__name__}` - {str(e)})")
 
 # =============================
 # INJECTION (MODULE LOADER)
