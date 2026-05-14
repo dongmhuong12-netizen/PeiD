@@ -5,6 +5,7 @@ import asyncio
 from collections import defaultdict
 
 from core.greet_storage import get_section, update_guild_config
+from core.booster_storage import get_guild_config as get_booster_cfg # [FIX 1] Nạp kho Booster
 from core.embed_storage import load_embed
 from core.variable_engine import apply_variables
 # IMPORT EMOJI HỆ THỐNG
@@ -21,8 +22,11 @@ async def send_config_message(guild: discord.Guild, member: discord.Member, sect
     """
     xử lý gửi tin nhắn greet/leave/booster tập trung.
     """
-    # 1. nạp cấu hình từ bộ nhớ - [SỬA LỖI] Await để đợi MongoDB phản hồi
-    config = await get_section(guild.id, section)
+    # 1. nạp cấu hình từ bộ nhớ - [SỬA LỖI] Phân luồng kho dữ liệu để fix lỗi test boost
+    if section == "booster":
+        config = await get_booster_cfg(guild.id)
+    else:
+        config = await get_section(guild.id, section)
     
     # [TRÍ NHỚ ĐÃ BÓC TÁCH] 
     # Logic nạp thủ công từ "booster_levels" qua cache_manager đã bị gỡ bỏ.
@@ -31,7 +35,7 @@ async def send_config_message(guild: discord.Guild, member: discord.Member, sect
 
     if not config: return False
 
-    # [GIA CỐ] Hỗ trợ đọc cả key mới (channel_id/embed_name) và key cũ (legacy)
+    # [GIA CỐ] Hỗ trợ đọc cả key mới (channel_id/embed_name) và key cũ (legacy) để Dashboard ko bị none
     channel_id = config.get("channel_id") or config.get("channel") or config.get("booster_channel")
     message_text = config.get("message") or config.get("booster_message")
     embed_name = config.get("embed_name") or config.get("embed") or config.get("booster_embed")
