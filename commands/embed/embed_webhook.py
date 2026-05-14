@@ -107,68 +107,83 @@ def build_omni_view(data, guild, member):
 @app_commands.command(name="send", description="phóng embed vào kênh hiện tại (có thể giả danh)")
 @app_commands.describe(
     name="tên embed muốn gửi", 
-    identity="chọn 'vỏ' danh tính để giả danh (tùy chọn)"
+    identity="chọn 'vỏ' danh tính để giả danh (tùy chọn)",
+    extra_embeds="các embed khác muốn gửi kèm, cách nhau bằng dấu phẩy (vd: b, c)"
 )
 @app_commands.autocomplete(name=embed_name_autocomplete, identity=identity_autocomplete)
-async def send_cmd(interaction: discord.Interaction, name: str, identity: str = None):
+async def send_cmd(interaction: discord.Interaction, name: str, identity: str = None, extra_embeds: str = None):
     # Phản hồi Ephemeral=True để không làm rác kênh chat khi sếp điều khiển
     await interaction.response.defer(ephemeral=True)
     
     guild = interaction.guild
     target_channel = interaction.channel # Cố định kênh hiện tại giống logic show
 
-    # 1. Tải dữ liệu Embed (DEF)
-    data = await load_embed(guild.id, name)
-    if not data:
-        return await interaction.followup.send(f"{Emojis.HOICHAM} không tìm thấy embed `{name}` trong kho.")
+    # [KẾT NỐI MẠCH] Gom danh sách các embed cần gửi lần lượt
+    embed_names = [name]
+    if extra_embeds:
+        embed_names.extend([n.strip() for n in extra_embeds.split(",") if n.strip()])
 
-    try:
-        # 2. Xử lý nội dung & linh kiện (ATK)
-        data_v = process_variable_data(copy.deepcopy(data), guild, interaction.user)
-        embed = discord.Embed.from_dict(data_v)
-        view = build_omni_view(data, guild, interaction.user)
+    # Bắt đầu vòng lặp xử lý liên thanh
+    for emb_name in embed_names:
+        # 1. Tải dữ liệu Embed (DEF)
+        data = await load_embed(guild.id, emb_name)
+        if not data:
+            await interaction.followup.send(f"{Emojis.HOICHAM} không tìm thấy embed `{emb_name}` trong kho.")
+            continue # Bỏ qua embed lỗi, tiếp tục bắn embed tiếp theo
 
-        # --- NHÁNH 1: GỬI QUA IDENTITY (WEBHOOK) ---
-        if identity:
-            ident_raw = await load_identity(guild.id, identity)
-            if not ident_raw:
-                return await interaction.followup.send(f"{Emojis.HOICHAM} danh tính `{identity}` không tồn tại.")
+        try:
+            # 2. Xử lý nội dung & linh kiện (ATK)
+            data_v = process_variable_data(copy.deepcopy(data), guild, interaction.user)
+            embed = discord.Embed.from_dict(data_v)
+            view = build_omni_view(data, guild, interaction.user)
 
-            if not target_channel.permissions_for(guild.me).manage_webhooks:
-                return await interaction.followup.send(f"{Emojis.HOICHAM} yiyi thiếu quyền `Manage Webhooks` để giả danh.")
+            # --- NHÁNH 1: GỬI QUA IDENTITY (WEBHOOK) ---
+            if identity:
+                ident_raw = await load_identity(guild.id, identity)
+                if not ident_raw:
+                    await interaction.followup.send(f"{Emojis.HOICHAM} danh tính `{identity}` không tồn tại.")
+                    continue
 
-            target_name = apply_variables(ident_raw.get("display_name", "yiyi"), guild, interaction.user)
-            target_avatar = apply_variables(ident_raw.get("avatar_url"), guild, interaction.user)
+                if not target_channel.permissions_for(guild.me).manage_webhooks:
+                    await interaction.followup.send(f"{Emojis.HOICHAM} yiyi thiếu quyền `Manage Webhooks` để giả danh.")
+                    continue
 
-            webhooks = await target_channel.webhooks()
-            webhook = next((wh for wh in webhooks if wh.name == "yiyi_webhook"), None)
-            if not webhook:
-                webhook = await target_channel.create_webhook(name="yiyi_webhook", reason="Identity System")
+                target_name = apply_variables(ident_raw.get("display_name", "yiyi"), guild, interaction.user)
+                target_avatar = apply_variables(ident_raw.get("avatar_url"), guild, interaction.user)
 
-            # Chuẩn bị phóng
-            send_params = {
-                "embed": embed,
-                "username": str(target_name)[:80],
-                "avatar_url": target_avatar,
-                "wait": True
-            }
-            if view: send_params["view"] = view
-            
-            await webhook.send(**send_params)
+                webhooks = await target_channel.webhooks()
+                webhook = next((wh for wh in webhooks if wh.name == "yiyi_webhook"), None)
+                if not webhook:
+                    webhook = await target_channel.create_webhook(name="yiyi_webhook", reason="Identity System")
 
-        # --- NHÁNH 2: GỬI TRỰC TIẾP (BOT) ---
-        else:
-            if not target_channel.permissions_for(guild.me).send_messages:
-                return await interaction.followup.send(f"{Emojis.HOICHAM} yiyi không có quyền gửi tin nhắn ở đây.")
+                # Chuẩn bị phóng
+                send_params = {
+                    "embed": embed,
+                    "username": str(target_name)[:80],
+                    "avatar_url": target_avatar,
+                    "wait": True
+                }
+                if view: send_params["view"] = view
+                
+                await webhook.send(**send_params)
 
-            await target_channel.send(embed=embed, view=view)
+            # --- NHÁNH 2: GỬI TRỰC TIẾP (BOT) ---
+            else:
+                if not target_channel.permissions_for(guild.me).send_messages:
+                    await interaction.followup.send(f"{Emojis.HOICHAM} yiyi không có quyền gửi tin nhắn ở đây.")
+                    continue
 
-        # 3. Chốt sổ thành công (Dấu vết chỉ sếp thấy)
+                await target_channel.send(embed=embed, view=view)
+
+        except Exception as e:
+            print(f"[Send Error] {e}")
+            await interaction.followup.send(f"{Emojis.HOICHAM} Lỗi kỹ thuật khi gửi `{emb_name}`: `{str(e)}`")
+
+    # 3. Chốt sổ thành công (Dấu vết chỉ sếp thấy)
+    if len(embed_names) > 1:
+        await interaction.followup.send(f"{Emojis.YIYITIM} Đã phóng liên hoàn {len(embed_names)} embed thành công!")
+    else:
         await interaction.followup.send(f"{Emojis.YIYITIM} Đã phóng embed `{name}` thành công!")
-
-    except Exception as e:
-        print(f"[Send Error] {e}")
-        await interaction.followup.send(f"{Emojis.HOICHAM} Lỗi kỹ thuật: `{str(e)}`")
 
 # =============================
 # INJECTION
@@ -182,4 +197,4 @@ async def setup(bot: commands.Bot):
             if existing: embed_group.remove_command("send")
             
             embed_group.add_command(send_cmd)
-            print("[load] success: embed_webhook (Show-Like Edition)", flush=True)
+            print("[load] success: embed_webhook (Show-Like Edition + Multi-Embed)", flush=True)
