@@ -43,8 +43,8 @@ async def export_cmd(interaction: discord.Interaction, name: str):
         response_text = (
             f"{Emojis.MATTRANG} tạo mã thành công, có thể sao chép mã bên dưới để sử dụng\n"
             f"lưu ý: **không được** chỉnh sửa đoạn mã này để tránh lỗi hệ thống.\n\n"
-            f"```\n{export_code}\n
-```"
+            f"```\n{export_code}\n```"
+
         )
         await interaction.followup.send(content=response_text)
     except Exception as e:
