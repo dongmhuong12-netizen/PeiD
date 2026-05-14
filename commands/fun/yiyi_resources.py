@@ -49,6 +49,18 @@ async def resources_cmd(interaction: discord.Interaction):
         index_size = stats.get("indexSize", 0) / (1024 * 1024)
         avg_obj_size = stats.get("avgObjSize", 0) / 1024 # KB
 
+        # [TÍNH TOÁN TỶ LỆ CHUẨN INDUSTRIAL]
+        # Trần dung lượng của Mongo Atlas Free Tier (Cụm M0) là 512 MB
+        MAX_STORAGE = 512.0
+        
+        data_pct = (data_size / MAX_STORAGE) * 100
+        storage_pct = (storage_size / MAX_STORAGE) * 100
+        index_pct = (index_size / MAX_STORAGE) * 100
+        
+        # Tổng dung lượng thực tế đang dùng (Storage + Index)
+        total_used = storage_size + index_size
+        total_pct = (total_used / MAX_STORAGE) * 100
+
         # 3. Tạo Embed báo cáo
         embed = discord.Embed(
             title=f"{Emojis.MATTRANG} báo cáo tài nguyên hệ thống peiD",
@@ -66,11 +78,12 @@ async def resources_cmd(interaction: discord.Interaction):
         
         # --- Thông tin Dung lượng ---
         embed.add_field(
-            name="📊 Quản lý lưu trữ", 
+            name="📊 Quản lý lưu trữ (Giới hạn Free: 512MB)", 
             value=(
-                f"• Dữ liệu thô: **{data_size:.2f} MB**\n"
-                f"• Thực tế chiếm dụng: **{storage_size:.2f} MB**\n"
-                f"• Chỉ mục (Indexes): **{index_size:.2f} MB**"
+                f"• Dữ liệu thô: **{data_size:.2f} MB / {MAX_STORAGE:.0f} MB** `({data_pct:.2f}%)`\n"
+                f"• Thực tế chiếm dụng: **{storage_size:.2f} MB / {MAX_STORAGE:.0f} MB** `({storage_pct:.2f}%)`\n"
+                f"• Chỉ mục (Indexes): **{index_size:.2f} MB / {MAX_STORAGE:.0f} MB** `({index_pct:.2f}%)`\n"
+                f"**➜ Tổng đang dùng:** **{total_used:.2f} MB / {MAX_STORAGE:.0f} MB** `({total_pct:.2f}%)`"
             ), 
             inline=False
         )
