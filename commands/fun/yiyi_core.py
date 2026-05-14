@@ -140,34 +140,50 @@ class YiyiGroup(app_commands.Group):
             except Exception as db_err:
                 print(f"[DB ERROR] Scan: {db_err}")
 
-            # --- [BỘ LỌC FORM GATEKEEPER - MÀNG 2: KIỂM TRA ĐỘ HOÀN CHỈNH] ---
-            valid_forms = []
-            for f in all_forms:
-                f_name = f.get("embed_name")
-                
-                # Loại ngay nếu chưa Apply
-                if f_name not in linked_form_names:
-                    continue
-                # Loại ngay nếu chưa có log channel
-                if not f.get("log_channel_id"):
-                    continue
-                # Loại ngay nếu không có trường nhập liệu nào
-                if not f.get("fields") or len(f.get("fields", {})) == 0:
-                    continue
-                
-                valid_forms.append(f)
+            # Đưa list form lấy từ DB thành dạng dict để dễ tìm kiếm
+            form_configs_by_name = {f.get("embed_name"): f for f in all_forms if f.get("embed_name")}
 
-            # --- [RÁP GIAO DIỆN FORM ĐỘNG] ---
-            f_st = f"`ON`" if valid_forms else f"`OFF`"
-            form_section_lines = [f"• **form (tuỳ chọn)**: {f_st}"]
-            form_section_lines.append(f"  └ số form hoàn chỉnh: `{len(valid_forms)}`")
+            # --- [BỘ LỌC FORM GATEKEEPER - MÀNG 2: KIỂM TRA ĐỘ HOÀN CHỈNH] ---
+            hoan_chinh_count = 0
+            for f_name in linked_form_names:
+                f_doc = form_configs_by_name.get(f_name, {})
+                if f_doc.get("log_channel_id") and len(f_doc.get("fields", {})) > 0:
+                    hoan_chinh_count += 1
+
+            # --- [RÁP GIAO DIỆN FORM ĐỘNG - DÀN DỌC CHUẨN Ý SẾP] ---
+            f_st = f"`ON`" if linked_form_names else f"`OFF`"
+            form_section_lines = [
+                f"• **form (tuỳ chọn)**: {f_st}",
+                f"  └ số form hoàn chỉnh: `{hoan_chinh_count}`"
+            ]
             
-            for vf in valid_forms:
-                f_nm = vf.get("embed_name", "none")
-                f_flds = len(vf.get("fields", {}))
-                f_ttl = vf.get("form_title", "none")
-                f_log = vf.get("log_channel_id", "none")
-                form_section_lines.append(f"  └ embed `[{f_nm}]`: `{f_flds}` ô | tiêu đề: `{f_ttl}` | log: <#{f_log}>")
+            # Nếu chưa Apply cái form nào, hiện 1 khối rỗng để sếp biết nó đang trống
+            if not linked_form_names:
+                form_section_lines.extend([
+                    "  └ embed: `none`",
+                    "  └ số ô nhập liệu: `0`",
+                    "  └ tiêu đề: `none`",
+                    "  └ thumbnail: `OFF`",
+                    "  └ kênh gửi log: `none`"
+                ])
+            else:
+                # Nếu đã Apply, dàn dọc từng khối 5 dòng cho mỗi form
+                for f_name in linked_form_names:
+                    f_doc = form_configs_by_name.get(f_name, {})
+                    f_flds = len(f_doc.get("fields", {}))
+                    f_ttl = f_doc.get("form_title")
+                    if not f_ttl: f_ttl = "none"
+                    f_th = f"`ON`" if f_doc.get("show_thumbnail") else f"`OFF`"
+                    f_log = f_doc.get("log_channel_id")
+                    log_str = f"<#{f_log}>" if f_log else "`none`"
+                    
+                    form_section_lines.extend([
+                        f"  └ embed: `{f_name}`",
+                        f"  └ số ô nhập liệu: `{f_flds}`",
+                        f"  └ tiêu đề: `{f_ttl}`",
+                        f"  └ thumbnail: {f_th}",
+                        f"  └ kênh gửi log: {log_str}"
+                    ])
             
             form_display = "\n".join(form_section_lines)
 
@@ -246,4 +262,4 @@ class YiyiGroup(app_commands.Group):
 
 async def setup(bot: commands.Bot):
     bot.tree.add_command(YiyiGroup(bot))
-    print("[load] success: commands.fun.yiyi_core (Gatekeeper Dynamic Forms)", flush=True)
+    print("[load] success: commands.fun.yiyi_core (Gatekeeper Dynamic Forms Vertical Fix)", flush=True)
