@@ -186,26 +186,66 @@ class EmbedGroup(app_commands.Group):
         view.message = msg
 
     @app_commands.command(name="show", description="gửi embed vào channel")
+    @app_commands.describe(extra_embeds="các embed khác muốn gửi kèm, cách nhau bằng dấu phẩy (vd: b, c)")
     @app_commands.autocomplete(name=embed_name_autocomplete)
-    async def show(self, interaction: discord.Interaction, name: str):
-        # [KẾT NỐI MẠCH] Nạp dữ liệu từ Cloud Atlas
-        data = await load_embed(interaction.guild.id, name)
-        if not data: 
-            embed_err = discord.Embed(
-                title=f"{Emojis.HOICHAM} aree...hãy thử lại lần nữa nhé.",
-                description=f"**yiyi** không tìm thấy embed có tên `{name}`. xin hãy kiểm tra embed cậu muốn show bằng `/p embed edit`",
-                color=0xf8bbd0
-            )
-            return await interaction.response.send_message(embed=embed_err, ephemeral=False)
+    async def show(self, interaction: discord.Interaction, name: str, extra_embeds: str = None):
+        # [KẾT NỐI MẠCH] Gom danh sách các embed cần gửi lần lượt
+        embed_names = [name]
+        if extra_embeds:
+            embed_names.extend([n.strip() for n in extra_embeds.split(",") if n.strip()])
+            
+        await interaction.response.send_message(f"{Emojis.MATTRANG} đang tiến hành gửi lần lượt {len(embed_names)} embed...", ephemeral=True)
         
-        # Phản hồi nhẹ nhàng cho Admin
-        await interaction.response.send_message(f"{Emojis.MATTRANG} embed `{name}` gửi đi thành công", ephemeral=True)
+        for emb_name in embed_names:
+            # Nạp dữ liệu từ Cloud Atlas
+            data = await load_embed(interaction.guild.id, emb_name)
+            if not data: 
+                embed_err = discord.Embed(
+                    title=f"{Emojis.HOICHAM} aree...hãy thử lại lần nữa nhé.",
+                    description=f"**yiyi** không tìm thấy embed có tên `{emb_name}`. xin hãy kiểm tra lại bằng `/p embed edit`",
+                    color=0xf8bbd0
+                )
+                await interaction.followup.send(embed=embed_err, ephemeral=True)
+                continue
+            
+            # Giữ nguyên DNA: Tạo View nút bấm linh hoạt cho toàn bộ hệ thống
+            view = create_embed_view(data)
+            
+            # [THỰC THI] Gửi embed thông qua Engine vạn năng
+            await send_embed(interaction.channel, data, interaction.guild, interaction.user, embed_name=emb_name, view=view)
+
+    @app_commands.command(name="send", description="gửi embed vào kênh được chỉ định")
+    @app_commands.describe(
+        channel="kênh nhận embed",
+        name="tên embed chính",
+        extra_embeds="các embed khác muốn gửi kèm, cách nhau bằng dấu phẩy (vd: b, c)"
+    )
+    @app_commands.autocomplete(name=embed_name_autocomplete)
+    async def send(self, interaction: discord.Interaction, channel: discord.TextChannel, name: str, extra_embeds: str = None):
+        # [KẾT NỐI MẠCH] Logic gửi liên thanh sang channel mục tiêu
+        embed_names = [name]
+        if extra_embeds:
+            embed_names.extend([n.strip() for n in extra_embeds.split(",") if n.strip()])
+            
+        await interaction.response.send_message(f"{Emojis.MATTRANG} đang tiến hành gửi lần lượt {len(embed_names)} embed vào {channel.mention}...", ephemeral=True)
         
-        # Giữ nguyên DNA: Tạo View nút bấm linh hoạt cho toàn bộ hệ thống
-        view = create_embed_view(data)
-        
-        # [THỰC THI] Gửi embed thông qua Engine vạn năng
-        await send_embed(interaction.channel, data, interaction.guild, interaction.user, embed_name=name, view=view)
+        for emb_name in embed_names:
+            # Nạp dữ liệu từ Cloud Atlas
+            data = await load_embed(interaction.guild.id, emb_name)
+            if not data: 
+                embed_err = discord.Embed(
+                    title=f"{Emojis.HOICHAM} aree...hãy thử lại lần nữa nhé.",
+                    description=f"**yiyi** không tìm thấy embed có tên `{emb_name}`. xin hãy kiểm tra lại bằng `/p embed edit`",
+                    color=0xf8bbd0
+                )
+                await interaction.followup.send(embed=embed_err, ephemeral=True)
+                continue
+            
+            # Giữ nguyên DNA: Tạo View nút bấm linh hoạt cho toàn bộ hệ thống
+            view = create_embed_view(data)
+            
+            # [THỰC THI] Gửi embed thẳng vào kênh mục tiêu
+            await send_embed(channel, data, interaction.guild, interaction.user, embed_name=emb_name, view=view)
 
     @app_commands.command(name="delete", description="xóa embed vĩnh viễn")
     @app_commands.autocomplete(name=embed_name_autocomplete)
