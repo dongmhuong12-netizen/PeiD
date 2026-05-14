@@ -41,7 +41,7 @@ async def handle_ticket_interaction(interaction: discord.Interaction):
             embed_err = discord.Embed(
                 title=f"{Emojis.HOICHAM} aree...?",
                 description=(
-                    "có vẻ có lỗi gì đó đối với Ticket của cậu được tạo và gửi tới. "
+                    "có vẻ có lỗi gì đó đối với Ticket của cậu được tạo và gửi đi. "
                     "hãy thử lại sau một thời gian hoặc liên hệ với staff/thành viên hỗ trợ để nhận sự trợ giúp từ họ nhé."
                 ),
                 color=0xf8bbd0
@@ -85,7 +85,7 @@ async def handle_ticket_interaction(interaction: discord.Interaction):
             title=f"{Emojis.MATTRANG} TICKET HỖ TRỢ",
             description=(
                 f"• **chào cậu nhé, {user.mention}.**\n\n"
-                "• kênh này được tạo ra để hỗ trợ giải đáp các thắc mắc của cậu. cậu có thể tự do đặt câu hỏi hoặc yêu trợ giúp.\n"
+                "• kênh này được tạo ra để hỗ trợ giải đáp các thắc mắc của cậu. cậu có thể tự do đặt câu hỏi hoặc yêu cầu trợ giúp.\n"
                 "• **hãy yên tâm về quyền riêng tư:** chỉ có cậu và các staff được phân vai trò hỗ trợ mới có thể thấy kênh này.\n"
                 f"• nhấn nút bên dưới để đóng Ticket nếu cậu không còn câu hỏi hay yêu cầu nào khác nhé {Emojis.YIYITIM}"
             ),
