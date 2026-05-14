@@ -43,7 +43,8 @@ async def export_cmd(interaction: discord.Interaction, name: str):
         response_text = (
             f"{Emojis.MATTRANG} tạo mã thành công, có thể sao chép mã bên dưới để sử dụng\n"
             f"lưu ý: **không được** chỉnh sửa đoạn mã này để tránh lỗi hệ thống.\n\n"
-            f"```\n{export_code}\n```"
+            f"```\n{export_code}\n
+```"
         )
         await interaction.followup.send(content=response_text)
     except Exception as e:
@@ -70,23 +71,39 @@ async def import_cmd(interaction: discord.Interaction, name: str, code: str):
 
 
 @app_commands.command(name="clone", description="copy embed từ một tin nhắn discord bất kỳ")
-@app_commands.describe(link="dán link tin nhắn hoặc định dạng channel_id-message_id", name="tên embed muốn lưu")
-async def clone_cmd(interaction: discord.Interaction, name: str, link: str):
+@app_commands.describe(
+    name="tên embed muốn lưu",
+    link_or_id="dán link tin nhắn hoặc ID tin nhắn",
+    channel_id="nhập ID kênh nếu cậu chỉ dán ID tin nhắn ở trên"
+)
+async def clone_cmd(interaction: discord.Interaction, name: str, link_or_id: str, channel_id: str = None):
     await interaction.response.defer(ephemeral=False)
     
     # 1. DEFENSE: Chặn trùng tên
     if await load_embed(interaction.guild.id, name):
         return await interaction.followup.send(content=f"{Emojis.HOICHAM} tên `{name}` đã tồn tại rồi cậu.")
 
-    # 2. ATTACK: Regex vạn năng
-    link_match = re.search(r'channels/(\d+|@me)/(\d+)/(\d+)', link)
-    id_match = re.search(r'(\d+)[\-/](\d+)', link)
+    # 2. ATTACK: Logic tọa độ vạn năng
+    c_id, m_id = None, None
 
+    # Ưu tiên bóc tách từ link nếu link_or_id là một URL
+    link_match = re.search(r'channels/(\d+|@me)/(\d+)/(\d+)', link_or_id)
     if link_match:
         c_id, m_id = int(link_match.group(2)), int(link_match.group(3))
-    elif id_match:
-        c_id, m_id = int(id_match.group(1)), int(id_match.group(2))
     else:
+        # Nếu không phải link, lọc sạch để lấy ID tin nhắn
+        m_id_raw = re.sub(r'\D', '', link_or_id)
+        if m_id_raw:
+            m_id = int(m_id_raw)
+        
+        # Lấy ID kênh từ tham số channel_id
+        if channel_id:
+            c_id_raw = re.sub(r'\D', '', channel_id)
+            if c_id_raw:
+                c_id = int(c_id_raw)
+
+    # Kiểm tra xem đã đủ "tọa độ" chưa
+    if not c_id or not m_id:
         return await interaction.followup.send(content=f"{Emojis.HOICHAM} link hoặc ID tin nhắn không hợp lệ rồi cậu ơi.")
     
     try:
@@ -127,7 +144,7 @@ async def clone_cmd(interaction: discord.Interaction, name: str, link: str):
         # 5. Lưu kho
         await save_embed(interaction.guild.id, name, clean_data)
         
-        # FIX: Đổi ngoặc đơn cho 'tút' để tránh SyntaxError
+        # Trả kết quả thành công với văn phong nguyên bản
         await interaction.followup.send(content=f"{Emojis.YIYITIM} clone embed `{name}` thành công! cậu có thể dùng `/p embed edit` để `chỉnh sửa` lại theo ý muốn nhé.")
         
     except discord.Forbidden:
