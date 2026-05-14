@@ -39,7 +39,7 @@ async def export_cmd(interaction: discord.Interaction, name: str):
         compressed = zlib.compress(json_bytes)
         export_code = base64.urlsafe_b64encode(compressed).decode('utf-8')
         
-        # FIX: Sửa lỗi xuống dòng sai cú pháp trong chuỗi
+        # FIX: Gom mạch f-string chuẩn Industrial để tránh SyntaxError tai hại
         response_text = (
             f"{Emojis.MATTRANG} tạo mã thành công, có thể sao chép mã bên dưới để sử dụng\n"
             f"lưu ý: **không được** chỉnh sửa đoạn mã này để tránh lỗi hệ thống.\n\n"
@@ -83,7 +83,7 @@ async def clone_cmd(interaction: discord.Interaction, name: str, link_or_id: str
     if await load_embed(interaction.guild.id, name):
         return await interaction.followup.send(content=f"{Emojis.HOICHAM} tên `{name}` đã tồn tại rồi cậu.")
 
-    # 2. ATTACK: Logic tọa độ vạn năng
+    # 2. ATTACK: Logic tọa độ vạn năng (Multi-IT Mode)
     c_id, m_id = None, None
 
     # Ưu tiên bóc tách từ link nếu link_or_id là một URL
@@ -91,18 +91,18 @@ async def clone_cmd(interaction: discord.Interaction, name: str, link_or_id: str
     if link_match:
         c_id, m_id = int(link_match.group(2)), int(link_match.group(3))
     else:
-        # Nếu không phải link, lọc sạch để lấy ID tin nhắn
+        # Nếu không phải link, lọc sạch để lấy ID tin nhắn nguyên chất
         m_id_raw = re.sub(r'\D', '', link_or_id)
         if m_id_raw:
             m_id = int(m_id_raw)
         
-        # Lấy ID kênh từ tham số channel_id
+        # Lấy ID kênh từ tham số channel_id bổ sung
         if channel_id:
             c_id_raw = re.sub(r'\D', '', channel_id)
             if c_id_raw:
                 c_id = int(c_id_raw)
 
-    # Kiểm tra xem đã đủ "tọa độ" chưa
+    # Kiểm tra xem đã đủ "tọa độ" để hành quân chưa
     if not c_id or not m_id:
         return await interaction.followup.send(content=f"{Emojis.HOICHAM} link hoặc ID tin nhắn không hợp lệ rồi cậu ơi.")
     
@@ -114,7 +114,7 @@ async def clone_cmd(interaction: discord.Interaction, name: str, link_or_id: str
         if not msg.embeds:
             return await interaction.followup.send(content=f"{Emojis.HOICHAM} tin nhắn này làm gì có embed nào ta..?")
             
-        # 4. DEEP CLONE: Bóc tách linh kiện
+        # 4. DEEP CLONE: Bóc tách linh kiện (Gìn giữ Logic Industrial)
         raw = msg.embeds[0].to_dict()
         
         clean_data = {
@@ -141,10 +141,10 @@ async def clone_cmd(interaction: discord.Interaction, name: str, link_or_id: str
         if "author" in clean_data: clean_data["author"] = {k: v for k, v in clean_data["author"].items() if v}
         if "footer" in clean_data: clean_data["footer"] = {k: v for k, v in clean_data["footer"].items() if v}
         
-        # 5. Lưu kho
+        # 5. Lưu kho vĩnh viễn
         await save_embed(interaction.guild.id, name, clean_data)
         
-        # Trả kết quả thành công với văn phong nguyên bản
+        # Trả kết quả thành công với văn phong niêm phong 100%
         await interaction.followup.send(content=f"{Emojis.YIYITIM} clone embed `{name}` thành công! cậu có thể dùng `/p embed edit` để `chỉnh sửa` lại theo ý muốn nhé.")
         
     except discord.Forbidden:
@@ -154,7 +154,7 @@ async def clone_cmd(interaction: discord.Interaction, name: str, link_or_id: str
         await interaction.followup.send(content=f"{Emojis.HOICHAM} **yiyi** không đọc được tin nhắn này. (Lỗi: `{type(e).__name__}`)")
 
 # =============================
-# INJECTION
+# INJECTION (BẢO TOÀN KIẾN TRÚC)
 # =============================
 async def setup(bot: commands.Bot):
     p_cmd = bot.tree.get_command("p")
@@ -169,4 +169,4 @@ async def setup(bot: commands.Bot):
             embed_group.add_command(export_cmd)
             embed_group.add_command(import_cmd)
             embed_group.add_command(clone_cmd)
-            print("[load] success: commands.embed.embed_advanced (Fixed)", flush=True)
+            print("[load] success: commands.embed.embed_advanced (Multi-IT Edition)", flush=True)
