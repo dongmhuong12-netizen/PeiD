@@ -3,11 +3,12 @@ import asyncio
 # [CẤY MỚI] Nạp State để truy cập vào cỗ máy bot.db
 from core.state import State
 
-# [TRÍ NHỚ ĐÃ BÓC TÁCH] Gỡ bỏ các import liên quan đến cache manager cục bộ
-# from core.cache_manager import get_raw, mark_dirty, update
-
 # Khởi tạo một dictionary cục bộ để duy trì dữ liệu trong RAM
 _internal_embed_cache = {}
+
+# [INDUSTRIAL GIA CỐ] Công tắc đánh dấu trạng thái đồng bộ hóa của server
+# Đảm bảo không bị lỗi "chỉ hiện 1 embed" khi bot reboot
+_synced_guilds = set()
 
 # [VÁ LỖI] Bổ sung Lock để chống Race Condition (mất dữ liệu khi lưu đồng thời)
 _lock = asyncio.Lock()
@@ -81,17 +82,15 @@ async def load_embed(guild_id, name):
     gid = _gid(guild_id)
     name = _nid(name)
 
-    # 1. Ưu tiên RAM: Tìm kiếm ở cả String ID và Int ID
-    guild_data = cache.get(gid) or cache.get(int(gid) if gid.isdigit() else None)
-    
+    # 1. Ưu tiên RAM
+    guild_data = cache.get(gid)
     if isinstance(guild_data, dict) and name in guild_data:
         return copy.deepcopy(guild_data[name])
 
-    # 2. [CẤY MỚI] Nếu RAM hụt (do Reboot trên Render), truy vấn Cloud Atlas
+    # 2. [CẤY MỚI] Nếu RAM hụt, truy vấn Cloud Atlas
     if hasattr(State.bot, "db"):
         doc = await State.bot.db.embeds.find_one({"guild_id": gid, "name": name})
         if doc:
-            # Khôi phục lại RAM để các lần gọi sau đạt tốc độ Max Ping
             if gid not in cache: cache[gid] = {}
             cache[gid][name] = doc["data"]
             return copy.deepcopy(doc["data"])
@@ -113,9 +112,7 @@ async def delete_embed(guild_id, name):
         name = _nid(name)
 
         if gid not in cache:
-            gid_int = int(gid) if gid.isdigit() else None
-            if gid_int not in cache: return False
-            gid = gid_int
+            return False
 
         guild_data = cache[gid]
         if not isinstance(guild_data, dict) or name not in guild_data:
@@ -125,10 +122,11 @@ async def delete_embed(guild_id, name):
 
         # [CẤY MỚI] Xóa vĩnh viễn trên Cloud Atlas
         if hasattr(State.bot, "db"):
-            await State.bot.db.embeds.delete_one({"guild_id": str(gid), "name": name})
+            await State.bot.db.embeds.delete_one({"guild_id": gid, "name": name})
 
         if not guild_data:
             cache.pop(gid, None)
+            _synced_guilds.discard(gid) # Reset trạng thái sync nếu server không còn embed nào
         
     print(f"[storage] đã xóa embed '{name}' khỏi server {gid} (RAM & Cloud).", flush=True)
     return True
@@ -140,19 +138,27 @@ async def delete_embed(guild_id, name):
 async def get_all_embeds(guild_id):
     """
     lấy toàn bộ kho embed của server (trả về bản sao an toàn).
-    [GIA CỐ] tự động khôi phục toàn bộ từ Cloud nếu RAM trống sau reboot.
+    [GIA CỐ] Sử dụng cỗ máy _synced_guilds để đảm bảo dữ liệu Cloud luôn được nạp đủ.
     """
     cache = _get_cache()
     gid = _gid(guild_id)
 
-    # Nếu RAM trống, thực hiện nạp hàng loạt từ Cloud Atlas (Industrial Logic)
-    if gid not in cache and hasattr(State.bot, "db"):
-        cursor = State.bot.db.embeds.find({"guild_id": gid})
-        async for doc in cursor:
+    # [PHÒNG NGỰ]: Nếu server chưa được đồng bộ hóa hoàn toàn từ Cloud Atlas
+    if gid not in _synced_guilds and hasattr(State.bot, "db"):
+        async with _lock:
+            # Truy vấn nạp hàng loạt (Bulk Load) từ Cloud
+            cursor = State.bot.db.embeds.find({"guild_id": gid})
             if gid not in cache: cache[gid] = {}
-            cache[gid][doc["name"]] = doc["data"]
+            
+            async for doc in cursor:
+                # Nạp vào RAM (Không đè lên dữ liệu RAM mới hơn nếu có)
+                cache[gid][doc["name"]] = doc["data"]
+            
+            # Gạt công tắc: Đánh dấu đã đồng bộ xong cho phiên làm việc này
+            _synced_guilds.add(gid)
+            print(f"[storage] đã đồng bộ hóa toàn bộ kho embed từ Cloud cho server {gid}.", flush=True)
 
-    guild_data = cache.get(gid) or cache.get(int(gid) if gid.isdigit() else None)
+    guild_data = cache.get(gid)
     if not isinstance(guild_data, dict):
         return {}
 
@@ -163,7 +169,7 @@ async def get_all_embed_names(guild_id):
     if guild_id is None:
         return []
 
-    # Gọi get_all_embeds để đảm bảo RAM đã được nạp từ Cloud trước khi liệt kê tên
+    # Gọi get_all_embeds để đảm bảo cỗ máy đồng bộ đã chạy trước khi liệt kê
     guild_data = await get_all_embeds(guild_id)
     
     if not isinstance(guild_data, dict):
@@ -188,18 +194,17 @@ async def atomic_update_button(guild_id, name, button_data: dict = None, action:
         gid = _gid(guild_id)
         name = _nid(name)
 
+        # Đảm bảo dữ liệu được nạp vào RAM trước khi thực hiện update nút
         if gid not in cache or name not in cache[gid]:
-            # Đảm bảo RAM được nạp trước khi update nút bấm
-            await get_all_embeds(guild_id)
-            if gid not in cache or name not in cache[gid]:
-                return False
+            # Thử nạp đơn lẻ từ Cloud trước
+            data_cloud = await load_embed(guild_id, name)
+            if not data_cloud: return False
 
         data = cache[gid][name]
         
         if "buttons" not in data or not isinstance(data["buttons"], list):
             data["buttons"] = []
 
-        # --- XỬ LÝ CÁC HÀNH ĐỘNG (ATOMIC ACTIONS) ---
         changed = False
 
         if action == "add" and button_data:
@@ -245,10 +250,9 @@ async def atomic_update_button(guild_id, name, button_data: dict = None, action:
             data["buttons"] = []
             changed = True
 
-        # [CẤY MỚI] Nếu có thay đổi, đồng bộ ngay toàn bộ Embed Data lên Cloud
         if changed and hasattr(State.bot, "db"):
             await State.bot.db.embeds.update_one(
-                {"guild_id": str(gid), "name": name},
+                {"guild_id": gid, "name": name},
                 {"$set": {"data": data}},
                 upsert=True
             )
