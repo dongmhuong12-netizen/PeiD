@@ -55,15 +55,39 @@ def _cleanup_views(key: str):
 def create_embed_view(data):
     buttons_data = data.get("buttons", [])
     if not buttons_data: return None
-    view = discord.ui.View()
+    
+    # [INDUSTRIAL] timeout=None để nút luôn sống vĩnh viễn trên kênh được show
+    view = discord.ui.View(timeout=None)
+    
+    # Map màu sắc nút chuẩn Industrial
+    style_map = {
+        "primary": discord.ButtonStyle.primary,
+        "secondary": discord.ButtonStyle.secondary,
+        "success": discord.ButtonStyle.success,
+        "danger": discord.ButtonStyle.danger,
+    }
+
     for btn in buttons_data:
-        if btn.get("type") == "link":
-            # GIA CỐ: Thêm tham số emoji để nhận diện ID <:name:id> sếp đã nhập
+        b_type = btn.get("type")
+        
+        # 1. MẠCH NÚT LINK (Chuyển hướng)
+        if b_type == "link":
             view.add_item(discord.ui.Button(
-                label=btn["label"], 
-                url=btn["url"], 
+                label=btn.get("label"), 
+                url=btn.get("url"), 
                 emoji=btn.get("emoji")
             ))
+            
+        # 2. MẠCH NÚT HỆ THỐNG (Multi-IT: Chấp nhận mọi loại Button tương tác)
+        elif b_type == "button":
+            # Tự động nhận diện Style, Label và CustomID để kích hoạt hệ thống tương ứng
+            view.add_item(discord.ui.Button(
+                style=style_map.get(btn.get("style", "secondary").lower(), discord.ButtonStyle.secondary),
+                label=btn.get("label"),
+                custom_id=btn.get("custom_id"),
+                emoji=btn.get("emoji")
+            ))
+            
     return view
 
 # =============================
@@ -177,7 +201,7 @@ class EmbedGroup(app_commands.Group):
         # Phản hồi nhẹ nhàng cho Admin
         await interaction.response.send_message(f"{Emojis.MATTRANG} embed `{name}` gửi đi thành công", ephemeral=True)
         
-        # Giữ nguyên DNA: Tạo View nút bấm Link/Emoji của sếp
+        # Giữ nguyên DNA: Tạo View nút bấm linh hoạt cho toàn bộ hệ thống
         view = create_embed_view(data)
         
         # [THỰC THI] Gửi embed thông qua Engine vạn năng
