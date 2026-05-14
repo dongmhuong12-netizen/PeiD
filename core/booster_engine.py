@@ -6,7 +6,7 @@ from collections import defaultdict
 # Import trí nhớ State để check bypass
 from core.state import State
 # Import từ storage
-from .booster_storage import get_guild_config
+from core.booster_storage import get_guild_config # [SỬA LỖI ĐƯỜNG DẪN]
 
 # [VÁ LỖI] Khóa Guild để bảo toàn tính nhất quán trong môi trường Multi-server
 _engine_locks = defaultdict(asyncio.Lock)
@@ -32,7 +32,8 @@ async def _execute_assign_logic(member: discord.Member, base_role: discord.Role 
     # [FIX] Đã đồng bộ key với booster.py: thêm guild.id để tránh lệch pha bypass
     bypass_key = f"boost_test_{guild.id}_{member.id}"
     state_data = await State.get_ui(bypass_key)
-    is_testing = state_data and time.time() < state_data.get("expiry", 0)
+    # [GIA CỐ]: is_testing chỉ đúng khi còn state_data và chưa quá expiry
+    is_testing = state_data is not None and time.time() < state_data.get("expiry", 0)
 
     # [VÁ LỖI] Khóa Guild để bảo vệ tiến trình thực thi duy nhất
     lock = _engine_locks[guild.id]
@@ -46,7 +47,8 @@ async def _execute_assign_logic(member: discord.Member, base_role: discord.Role 
             if base_role is None:
                 config = await get_guild_config(guild.id)
                 if not config: return
-                base_role_id = config.get("booster_role")
+                # [SỬA LỖI BIẾN]: Hỗ trợ cả key cũ và mới để Dashboard ko bị hụt data
+                base_role_id = config.get("booster_role") or config.get("role_id")
                 if not base_role_id: return
                 try:
                     base_role = guild.get_role(int(base_role_id))
@@ -98,7 +100,8 @@ async def sync_all_boosters(guild: discord.Guild):
     # [FIX CHÍ MẠNG]: Đọc Config 1 lần duy nhất cho toàn server
     config = await get_guild_config(guild.id)
     if not config: return
-    role_id = config.get("booster_role")
+    # [SỬA LỖI BIẾN]: Đồng bộ key với Dashboard
+    role_id = config.get("booster_role") or config.get("role_id")
     if not role_id: return
     
     try:
@@ -110,7 +113,7 @@ async def sync_all_boosters(guild: discord.Guild):
     if not guild.me.guild_permissions.manage_roles:
         return
 
-    # [CƠ CHẾ TÌM BOOSTER TỐI ƯU 100K+]: Chỉ gom những người liên quan (O(1) thay vì O(N))
+    # [CƠ CHẾ TÌM BOOSTER TỐI ƯU 100K+]: Chỉ gom những người liên quan
     actual_boosters = set(guild.premium_subscribers)
     role_holders = set(base_role.members)
     target_members = actual_boosters.union(role_holders)
