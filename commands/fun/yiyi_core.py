@@ -91,7 +91,6 @@ class YiyiGroup(app_commands.Group):
 
             # NẠP DATA ĐA LUỒNG - BẢO VỆ CHẶT CHẼ
             try:
-                # [BẢO VỆ LOGIC CŨ] Gọi 5 luồng chính (không gọi hàm form bị lỗi nữa)
                 results = await asyncio.gather(
                     get_greet_cfg(gid), get_booster_cfg(gid), get_ticket_config(gid),
                     get_all_embeds(gid), get_all_identities(gid),
@@ -100,39 +99,79 @@ class YiyiGroup(app_commands.Group):
             except: 
                 results = [{}, {}, {}, {}, {}]
 
-            # Gán dữ liệu (xử lý trường hợp Exception trong Gather)
+            # Gán dữ liệu
             greet_full = results[0] if isinstance(results[0], dict) else {}
             boost_cfg = results[1] if isinstance(results[1], dict) else {}
             ticket_cfg = results[2] if isinstance(results[2], dict) else {}
             embed_data = results[3] if isinstance(results[3], dict) else {}
             ident_data = results[4] if isinstance(results[4], dict) else {}
 
+            # --- [BỘ LỌC FORM GATEKEEPER - MÀNG 1: TÌM FORM ĐÃ APPLY] ---
+            linked_form_names = set()
+            for emb_info in embed_data.values():
+                if isinstance(emb_info, dict) and emb_info.get("buttons"):
+                    for btn in emb_info["buttons"]:
+                        cid = btn.get("custom_id", "")
+                        if cid.startswith("yiyi:forms:open:"):
+                            f_name = cid.split(":")[-1]
+                            linked_form_names.add(f_name)
+
             rr_count = 0
-            form_cfg = {} 
+            all_forms = []
             try:
                 db = getattr(State.bot, "db", None)
                 if db is not None:
-                    # [VÁ LỖI DB] Quét Reaction Roles an toàn qua lớp bọc
+                    # Quét Reaction Roles an toàn
                     col_rr = None
                     if hasattr(db, "reactions"): col_rr = db.reactions
                     elif hasattr(db, "db"): col_rr = db.db["reactions"]
                     if col_rr is not None:
                         rr_count = await col_rr.count_documents({"guild_id": gid_str})
                     
-                    # [VÁ LỖI DB] Quét Forms an toàn qua lớp bọc
+                    # Quét toàn bộ Form của Guild
                     col_form = None
                     if hasattr(db, "forms"): col_form = db.forms
                     elif hasattr(db, "db"): col_form = db.db["forms"]
                     elif hasattr(db, "embeds"): col_form = db.embeds.database["forms"]
                     
                     if col_form is not None:
-                        form_doc = await col_form.find_one({"guild_id": gid_str})
-                        if form_doc:
-                            form_cfg = form_doc
+                        cursor = col_form.find({"guild_id": gid_str})
+                        all_forms = await cursor.to_list(length=None)
             except Exception as db_err:
                 print(f"[DB ERROR] Scan: {db_err}")
 
-            # --- HELPERS ĐỊNH DẠNG ---
+            # --- [BỘ LỌC FORM GATEKEEPER - MÀNG 2: KIỂM TRA ĐỘ HOÀN CHỈNH] ---
+            valid_forms = []
+            for f in all_forms:
+                f_name = f.get("embed_name")
+                
+                # Loại ngay nếu chưa Apply
+                if f_name not in linked_form_names:
+                    continue
+                # Loại ngay nếu chưa có log channel
+                if not f.get("log_channel_id"):
+                    continue
+                # Loại ngay nếu không có trường nhập liệu nào
+                if not f.get("fields") or len(f.get("fields", {})) == 0:
+                    continue
+                
+                valid_forms.append(f)
+
+            # --- [RÁP GIAO DIỆN FORM ĐỘNG] ---
+            f_st = f"`ON`" if valid_forms else f"`OFF`"
+            form_section_lines = [f"• **form (tuỳ chọn)**: {f_st}"]
+            form_section_lines.append(f"  └ số form hoàn chỉnh: `{len(valid_forms)}`")
+            
+            for vf in valid_forms:
+                f_nm = vf.get("embed_name", "none")
+                f_flds = len(vf.get("fields", {}))
+                f_ttl = vf.get("form_title", "none")
+                f_log = vf.get("log_channel_id", "none")
+                form_section_lines.append(f"  └ embed `[{f_nm}]`: `{f_flds}` ô | tiêu đề: `{f_ttl}` | log: <#{f_log}>")
+            
+            form_display = "\n".join(form_section_lines)
+
+            # --- HELPERS ĐỊNH DẠNG (GIỮ NGUYÊN) ---
             def parse_module(module_key):
                 data = greet_full.get(module_key, {})
                 c_id, e_nm, msg = data.get("channel_id"), data.get("embed_name"), data.get("message")
@@ -154,16 +193,12 @@ class YiyiGroup(app_commands.Group):
             w_st, w_ch, w_eb, w_tx = parse_module("wellcome")
             b_st, b_ch, b_eb, b_tx, b_rl = parse_booster()
 
-            # Ticket & Form
+            # Ticket
             t_st = f"`ON`" if ticket_cfg.get("category_id") else f"`OFF`"
             s_roles = ticket_cfg.get("staff_roles", [])
             t_rl = f"<@&{s_roles[0]}>" if (isinstance(s_roles, list) and s_roles) else f"<@&{s_roles}>" if s_roles else f"`none`"
 
-            f_st = f"`ON`" if form_cfg else f"`OFF`"
-            # Khớp chính xác trường trong Database Form mới
-            f_th = f"`ON`" if form_cfg.get("show_thumbnail") else f"`OFF`"
-
-            # ================= RÁP DASHBOARD CHI TIẾT TÁCH DÒNG (ĐÃ CHUYỂN HÀNG DỌC THEO Ý SẾP) =================
+            # ================= RÁP DASHBOARD TỔNG (GIỮ FORM DỌC CỦA SẾP) =================
             desc = f"""{Emojis.MATTRANG} **hệ thống tiếp tân & tương tác**
 • **greet (chào mừng)**: {g_st}
   └ kênh: {g_ch}
@@ -194,12 +229,7 @@ class YiyiGroup(app_commands.Group):
   └ role hỗ trợ: {t_rl}
   └ danh mục: <#{ticket_cfg.get('category_id', 'none')}>
   └ kênh gửi log: <#{ticket_cfg.get('log_channel_id', 'none')}>
-• **form (tuỳ chọn)**: {f_st}
-  └ embed: `{form_cfg.get('embed_name', 'none')}`
-  └ số ô nhập liệu: `{len(form_cfg.get('fields', {}))}`
-  └ tiêu đề: `{form_cfg.get('form_title', 'none')}`
-  └ thumbnail: {f_th}
-  └ kênh gửi log: <#{form_cfg.get('log_channel_id', 'none')}>
+{form_display}
 • **identity (giả danh)**:
   └ số vỏ: `{len(ident_data)}`"""
 
@@ -216,4 +246,4 @@ class YiyiGroup(app_commands.Group):
 
 async def setup(bot: commands.Bot):
     bot.tree.add_command(YiyiGroup(bot))
-    print("[load] success: commands.fun.yiyi_core (Vertical Format & Form Fixed)", flush=True)
+    print("[load] success: commands.fun.yiyi_core (Gatekeeper Dynamic Forms)", flush=True)
