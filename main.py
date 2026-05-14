@@ -75,6 +75,7 @@ EXTENSIONS = [
     "commands.identity.identity_group",
     "commands.ticket.ticket_group",  
     "commands.forms.forms_group",    
+    "commands.fun.yiyi_resources",
 ]
 
 async def load_extensions():
