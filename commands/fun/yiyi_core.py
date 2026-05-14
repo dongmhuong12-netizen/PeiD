@@ -91,38 +91,36 @@ class YiyiGroup(app_commands.Group):
 
             # NẠP DATA ĐA LUỒNG - BẢO VỆ CHẶT CHẼ
             try:
-                try: 
-                    from core.forms_storage import get_forms_config
-                    form_task = get_forms_config(gid)
-                except: 
-                    async def dummy_f(g): return {}
-                    form_task = dummy_f(gid)
-                
+                # [BẢO VỆ LOGIC CŨ] Gọi 5 luồng chính (không gọi hàm form bị lỗi nữa)
                 results = await asyncio.gather(
                     get_greet_cfg(gid), get_booster_cfg(gid), get_ticket_config(gid),
-                    get_all_embeds(gid), form_task, get_all_identities(gid),
+                    get_all_embeds(gid), get_all_identities(gid),
                     return_exceptions=True
                 )
             except: 
-                results = [{}, {}, {}, {}, {}, {}]
+                results = [{}, {}, {}, {}, {}]
 
             # Gán dữ liệu (xử lý trường hợp Exception trong Gather)
             greet_full = results[0] if isinstance(results[0], dict) else {}
             boost_cfg = results[1] if isinstance(results[1], dict) else {}
             ticket_cfg = results[2] if isinstance(results[2], dict) else {}
             embed_data = results[3] if isinstance(results[3], dict) else {}
-            form_cfg = results[4] if isinstance(results[4], dict) else {}
-            ident_data = results[5] if isinstance(results[5], dict) else {}
+            ident_data = results[4] if isinstance(results[4], dict) else {}
 
             # TRUY CẬP DB KIỂU KEY-INDEX ĐỂ TRÁNH ATTRIBUTEERROR
             rr_count = 0
+            form_cfg = {} # Khởi tạo rỗng an toàn
             try:
                 db = getattr(State.bot, "db", None)
                 if db is not None:
-                    # Sử dụng bracket notation db['reactions'] thay vì db.reactions
+                    # 1. Quét Reaction Roles
                     rr_count = await db['reactions'].count_documents({"guild_id": gid_str})
+                    # 2. [VÁ LỖI FORM] Đọc trực tiếp từ kho Forms để tránh mất liên kết
+                    form_doc = await db['forms'].find_one({"guild_id": gid_str})
+                    if form_doc:
+                        form_cfg = form_doc
             except Exception as db_err:
-                print(f"[DB ERROR] Reaction Role Scan: {db_err}")
+                print(f"[DB ERROR] Scan: {db_err}")
 
             # --- HELPERS ĐỊNH DẠNG ---
             def parse_module(module_key):
@@ -132,7 +130,6 @@ class YiyiGroup(app_commands.Group):
                 return status, f"<#{c_id}>" if c_id else f"`none`", f"`{e_nm}`" if e_nm else f"`none`", f"`có`" if msg else f"`none`"
 
             def parse_booster():
-                # Khớp chính xác Key từ booster_storage.py
                 c_id = boost_cfg.get("channel")
                 e_nm = boost_cfg.get("embed")
                 msg = boost_cfg.get("message")
@@ -153,18 +150,28 @@ class YiyiGroup(app_commands.Group):
             t_rl = f"<@&{s_roles[0]}>" if (isinstance(s_roles, list) and s_roles) else f"<@&{s_roles}>" if s_roles else f"`none`"
 
             f_st = f"`ON`" if form_cfg else f"`OFF`"
-            f_th = f"`ON`" if form_cfg.get("thumbnail") else f"`OFF`"
+            # [VÁ LỖI KEY CLOUD] Khớp chính xác trường trong Database Form mới
+            f_th = f"`ON`" if form_cfg.get("show_thumbnail") else f"`OFF`"
 
-            # ================= RÁP DASHBOARD CHI TIẾT TÁCH DÒNG =================
+            # ================= RÁP DASHBOARD CHI TIẾT TÁCH DÒNG (ĐÃ CHUYỂN HÀNG DỌC THEO Ý SẾP) =================
             desc = f"""{Emojis.MATTRANG} **hệ thống tiếp tân & tương tác**
 • **greet (chào mừng)**: {g_st}
-  └ kênh: {g_ch} | embed: {g_eb} | text: {g_tx}
+  └ kênh: {g_ch}
+  └ embed: {g_eb}
+  └ text: {g_tx}
 • **leave (tạm biệt)**: {l_st}
-  └ kênh: {l_ch} | embed: {l_eb} | text: {l_tx}
+  └ kênh: {l_ch}
+  └ embed: {l_eb}
+  └ text: {l_tx}
 • **wellcome (chào mừng 2)**: {w_st}
-  └ kênh: {w_ch} | embed: {w_eb} | text: {w_tx}
+  └ kênh: {w_ch}
+  └ embed: {w_eb}
+  └ text: {w_tx}
 • **booster (tri ân)**: {b_st}
-  └ kênh: {b_ch} | embed: {b_eb} | text: {b_tx} | role: {b_rl}
+  └ kênh: {b_ch}
+  └ embed: {b_eb}
+  └ text: {b_tx}
+  └ role: {b_rl}
 
 {Emojis.MATTRANG} **kho lưu trữ embed**
 • **số embed đã tạo**: `{len(embed_data)}/50`
@@ -179,8 +186,8 @@ class YiyiGroup(app_commands.Group):
   └ kênh gửi log: <#{ticket_cfg.get('log_channel_id', 'none')}>
 • **form (tuỳ chọn)**: {f_st}
   └ embed: `{form_cfg.get('embed_name', 'none')}`
-  └ số ô nhập liệu: `{len(form_cfg.get('fields', []))}`
-  └ tiêu đề: `{form_cfg.get('title', 'none')}`
+  └ số ô nhập liệu: `{len(form_cfg.get('fields', {}))}`
+  └ tiêu đề: `{form_cfg.get('form_title', 'none')}`
   └ thumbnail: {f_th}
   └ kênh gửi log: <#{form_cfg.get('log_channel_id', 'none')}>
 • **identity (giả danh)**:
@@ -199,4 +206,4 @@ class YiyiGroup(app_commands.Group):
 
 async def setup(bot: commands.Bot):
     bot.tree.add_command(YiyiGroup(bot))
-    print("[load] success: commands.fun.yiyi_core (Industrial Detail Dashboard Fixed)")
+    print("[load] success: commands.fun.yiyi_core (Vertical Format & Form Fixed)", flush=True)
