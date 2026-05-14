@@ -107,18 +107,28 @@ class YiyiGroup(app_commands.Group):
             embed_data = results[3] if isinstance(results[3], dict) else {}
             ident_data = results[4] if isinstance(results[4], dict) else {}
 
-            # TRUY CẬP DB KIỂU KEY-INDEX ĐỂ TRÁNH ATTRIBUTEERROR
             rr_count = 0
-            form_cfg = {} # Khởi tạo rỗng an toàn
+            form_cfg = {} 
             try:
                 db = getattr(State.bot, "db", None)
                 if db is not None:
-                    # 1. Quét Reaction Roles
-                    rr_count = await db['reactions'].count_documents({"guild_id": gid_str})
-                    # 2. [VÁ LỖI FORM] Đọc trực tiếp từ kho Forms để tránh mất liên kết
-                    form_doc = await db['forms'].find_one({"guild_id": gid_str})
-                    if form_doc:
-                        form_cfg = form_doc
+                    # [VÁ LỖI DB] Quét Reaction Roles an toàn qua lớp bọc
+                    col_rr = None
+                    if hasattr(db, "reactions"): col_rr = db.reactions
+                    elif hasattr(db, "db"): col_rr = db.db["reactions"]
+                    if col_rr is not None:
+                        rr_count = await col_rr.count_documents({"guild_id": gid_str})
+                    
+                    # [VÁ LỖI DB] Quét Forms an toàn qua lớp bọc
+                    col_form = None
+                    if hasattr(db, "forms"): col_form = db.forms
+                    elif hasattr(db, "db"): col_form = db.db["forms"]
+                    elif hasattr(db, "embeds"): col_form = db.embeds.database["forms"]
+                    
+                    if col_form is not None:
+                        form_doc = await col_form.find_one({"guild_id": gid_str})
+                        if form_doc:
+                            form_cfg = form_doc
             except Exception as db_err:
                 print(f"[DB ERROR] Scan: {db_err}")
 
@@ -150,7 +160,7 @@ class YiyiGroup(app_commands.Group):
             t_rl = f"<@&{s_roles[0]}>" if (isinstance(s_roles, list) and s_roles) else f"<@&{s_roles}>" if s_roles else f"`none`"
 
             f_st = f"`ON`" if form_cfg else f"`OFF`"
-            # [VÁ LỖI KEY CLOUD] Khớp chính xác trường trong Database Form mới
+            # Khớp chính xác trường trong Database Form mới
             f_th = f"`ON`" if form_cfg.get("show_thumbnail") else f"`OFF`"
 
             # ================= RÁP DASHBOARD CHI TIẾT TÁCH DÒNG (ĐÃ CHUYỂN HÀNG DỌC THEO Ý SẾP) =================
