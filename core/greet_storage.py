@@ -58,12 +58,13 @@ async def update_guild_config(guild_id: int, section: str, key: str, value):
     """
     Cập nhật cấu hình vào bộ nhớ RAM và đồng bộ tức thì lên Cloud Atlas.
     """
-    cache = _get_cache()
     gid = str(guild_id)
 
-    # Khởi tạo không gian lưu trữ cho Guild nếu chưa có (Hỗ trợ 3 nhánh Greet/Leave/Wellcome)
-    if gid not in cache or not isinstance(cache[gid], dict):
-        cache[gid] = {"greet": {}, "leave": {}, "wellcome": {}}
+    # [FIX CHÍ MẠNG] Gọi get_guild_config để nạp dữ liệu từ Cloud vào RAM nếu RAM đang trống
+    # Tránh việc khởi tạo cache[gid] = {} làm mất dữ liệu cũ của các section khác
+    await get_guild_config(guild_id)
+    
+    cache = _get_cache()
 
     if section not in cache[gid] or not isinstance(cache[gid][section], dict):
         cache[gid][section] = {}
@@ -71,7 +72,7 @@ async def update_guild_config(guild_id: int, section: str, key: str, value):
     # Ghi trực tiếp vào RAM (Source of Truth tạm thời để phản hồi ngay lập tức)
     cache[gid][section][key] = value
 
-    # [CẤY MỚI] Đồng bộ Cloud Atlas vào ngăn 'configs' với đường dẫn settings động
+    # [CẤY MỚI] Đồng bộ Cloud Atlas vào ngăn 'settings' với đường dẫn settings động
     db = getattr(State.bot, "db", None)
     if db:
         await db.configs.update_one(
