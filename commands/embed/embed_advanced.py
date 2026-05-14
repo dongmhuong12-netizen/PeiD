@@ -39,11 +39,11 @@ async def export_cmd(interaction: discord.Interaction, name: str):
         compressed = zlib.compress(json_bytes)
         export_code = base64.urlsafe_b64encode(compressed).decode('utf-8')
         
+        # FIX: Sửa lỗi xuống dòng sai cú pháp trong chuỗi
         response_text = (
             f"{Emojis.MATTRANG} tạo mã thành công, có thể sao chép mã bên dưới để sử dụng\n"
             f"lưu ý: **không được** chỉnh sửa đoạn mã này để tránh lỗi hệ thống.\n\n"
-            f"```\n{export_code}\n
-```"
+            f"```\n{export_code}\n```"
         )
         await interaction.followup.send(content=response_text)
     except Exception as e:
@@ -64,7 +64,7 @@ async def import_cmd(interaction: discord.Interaction, name: str, code: str):
         data = json.loads(decompressed)
         
         await save_embed(interaction.guild.id, name, data)
-        await interaction.followup.send(content=f"{Emojis.YIYITIM} import thành công! cậu dùng `/p embed edit name:{name}` để xem lại nhé.")
+        await interaction.followup.send(content=f"{Emojis.YIYITIM} import thành công! cậu dùng `/p embed edit name:{name}` để xem và chỉnh sửa thêm nhé.")
     except Exception:
         await interaction.followup.send(content=f"{Emojis.HOICHAM} mã import không hợp lệ hoặc đã bị hỏng.")
 
@@ -78,10 +78,8 @@ async def clone_cmd(interaction: discord.Interaction, name: str, link: str):
     if await load_embed(interaction.guild.id, name):
         return await interaction.followup.send(content=f"{Emojis.HOICHAM} tên `{name}` đã tồn tại rồi cậu.")
 
-    # 2. ATTACK: Regex vạn năng (Xử lý mọi loại Link: Server, DM, Canary, PTB và cả ID rời)
-    # Pattern 1: Link chuẩn Discord (Chấp nhận cả @me cho DM)
+    # 2. ATTACK: Regex vạn năng
     link_match = re.search(r'channels/(\d+|@me)/(\d+)/(\d+)', link)
-    # Pattern 2: Định dạng ID rời (channel_id-message_id)
     id_match = re.search(r'(\d+)[\-/](\d+)', link)
 
     if link_match:
@@ -97,12 +95,11 @@ async def clone_cmd(interaction: discord.Interaction, name: str, link: str):
         msg = await channel.fetch_message(m_id)
         
         if not msg.embeds:
-            return await interaction.followup.send(content=f"{Emojis.HOICHAM} tin nhắn này làm gì có embed nào đâu nè?")
+            return await interaction.followup.send(content=f"{Emojis.HOICHAM} tin nhắn này làm gì có embed nào ta..?")
             
-        # 4. DEEP CLONE: Bóc tách toàn bộ linh kiện (bao gồm cả Fields)
+        # 4. DEEP CLONE: Bóc tách linh kiện
         raw = msg.embeds[0].to_dict()
         
-        # Lọc sạch rác hệ thống, giữ lại hồn cốt Embed
         clean_data = {
             "title": raw.get("title"),
             "description": raw.get("description"),
@@ -123,7 +120,6 @@ async def clone_cmd(interaction: discord.Interaction, name: str, link: str):
             ]
         }
         
-        # Loại bỏ các key rỗng để tối ưu dung lượng DB
         clean_data = {k: v for k, v in clean_data.items() if v is not None}
         if "author" in clean_data: clean_data["author"] = {k: v for k, v in clean_data["author"].items() if v}
         if "footer" in clean_data: clean_data["footer"] = {k: v for k, v in clean_data["footer"].items() if v}
@@ -131,7 +127,8 @@ async def clone_cmd(interaction: discord.Interaction, name: str, link: str):
         # 5. Lưu kho
         await save_embed(interaction.guild.id, name, clean_data)
         
-        await interaction.followup.send(content=f"{Emojis.YIYITIM} clone thành công embed `{name}`! giờ cậu có thể dùng `/p embed edit` để "tút" lại theo ý muốn nhé.")
+        # FIX: Đổi ngoặc đơn cho 'tút' để tránh SyntaxError
+        await interaction.followup.send(content=f"{Emojis.YIYITIM} clone embed `{name}` thành công! cậu có thể dùng `/p embed edit` để `chỉnh sửa` lại theo ý muốn nhé.")
         
     except discord.Forbidden:
         await interaction.followup.send(content=f"{Emojis.HOICHAM} **yiyi** không có quyền xem tin nhắn ở kênh đó, cậu check lại nhé.")
@@ -140,7 +137,7 @@ async def clone_cmd(interaction: discord.Interaction, name: str, link: str):
         await interaction.followup.send(content=f"{Emojis.HOICHAM} **yiyi** không đọc được tin nhắn này. (Lỗi: `{type(e).__name__}`)")
 
 # =============================
-# INJECTION (BẢO TOÀN LOGIC CŨ)
+# INJECTION
 # =============================
 async def setup(bot: commands.Bot):
     p_cmd = bot.tree.get_command("p")
@@ -155,4 +152,4 @@ async def setup(bot: commands.Bot):
             embed_group.add_command(export_cmd)
             embed_group.add_command(import_cmd)
             embed_group.add_command(clone_cmd)
-            print("[load] success: commands.embed.embed_advanced (Full DEF/ATK Build)", flush=True)
+            print("[load] success: commands.embed.embed_advanced (Fixed)", flush=True)
