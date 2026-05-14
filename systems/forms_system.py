@@ -6,14 +6,17 @@ from core.forms_storage import get_form_config # [CẤY MỚI] Trí nhớ Cloud
 # --- LỚP MODAL ĐỘNG (Gia cố Multi-IT) ---
 class DynamicFormModal(discord.ui.Modal):
     def __init__(self, form_title, fields_config, log_channel, show_thumbnail):
-        # [VÁ LỖI EMOJI RÁC]: Gọt sạch mã <:emoji:id> vì Discord Modal Title không hỗ trợ
-        raw_title = f"{Emojis.MATTRANG} ĐƠN ĐĂNG KÝ"
-        clean_popup_title = re.sub(r'<a?:\w+:\d+>', '', raw_title).strip()
+        # [ĐỒNG BỘ TIÊU ĐỀ]: Lấy chính xác form_title từ cấu hình để làm gốc
+        self.form_title = form_title or f"{Emojis.MATTRANG} ĐƠN ĐĂNG KÝ"
+        
+        # [VÁ LỖI EMOJI RÁC]: Gọt sạch mã <:emoji:id> cho tiêu đề Modal (vì Discord không hỗ trợ)
+        # Tiêu đề này sẽ đồng bộ với nội dung sếp đã setup
+        clean_popup_title = re.sub(r'<a?:\w+:\d+>', '', self.form_title).strip()
+        if not clean_popup_title: clean_popup_title = "ĐƠN ĐĂNG KÝ"
         
         super().__init__(title=clean_popup_title[:45])
         
         self.log_channel = log_channel
-        self.form_title = form_title or "ĐƠN ĐĂNG KÝ MỚI"
         self.show_thumbnail = show_thumbnail
         self.inputs = {}
 
@@ -35,7 +38,7 @@ class DynamicFormModal(discord.ui.Modal):
         # Phản hồi nhẹ nhàng tránh lỗi Interaction Failed
         await interaction.response.defer(ephemeral=True)
 
-        # 6. Embed Log với tiêu đề tùy chỉnh (Embed thì hỗ trợ Emoji thoải mái)
+        # 6. Embed Log với tiêu đề tùy chỉnh (Đã đồng bộ - Embed hỗ trợ Emoji thoải mái)
         embed = discord.Embed(
             title=self.form_title,
             description=f"**Người gửi:** \n {interaction.user.mention}",
@@ -48,22 +51,26 @@ class DynamicFormModal(discord.ui.Modal):
             embed.set_thumbnail(url=interaction.user.display_avatar.url)
         
         for label, text_input in self.inputs.items():
+            # 7. Nếu trống thì hiện 'none'
             val = text_input.value if text_input.value else "`none`"
             embed.add_field(name=label, value=val, inline=False)
 
         if self.log_channel:
             try:
                 await self.log_channel.send(embed=embed)
+                # 2. Phản hồi thành công
                 await interaction.followup.send(
                     f"{Emojis.MATTRANG} đơn của cậu đã được gửi đi thành công.", 
                     ephemeral=True
                 )
             except:
+                # 3. Lỗi kênh log/quyền hạn
                 await interaction.followup.send(
                     f"{Emojis.HOICHAM} aree... không thể gửi đơn vào kênh log. hãy kiểm tra lại quyền hạn nhé.", 
                     ephemeral=True
                 )
         else:
+            # 3. Không tìm thấy kênh log
             await interaction.followup.send(
                 f"{Emojis.HOICHAM} aree... không tìm thấy kênh trả đơn. hãy báo cho staff/manager để kiểm tra lại cấu hình nhé.", 
                 ephemeral=True
