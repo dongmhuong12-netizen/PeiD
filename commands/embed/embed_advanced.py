@@ -39,7 +39,7 @@ async def export_cmd(interaction: discord.Interaction, name: str):
         compressed = zlib.compress(json_bytes)
         export_code = base64.urlsafe_b64encode(compressed).decode('utf-8')
         
-        # FIX: Gom mạch f-string chuẩn Industrial để tránh SyntaxError tai hại
+        # FIX: Gom mạch f-string trên các dòng hợp lệ để tránh SyntaxError
         response_text = (
             f"{Emojis.MATTRANG} tạo mã thành công, có thể sao chép mã bên dưới để sử dụng\n"
             f"lưu ý: **không được** chỉnh sửa đoạn mã này để tránh lỗi hệ thống.\n\n"
@@ -144,7 +144,7 @@ async def clone_cmd(interaction: discord.Interaction, name: str, link_or_id: str
         # 5. Lưu kho vĩnh viễn
         await save_embed(interaction.guild.id, name, clean_data)
         
-        # Trả kết quả thành công với văn phong niêm phong 100%
+        # FIX: Bảo toàn văn phong và dấu backtick
         await interaction.followup.send(content=f"{Emojis.YIYITIM} clone embed `{name}` thành công! cậu có thể dùng `/p embed edit` để `chỉnh sửa` lại theo ý muốn nhé.")
         
     except discord.Forbidden:
@@ -169,4 +169,4 @@ async def setup(bot: commands.Bot):
             embed_group.add_command(export_cmd)
             embed_group.add_command(import_cmd)
             embed_group.add_command(clone_cmd)
-            print("[load] success: commands.embed.embed_advanced (Multi-IT Edition)", flush=True)
+            print("[load] success: commands.embed.embed_advanced (Multi-IT Fixed Edition)", flush=True)
