@@ -104,11 +104,11 @@ def build_omni_view(data, guild, member):
 # OPTIMIZED SEND COMMAND (NO-CHANNEL VERSION)
 # =============================
 
-@app_commands.command(name="send", description="phóng embed vào kênh hiện tại (có thể giả danh)")
+@app_commands.command(name="send", description="gửi embed vào kênh hiện tại (có thể giả danh)")
 @app_commands.describe(
-    name="tên embed muốn gửi", 
-    identity="chọn 'vỏ' danh tính để giả danh (tùy chọn)",
-    extra_embeds="các embed khác muốn gửi kèm, cách nhau bằng dấu phẩy (vd: b, c)"
+    name="chọn embed chính muốn gửi", 
+    identity="chọn vỏ danh tính để giả danh (tùy chọn)",
+    extra_embeds="nhập tên các embed khác, cách nhau bằng dấu phẩy (vd: b, c)"
 )
 @app_commands.autocomplete(name=embed_name_autocomplete, identity=identity_autocomplete)
 async def send_cmd(interaction: discord.Interaction, name: str, identity: str = None, extra_embeds: str = None):
