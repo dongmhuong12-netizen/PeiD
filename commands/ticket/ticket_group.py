@@ -135,9 +135,9 @@ class TicketGroup(app_commands.Group):
                 )
                 return await interaction.followup.send(embed=embed_full)
 
-        # [CHỐT HẠ] Cập nhật tên Embed vào Config để Dashboard (yiyi setting) lấy được data
-        # Tuyệt đối lưu dạng String để Dashboard hiển thị sạch sẽ
-        await update_ticket_config(guild_id, {"embed_name": str(embed_name)})
+        # [CHỐT HẠ] Hợp nhất dữ liệu: Đưa thêm tên Embed vào cấu hình cũ thay vì ghi đè mới hoàn toàn
+        config["embed_name"] = str(embed_name)
+        await update_ticket_config(guild_id, config)
 
         # [FIX LỖI IMAGE_23] Đã thêm tường minh tham số embed=
         embed_ok = discord.Embed(
