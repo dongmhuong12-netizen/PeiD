@@ -26,7 +26,7 @@ class BoostGroup(app_commands.Group):
     @app_commands.default_permissions(manage_guild=True)
     async def role(self, interaction: discord.Interaction, role: discord.Role):
         """(1) cập nhật role và kích hoạt truy quét chủ động"""
-        # [GIA CỐ] Defer ngay lập tức để tránh lỗi Unknown Interaction khi sync_all_boosters chạy nặng
+        # [GIA CỐ] Defer ngay lập tức để tránh lỗi Unknown Interaction
         await interaction.response.defer(ephemeral=False)
         
         print(f"[BOOST] Đang setup role {role.name} cho server {interaction.guild.id}", flush=True)
@@ -43,7 +43,6 @@ class BoostGroup(app_commands.Group):
         await interaction.followup.send(embed=embed)
 
         # LOGIC PROACTIVE: tự động quét toàn server để gán role cho người đang boost
-        # Chạy task ngầm để không làm nghẽn phản hồi chính
         asyncio.create_task(sync_all_boosters(interaction.guild))
 
     @app_commands.command(name="channel", description="đặt kênh thông báo khi có người boost")
@@ -54,6 +53,8 @@ class BoostGroup(app_commands.Group):
         
         print(f"[BOOST] Đang setup channel {channel.name} cho server {interaction.guild.id}", flush=True)
         config = await get_guild_config(interaction.guild.id)
+        # [SỬA LỖI BIẾN]: Cập nhật cả key mới để Dashboard luôn hiện data chính xác
+        config["channel_id"] = channel.id
         config["channel"] = channel.id
         await save_guild_config(interaction.guild.id, config)
         
@@ -95,6 +96,8 @@ class BoostGroup(app_commands.Group):
             return await interaction.followup.send(embed=embed_err)
         
         config = await get_guild_config(interaction.guild.id)
+        # [SỬA LỖI BIẾN]: Chuẩn hóa key embed_name cho Dashboard
+        config["embed_name"] = name
         config["embed"] = name
         await save_guild_config(interaction.guild.id, config)
         
@@ -117,6 +120,7 @@ class BoostGroup(app_commands.Group):
         rolesetup = role_obj.mention if role_obj else "`none`"
 
         # [KIM BÀI MIỄN TỬ] Kích hoạt bảo vệ 5 phút trong State
+        # Đồng bộ Key tuyệt đối với Booster Engine
         bypass_key = f"boost_test_{interaction.guild.id}_{interaction.user.id}"
         await State.set_ui(bypass_key, {"expiry": time.time() + 300})
         
@@ -164,6 +168,7 @@ class BoosterListener(commands.Cog):
         """Vòng lặp đồng bộ: gán cho boost, gỡ cho không boost (Bypass 5p)"""
         for guild in self.bot.guilds:
             try:
+                # [INDUSTRIAL] Gọi sync_all_boosters để quét sạch member no-boost/test-expired
                 await sync_all_boosters(guild)
             except:
                 continue
@@ -180,7 +185,7 @@ class BoosterListener(commands.Cog):
         
         boost_changed = before.premium_since != after.premium_since
         if boost_changed:
-            # Gán role/Level mới
+            # Gán role/Level mới thông qua Engine
             task = asyncio.create_task(assign_correct_level(after))
             self._tasks.add(task)
             task.add_done_callback(self._tasks.discard)
@@ -197,4 +202,4 @@ async def setup(bot: commands.Bot):
         if not any(c.name == "boost" for c in p_cmd.commands):
             p_cmd.add_command(BoostGroup())
     await bot.add_cog(BoosterListener(bot))
-    print("[load] success: core.booster (Industrial Defer Applied)", flush=True)
+    print("[load] success: core.booster (Standardized & Expire Fix)", flush=True)
