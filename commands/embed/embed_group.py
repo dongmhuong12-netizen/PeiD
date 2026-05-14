@@ -112,6 +112,7 @@ class EmbedGroup(app_commands.Group):
         super().__init__(name="embed", description="hệ thống quản lý embed chuyên sâu")
 
     @app_commands.command(name="create", description="tạo embed thiết kế mới")
+    @app_commands.describe(name="nhập tên embed mới muốn tạo")
     async def create(self, interaction: discord.Interaction, name: str):
         # QUY TẮC 3S: Defer ngay lập tức để giữ mạch kết nối với Discord (Industrial Standard)
         await interaction.response.defer(ephemeral=False)
@@ -156,6 +157,7 @@ class EmbedGroup(app_commands.Group):
         view.message = msg
 
     @app_commands.command(name="edit", description="chỉnh sửa embed hiện có")
+    @app_commands.describe(name="chọn embed muốn chỉnh sửa từ danh sách")
     @app_commands.autocomplete(name=embed_name_autocomplete)
     async def edit(self, interaction: discord.Interaction, name: str):
         # IT Standard Defer: Tránh lỗi "Interaction Failed" khi Cloud phản hồi chậm
@@ -186,7 +188,10 @@ class EmbedGroup(app_commands.Group):
         view.message = msg
 
     @app_commands.command(name="show", description="gửi embed vào channel")
-    @app_commands.describe(extra_embeds="các embed khác muốn gửi kèm, cách nhau bằng dấu phẩy (vd: b, c)")
+    @app_commands.describe(
+        name="chọn embed chính muốn gửi từ danh sách",
+        extra_embeds="nhập tên các embed khác muốn gửi kèm, cách nhau bằng dấu phẩy (vd: b, c)"
+    )
     @app_commands.autocomplete(name=embed_name_autocomplete)
     async def show(self, interaction: discord.Interaction, name: str, extra_embeds: str = None):
         # [KẾT NỐI MẠCH] Gom danh sách các embed cần gửi lần lượt
@@ -216,9 +221,9 @@ class EmbedGroup(app_commands.Group):
 
     @app_commands.command(name="send", description="gửi embed vào kênh được chỉ định")
     @app_commands.describe(
-        channel="kênh nhận embed",
-        name="tên embed chính",
-        extra_embeds="các embed khác muốn gửi kèm, cách nhau bằng dấu phẩy (vd: b, c)"
+        channel="chọn kênh muốn gửi embed tới",
+        name="chọn embed chính muốn gửi từ danh sách",
+        extra_embeds="nhập tên các embed khác muốn gửi kèm, cách nhau bằng dấu phẩy (vd: b, c)"
     )
     @app_commands.autocomplete(name=embed_name_autocomplete)
     async def send(self, interaction: discord.Interaction, channel: discord.TextChannel, name: str, extra_embeds: str = None):
@@ -248,6 +253,7 @@ class EmbedGroup(app_commands.Group):
             await send_embed(channel, data, interaction.guild, interaction.user, embed_name=emb_name, view=view)
 
     @app_commands.command(name="delete", description="xóa embed vĩnh viễn")
+    @app_commands.describe(name="chọn embed muốn xóa vĩnh viễn từ danh sách")
     @app_commands.autocomplete(name=embed_name_autocomplete)
     async def delete(self, interaction: discord.Interaction, name: str):
         # [KẾT NỐI MẠCH] Await để lệnh xóa thực thi xong trên Cloud mới báo thành công
