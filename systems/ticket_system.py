@@ -53,7 +53,7 @@ async def handle_ticket_interaction(interaction: discord.Interaction):
         existing_channel = discord.utils.get(guild.channels, name=ticket_name)
         if existing_channel:
             embed_exist = discord.Embed(
-                description=f"{Emojis.MATTRANG} cậu đã có sẵn một Ticket đang mở sẵn từ chính cậu ở kênh {existing_channel.mention} rồi nhee, không được tạo thêm đâu.",
+                description=f"{Emojis.MATTRANG} cậu đã có một Ticket đang mở sẵn từ chính cậu ở kênh {existing_channel.mention} rồi nhee, không được tạo thêm đâu.",
                 color=0xf8bbd0
             )
             return await interaction.followup.send(embed=embed_exist, ephemeral=True)
