@@ -71,12 +71,11 @@ class EmbedLinkGroup(app_commands.Group):
     @app_commands.command(name="add", description="gắn một nút link web vào embed")
     @app_commands.describe(
         embed_name="tên embed cần gắn", 
-        label="chữ hiển thị trên nút (tối đa 80 ký tự)", 
-        url="đường dẫn web (phải bắt đầu bằng http:// hoặc https://)",
-        emoji="emoji hiển thị (tùy chọn)"
+        label="nhãn nút (hỗ trợ cả emoji thiết bị và discord, tối đa 80 ký tự)", 
+        url="đường dẫn web (phải bắt đầu bằng http:// hoặc https://)"
     )
     @app_commands.autocomplete(embed_name=embed_name_autocomplete)
-    async def add_link(self, interaction: discord.Interaction, embed_name: str, label: str, url: str, emoji: str = None):
+    async def add_link(self, interaction: discord.Interaction, embed_name: str, label: str, url: str):
         # Chuyển sang True để bảo mật quá trình setup
         await interaction.response.defer(ephemeral=True)
         guild_id = interaction.guild.id
@@ -85,24 +84,23 @@ class EmbedLinkGroup(app_commands.Group):
         if len(label) > 80:
             return await interaction.followup.send(f"{Emojis.HOICHAM} chữ hiển thị vượt giới hạn ({len(label)}/80). hãy viết ngắn đi một chút nhé.")
 
-        # 2. Validation: Regex URL chặt chẽ (Đã đổi xưng hô thành 'cậu')
+        # 2. Validation: Regex URL chặt chẽ
         url_pattern = r"^https?://[^\s/$.?#].[^\s]*$"
         if not re.match(url_pattern, url):
             return await interaction.followup.send(f"{Emojis.HOICHAM} aree... URL cậu nhập có vẻ không đúng định dạng rồi. cậu hãy chắc chắn nó bắt đầu bằng http:// hoặc https:// nhé.")
 
-        # 3. Validation: Check Emoji (Đã đổi xưng hô thành 'cậu')
-        if emoji and not is_valid_emoji(emoji):
-            return await interaction.followup.send(f"{Emojis.HOICHAM} hình như emoji này không nằm trong danh sách hỗ trợ rồi. cậu check lại định dạng <:name:id> hoặc dùng emoji mặc định nhé.")
+        # [CẬP NHẬT GIAO DIỆN CHUẨN INDUSTRIAL] Tự động nới lỏng khoảng cách cho Emoji và Icon Link
+        formatted_label = f" {label.strip()} "
 
-        # 4. Tạo Data Nút Link
+        # 3. Tạo Data Nút Link (Tích hợp vạn năng: Emoji đã nằm trong Label)
         btn_data = {
             "type": "link",
-            "label": label,
+            "label": formatted_label,
             "url": url.strip(),
-            "emoji": emoji
+            "emoji": None # Đã tích hợp vào Label nên field này để None
         }
         
-        # 5. Cấy nút vào Storage
+        # 4. Cấy nút vào Storage (Mạch Append chuẩn Multi-Link)
         success = await atomic_update_button(guild_id, embed_name, button_data=btn_data, action="add")
         
         if success:
@@ -141,6 +139,6 @@ async def setup(bot: commands.Bot):
         if existing: p_cmd.remove_command("link")
         
         p_cmd.add_command(EmbedLinkGroup())
-        print("[load] success: commands.embed.embed_link (Smart Remove & Yiyi Style)", flush=True)
+        print("[load] success: commands.embed.embed_link (Universal Label & Industrial Fix)", flush=True)
     else:
         print("[error] không tìm thấy khung /p!", flush=True)
