@@ -209,7 +209,7 @@ class TicketGroup(app_commands.Group):
 
         btn_data = {
             "type": "button", "style": "primary", "label": "  Ticket",
-            "emoji": f"{Emojis.MATTRANG}", "custom_id": "yiyi:ticket:open", "system": "ticket"
+            "emoji": f"{Emojis.NO}", "custom_id": "yiyi:ticket:open", "system": "ticket"
         }
 
         updated = await atomic_update_button(guild_id, embed_name, action="update_by_id", custom_id="yiyi:ticket:open", button_data=btn_data)
