@@ -131,7 +131,7 @@ class FormsGroup(app_commands.Group):
             await interaction.followup.send(f"{Emojis.HOICHAM} Lỗi hệ thống khi cấu hình trường: `{e}`")
 
     # =========================
-    # LỆNH 3: CẤY NÚT GỬI ĐƠN (Gỡ bom xóa dữ liệu)
+    # LỆNH 3: APPLY (BẢN FIX LỖI HIỂN THỊ)
     # =========================
     @app_commands.command(name="apply", description="11. Liên kết Form vào Embed")
     @app_commands.describe(embed_name="Tên embed muốn liên kết nút gửi đơn")
@@ -170,7 +170,8 @@ class FormsGroup(app_commands.Group):
                 title=f"{Emojis.MATTRANG} liên kết với embed `{embed_name}` thành công",
                 color=0xf8bbd0
             )
-            await interaction.followup.send(embed_success)
+            # FIX: Thêm từ khóa 'embed=' để tránh lỗi hiển thị xác object
+            await interaction.followup.send(embed=embed_success)
         except Exception as e:
             print(f"[LỖI FORM APPLY] {e}")
             await interaction.followup.send(f"{Emojis.HOICHAM} Lỗi liên kết nút: `{e}`")
