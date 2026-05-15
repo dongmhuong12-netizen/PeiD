@@ -15,15 +15,27 @@ from utils.emojis import Emojis
 
 async def embed_name_autocomplete(interaction: discord.Interaction, current: str):
     """
-    Autocomplete thần tốc chống lỗi 404 cho hệ thống Ticket.
+    [NÂNG CẤP INDUSTRIAL]
+    Autocomplete thần tốc hỗ trợ cả chuỗi đơn và chuỗi nhiều tên (cách nhau bởi dấu phẩy).
+    Đảm bảo sếp không bao giờ phải nhớ tên embed khi setup.
     """
     guild = interaction.guild
     if not guild: return []
     try:
         names = await get_all_embed_names(guild.id)
+        
+        # MẠCH XỬ LÝ CHUẨN: Hỗ trợ gợi ý ngay cả khi sếp gõ chuỗi nhiều tên
+        if "," in current:
+            parts = current.split(",")
+            to_complete = parts[-1].strip().lower()
+            prefix = ",".join(parts[:-1]) + ", "
+        else:
+            to_complete = current.strip().lower()
+            prefix = ""
+
         choices = [
-            app_commands.Choice(name=name, value=name) 
-            for name in names if current.lower() in name.lower()
+            app_commands.Choice(name=f"{prefix}{name}", value=f"{prefix}{name}") 
+            for name in names if to_complete in name.lower()
         ][:25]
         return choices
     except Exception:
@@ -172,6 +184,10 @@ class TicketGroup(app_commands.Group):
     # =========================
     @app_commands.command(name="setting", description="Xem cấu hình hiện tại của hệ thống Ticket")
     async def ticket_setting(self, interaction: discord.Interaction):
+        """
+        [ATK/DEF OPTIMIZED]
+        Mạch hiển thị tích hợp Self-Healing: Tự động phát hiện và gỡ bỏ liên kết với embed đã bị xóa.
+        """
         await interaction.response.defer(ephemeral=True)
         guild = interaction.guild
         config = await get_ticket_config(guild.id)
@@ -179,16 +195,16 @@ class TicketGroup(app_commands.Group):
         if not config:
             return await interaction.followup.send(f"{Emojis.HOICHAM} hệ thống ticket chưa được cấu hình trên server này.", ephemeral=True)
 
-        # [VALIDATION LOGIC] Kiểm tra xem Embed liên kết có còn tồn tại không
+        # [VALIDATION LOGIC - DEFENSE LAYER]
         embed_name = config.get("embed_name")
         display_embed = "Chưa liên kết"
         
         if embed_name:
-            # Xác minh linh hồn embed trong kho
+            # Thực hiện Verify chéo với kho Embed (Real-time check)
             exists = await load_embed(guild.id, embed_name)
             if not exists:
+                # [SELF-HEALING] Nếu embed không tồn tại, đánh dấu lỗi và tự dọn dẹp database
                 display_embed = f"`{embed_name}` (⚠️ **Đã bị xoá**)"
-                # Tự động dọn dẹp liên kết ma trong DB để đồng bộ hoàn toàn
                 config["embed_name"] = None
                 await update_ticket_config(guild.id, config)
             else:
