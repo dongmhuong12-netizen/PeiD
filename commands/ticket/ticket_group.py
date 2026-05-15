@@ -186,9 +186,9 @@ class TicketGroup(app_commands.Group):
         await interaction.followup.send(f"{Emojis.HOICHAM} Role này hổng có trong danh sách hỗ trợ nên hổng xóa được nhe.")
 
     # =========================
-    # CÁC LỆNH KHÁC (GIỮ NGUYÊN DNA CỦA SẾP)
+    # LỆNH 4: APPLY (ĐỘC QUYỀN - SINGLE INSTANCE)
     # =========================
-    @app_commands.command(name="apply", description="Liên kết Ticket vào Embed")
+    @app_commands.command(name="apply", description="Liên kết Ticket vào Embed (Chỉ cho phép duy nhất 1 embed)")
     @app_commands.describe(embed_name="Tên embed muốn gắn nút Ticket")
     @app_commands.autocomplete(embed_name=embed_name_autocomplete)
     async def apply(self, interaction: discord.Interaction, embed_name: str):
@@ -212,6 +212,12 @@ class TicketGroup(app_commands.Group):
             "emoji": f"{Emojis.NO}", "custom_id": "yiyi:ticket:open", "system": "ticket"
         }
 
+        # [MẠCH THANH TRỪNG - INDUSTRIAL SINGLE INSTANCE]
+        old_embed = config.get("embed_name")
+        if old_embed and str(old_embed) != str(embed_name):
+            await atomic_update_button(guild_id, old_embed, action="remove_by_id", custom_id="yiyi:ticket:open")
+
+        # Gắn nút vào embed mục tiêu
         updated = await atomic_update_button(guild_id, embed_name, action="update_by_id", custom_id="yiyi:ticket:open", button_data=btn_data)
         if not updated:
             await atomic_update_button(guild_id, embed_name, button_data=btn_data, action="add")
@@ -221,10 +227,14 @@ class TicketGroup(app_commands.Group):
 
         embed_ok = discord.Embed(
             title=f"{Emojis.MATTRANG} liên kết Ticket vào embed `{embed_name}` thành công.",
+            description="*hệ thống đã tự động gỡ nút Ticket ở các vị trí cũ để đảm bảo tính duy nhất.*",
             color=0xf8bbd0
         )
         await interaction.followup.send(embed=embed_ok)
 
+    # =========================
+    # LỆNH 5: SETTING (REAL-TIME MONITORING)
+    # =========================
     @app_commands.command(name="setting", description="Xem cấu hình hiện tại của hệ thống Ticket")
     async def ticket_setting(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
@@ -234,32 +244,29 @@ class TicketGroup(app_commands.Group):
         if not config:
             return await interaction.followup.send(f"{Emojis.HOICHAM} hệ thống ticket chưa được cấu hình trên server này.", ephemeral=True)
 
+        # Mạch Verify thực trạng thời gian thực
         embed_name = config.get("embed_name")
-        display_embed = "Chưa liên kết"
+        display_embed = "`none`"
         if embed_name:
-            exists = await load_embed(guild.id, embed_name)
-            if not exists:
-                display_embed = f"`{embed_name}` (⚠️ **Đã bị xoá**)"
-                config["embed_name"] = None
-                await update_ticket_config(guild.id, config)
-            else:
+            if await load_embed(guild.id, embed_name):
                 display_embed = f"`{embed_name}`"
 
         cat = guild.get_channel(int(config.get("category_id", 0)))
         log = guild.get_channel(int(config.get("log_channel_id", 0)))
         staff_ids = config.get("staff_roles", [])
-        staff_mentions = ", ".join([f"<@&{r}>" for r in staff_ids]) or "Chưa có"
+        staff_mentions = ", ".join([f"<@&{r}>" for r in staff_ids]) if staff_ids else "`none`"
 
         embed_setting = discord.Embed(
-            title=f"{Emojis.MATTRANG} cấu hình ticket của `{guild.name}`",
+            title=f"{Emojis.MATTRANG} chi tiết cấu hình ticket của {guild.name}",
             description=(
-                f"• **Danh mục:** {cat.mention if cat else '`Không tìm thấy`'}\n"
-                f"• **Kênh Logs:** {log.mention if log else '`Không tìm thấy`'}\n"
-                f"• **Staff Roles:** {staff_mentions}\n"
-                f"• **Embed liên kết:** {display_embed}"
+                f"• **danh mục:** {cat.mention if cat else '`none`'}\n"
+                f"• **kênh logs:** {log.mention if log else '`none`'}\n"
+                f"• **staff roles:** {staff_mentions}\n"
+                f"• **embed liên kết:** {display_embed}"
             ),
             color=0xf8bbd0
         )
+        embed_setting.set_footer(text="yiyi iu cậu • báo cáo hạ tầng hỗ trợ")
         await interaction.followup.send(embed=embed_setting)
 
 async def setup(bot: commands.Bot):
@@ -268,4 +275,4 @@ async def setup(bot: commands.Bot):
         existing = next((c for c in p_cmd.commands if c.name == "ticket"), None)
         if existing: p_cmd.remove_command("ticket")
         p_cmd.add_command(TicketGroup())
-        print("[LOAD] Success: commands.ticket.ticket_group (Modular Staff Optimized)", flush=True)
+        print("[LOAD] Success: commands.ticket.ticket_group (Full Monitoring Optimized)", flush=True)
