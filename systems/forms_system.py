@@ -96,7 +96,7 @@ async def update_form_field(guild_id: int, embed_name: str, slot: int, label: st
     return False
 
 # ==========================================
-# INTERACTION LOGIC (HỢP LÝ HOÁ VỊ TRÍ NGƯỜI GỬI)
+# INTERACTION LOGIC (HỢP LÝ HOÁ VỊ TRÍ & SPACING)
 # ==========================================
 
 class YiyiFormModal(discord.ui.Modal):
@@ -133,8 +133,11 @@ class YiyiFormModal(discord.ui.Modal):
             timestamp=discord.utils.utcnow()
         )
         
-        # [VỊ TRÍ NGƯỜI GỬI] Đưa xuống làm Field ngay dưới Title
+        # [VỊ TRÍ NGƯỜI GỬI] Hiện ngay dưới Title
         embed_log.add_field(name="Người gửi:", value=interaction.user.mention, inline=False)
+        
+        # [KHOẢNG CÁCH INDUSTRIAL] Thêm một hàng trống để đơn nhìn thông thoáng hơn
+        embed_log.add_field(name="\u200b", value="\u200b", inline=False)
         
         # Thêm các trường dữ liệu từ đơn (sắp xếp theo thứ tự slot)
         for slot in sorted(self.inputs.keys(), key=lambda x: int(x)):
