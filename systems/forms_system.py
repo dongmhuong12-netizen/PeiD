@@ -1,4 +1,10 @@
+import discord
 from core.state import State
+from utils.emojis import Emojis
+
+# ==========================================
+# DATABASE LOGIC (BẢO TỒN 100% DNA CỦA SẾP)
+# ==========================================
 
 def _get_forms_col():
     """
@@ -88,3 +94,77 @@ async def update_form_field(guild_id: int, embed_name: str, slot: int, label: st
         )
         return True
     return False
+
+# ==========================================
+# INTERACTION LOGIC (CẤY MẠCH XỬ LÝ MODAL)
+# ==========================================
+
+class YiyiFormModal(discord.ui.Modal):
+    """Lớp giao diện bảng nhập liệu hiện lên khi người dùng bấm nút."""
+    def __init__(self, title, fields_data, log_channel_id, show_thumbnail):
+        super().__init__(title=title)
+        self.log_channel_id = log_channel_id
+        self.show_thumbnail = show_thumbnail
+        self.inputs = {}
+
+        # Sắp xếp các ô nhập liệu theo đúng thứ tự slot (1 -> 5)
+        sorted_slots = sorted(fields_data.keys(), key=lambda x: int(x))
+
+        for slot in sorted_slots:
+            data = fields_data[slot]
+            text_input = discord.ui.TextInput(
+                label=data['label'],
+                placeholder=data['placeholder'],
+                required=data['required'],
+                style=discord.TextStyle.paragraph if len(data['label']) > 15 else discord.TextStyle.short
+            )
+            self.add_item(text_input)
+            self.inputs[slot] = text_input
+
+    async def on_submit(self, interaction: discord.Interaction):
+        # Mạch gửi đơn về kênh log khi user nhấn Submit
+        channel = interaction.guild.get_channel(int(self.log_channel_id))
+        if not channel:
+            return await interaction.response.send_message(f"{Emojis.HOICHAM} hổng tìm thấy kênh log để gửi đơn rồi sếp ơi!", ephemeral=True)
+
+        embed_log = discord.Embed(
+            title=f"{Emojis.MATTRANG} đơn đăng ký mới: {self.title}",
+            color=0xf8bbd0,
+            timestamp=discord.utils.utcnow()
+        )
+        
+        for slot in sorted(self.inputs.keys(), key=lambda x: int(x)):
+            text_input = self.inputs[slot]
+            embed_log.add_field(name=f"• {text_input.label}", value=text_input.value, inline=False)
+        
+        embed_log.set_author(name=f"người gửi: {interaction.user.display_name}", icon_url=interaction.user.display_avatar.url)
+        if self.show_thumbnail:
+            embed_log.set_thumbnail(url=interaction.user.display_avatar.url)
+
+        await channel.send(embed=embed_log)
+        await interaction.response.send_message(f"{Emojis.MATTRANG} đơn của cậu đã được gửi đi thành công nhee!", ephemeral=True)
+
+async def handle_forms_interaction(interaction: discord.Interaction):
+    """
+    [ENTRY POINT] 
+    Hàm này điều phối việc hiện Modal khi user bấm nút gắn với Form.
+    Nó chính là cái mà button_listener.py đang tìm kiếm.
+    """
+    custom_id = interaction.data.get("custom_id", "")
+    parts = custom_id.split(":")
+    if len(parts) < 4: return
+
+    embed_name = parts[3]
+    config = await get_form_config(interaction.guild.id, embed_name)
+
+    if not config or not config.get("fields"):
+        return await interaction.response.send_message(f"{Emojis.HOICHAM} form này chưa được sếp thiết lập nội dung (field) rồi!", ephemeral=True)
+
+    # Hiện Modal xịn xò cho user
+    modal = YiyiFormModal(
+        title=config.get("form_title", "Biểu mẫu Yiyi"),
+        fields_data=config.get("fields", {}),
+        log_channel_id=config.get("log_channel_id"),
+        show_thumbnail=config.get("show_thumbnail", True)
+    )
+    await interaction.response.send_modal(modal)
