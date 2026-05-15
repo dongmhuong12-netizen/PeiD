@@ -13,14 +13,19 @@ async def handle_ticket_interaction(interaction: discord.Interaction):
     # [KẾT NỐI MẠCH] Truy vấn cấu hình Ticket từ Cloud Atlas
     config = await get_ticket_config(guild.id) 
 
-    # [MỤC 1] Phản hồi khi chưa có cấu hình
-    if not config:
+    # [DEF - VÁ LỖI ĐỒNG BỘ] 
+    # Vì get_ticket_config giờ trả về {} nên phải check thêm key category_id
+    if not config or not config.get("category_id"):
         embed_no_config = discord.Embed(
             title=f"{Emojis.HOICHAM} hệ thống chưa có cấu hình.",
             description="cậu hãy liên hệ với các Admin để nhận sự hỗ trợ từ họ nhé.",
             color=0xf8bbd0
         )
-        return await interaction.response.send_message(embed=embed_no_config, ephemeral=True)
+        # Nếu là nút bấm mở ticket thì send_message, còn lại tùy biến theo mạch logic
+        if not interaction.response.is_done():
+            return await interaction.response.send_message(embed=embed_no_config, ephemeral=True)
+        else:
+            return await interaction.followup.send(embed=embed_no_config, ephemeral=True)
 
     # =========================
     # LOGIC 1: MỞ TICKET
@@ -41,14 +46,14 @@ async def handle_ticket_interaction(interaction: discord.Interaction):
             embed_err = discord.Embed(
                 title=f"{Emojis.HOICHAM} aree...?",
                 description=(
-                    "có vẻ có lỗi gì đó đối với Ticket của cậu được tạo và gửi đi. "
-                    "hãy thử lại sau một thời gian hoặc liên hệ với staff/thành viên hỗ trợ để nhận sự trợ giúp từ họ nhé."
+                    "có vẻ danh mục chứa Ticket đã bị xóa hoặc không hợp lệ. "
+                    "hãy liên hệ với staff/thành viên hỗ trợ để thiết lập lại bằng `/p ticket setup` nhé."
                 ),
                 color=0xf8bbd0
             )
             return await interaction.followup.send(embed=embed_err, ephemeral=True)
 
-        # [MỤC 3] Kiểm tra ticket trùng (Dựa trên tên kênh sếp dặn)
+        # [MỤC 3] Kiểm tra ticket trùng (Đã chuẩn hóa lower toàn diện)
         ticket_name = f"ticket-{user.name.lower()}"
         existing_channel = discord.utils.get(guild.channels, name=ticket_name)
         if existing_channel:
@@ -68,13 +73,15 @@ async def handle_ticket_interaction(interaction: discord.Interaction):
         # Nạp danh sách Staff từ cấu hình Cloud
         staff_ids = config.get("staff_roles", [])
         for r_id in staff_ids:
-            role = guild.get_role(int(r_id))
-            if role:
-                overwrites[role] = discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True)
+            try:
+                role = guild.get_role(int(r_id))
+                if role:
+                    overwrites[role] = discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True)
+            except: continue
 
-        # [MỤC 4] Tạo kênh (Giữ nguyên định dạng tên của sếp)
+        # [MỤC 4] Tạo kênh (Đã đồng bộ hóa định dạng tên)
         channel = await guild.create_text_channel(
-            name=f"ticket-{user.name}",
+            name=ticket_name,
             category=category,
             overwrites=overwrites,
             topic=f"Ticket hỗ trợ của {user.name} (ID: {user.id})"
