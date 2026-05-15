@@ -111,24 +111,20 @@ async def delete_embed(guild_id, name):
         gid = _gid(guild_id)
         name = _nid(name)
 
-        if gid not in cache:
-            return False
+        # [DEF - NHỔ CỎ TẬN GỐC] 
+        # Xóa RAM nếu có (Không return False sớm để đảm bảo lệnh xóa Cloud luôn chạy)
+        if gid in cache and isinstance(cache[gid], dict):
+            if name in cache[gid]:
+                del cache[gid][name]
+                if not cache[gid]:
+                    cache.pop(gid, None)
+                    _synced_guilds.discard(gid)
 
-        guild_data = cache[gid]
-        if not isinstance(guild_data, dict) or name not in guild_data:
-            return False
-
-        del guild_data[name]
-
-        # [CẤY MỚI] Xóa vĩnh viễn trên Cloud Atlas
+        # [GIA CỐ] Luôn luôn gửi lệnh xóa lên Cloud Atlas bất kể trạng thái RAM
         if hasattr(State.bot, "db"):
             await State.bot.db.embeds.delete_one({"guild_id": gid, "name": name})
-
-        if not guild_data:
-            cache.pop(gid, None)
-            _synced_guilds.discard(gid) # Reset trạng thái sync nếu server không còn embed nào
         
-    print(f"[storage] đã xóa embed '{name}' khỏi server {gid} (RAM & Cloud).", flush=True)
+    print(f"[storage] đã xóa vĩnh viễn embed '{name}' khỏi hệ thống (RAM & Cloud).", flush=True)
     return True
 
 # =========================
