@@ -377,16 +377,32 @@ class EmbedGroup(app_commands.Group):
         if extra_embeds:
             embed_names.extend([n.strip() for n in extra_embeds.split(",") if n.strip()])
 
+        # TRUY XUẤT DATABASE (Giả định sếp gắn db vào interaction.client.db)
+        db = interaction.client.db if hasattr(interaction.client, "db") else None
+
         for emb_name in embed_names:
-            # Await để lệnh xóa thực thi xong trên Cloud
+            # 1. Await để lệnh xóa thực thi xong trên Cloud (Linh hồn embed biến mất)
             await delete_embed(interaction.guild.id, emb_name)
             _cleanup_views(f"{interaction.guild.id}:{emb_name}")
+            
+            # 2. [INDUSTRIAL CASCADE CLEANUP] Dọn dẹp liên kết ma ở các hệ thống khác
+            if db:
+                guild_filter = {"guild_id": str(interaction.guild.id)}
+                
+                # Gỡ liên kết tại Ticket và Form
+                await db.tickets.update_many({**guild_filter, "embed_name": emb_name}, {"$set": {"embed_name": None}})
+                await db.forms.update_many({**guild_filter, "embed_name": emb_name}, {"$set": {"embed_name": None}})
+                
+                # Gỡ liên kết tại Guild Settings (Greet, Leave, YiyiSetting)
+                await db.guild_settings.update_many({**guild_filter, "greet_embed": emb_name}, {"$set": {"greet_embed": None}})
+                await db.guild_settings.update_many({**guild_filter, "leave_embed": emb_name}, {"$set": {"leave_embed": None}})
+                await db.guild_settings.update_many({**guild_filter, "yiyi_embed": emb_name}, {"$set": {"yiyi_embed": None}})
         
         # Báo cáo tổng kết dựa trên số lượng
         if len(embed_names) > 1:
-            await interaction.followup.send(f"{Emojis.MATTRANG} đã xoá thành công {len(embed_names)} embed. có thể tạo lại embed mới bằng tên của các embed này")
+            await interaction.followup.send(f"{Emojis.MATTRANG} đã xoá thành công {len(embed_names)} embed. toàn bộ liên kết tại ticket và hệ thống banner đã được gỡ bỏ.")
         else:
-            await interaction.followup.send(f"{Emojis.MATTRANG} embed `{name}` đã được xoá thành công. có thể tạo lại embed mới bằng tên của embed này")
+            await interaction.followup.send(f"{Emojis.MATTRANG} embed `{name}` đã được xoá thành công và gỡ bỏ liên kết hệ thống.")
 
 # =============================
 # INJECTION (KHÔI PHỤC MẠCH ĐĂNG KÝ LỆNH CHUẨN)
