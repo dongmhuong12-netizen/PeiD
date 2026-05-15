@@ -6,6 +6,7 @@ import copy
 
 from core.embed_ui import EmbedUIView, ACTIVE_EMBED_VIEWS
 from core.embed_storage import load_embed, delete_embed, get_all_embed_names
+from core.embed_storage import _nid # [HỖ TRỢ CHUẨN HÓA]
 from core.embed_sender import send_embed, _build_embed
 from systems.embed_system import EmbedSystem
 from core.variable_engine import apply_variables
@@ -373,26 +374,42 @@ class EmbedGroup(app_commands.Group):
         # [QUY TẮC 3S] Defer ngay để giữ kết nối
         await interaction.response.defer(ephemeral=False)
         
-        embed_names = [name]
+        # [ATK - CHUẨN HÓA] Ép toàn bộ về chữ thường để quét sạch dữ liệu ma (Lower-Case Batch)
+        embed_names = [_nid(name)]
         if extra_embeds:
-            embed_names.extend([n.strip() for n in extra_embeds.split(",") if n.strip()])
+            embed_names.extend([_nid(n) for n in extra_embeds.split(",") if n.strip()])
 
         # [DEF - TRUY XUẤT DATABASE GỐC] So sánh chuẩn NoneType để tránh crash Motor
         wrapper = getattr(interaction.client, "db", None)
         db = getattr(wrapper, "db", None)
 
+        # 1. KIỂM TOÁN (Verification) - Khôi phục văn phong check tồn tại
+        existing_names = []
+        for emb_name in embed_names:
+            if await load_embed(interaction.guild.id, emb_name):
+                existing_names.append(emb_name)
+
+        if not existing_names:
+            # Khôi phục đúng DNA văn phong khi không tìm thấy
+            embed_none = discord.Embed(
+                title=f"{Emojis.HOICHAM} hmm...?",
+                description=f"**yiyi** không tìm thấy embed nào có tên như cậu nhập, hãy thử kiểm tra lại nhe",
+                color=0xf8bbd0
+            )
+            return await interaction.followup.send(embed=embed_none)
+
         async def perform_cleanup():
-            # 1. Dọn dẹp trong Storage và Views (Xóa dữ liệu RAM và Cloud Embed)
-            storage_tasks = [delete_embed(interaction.guild.id, n) for n in embed_names]
-            for n in embed_names: 
+            # 2. Dọn dẹp trong Storage và Views (Xóa dữ liệu RAM và Cloud Embed)
+            storage_tasks = [delete_embed(interaction.guild.id, n) for n in existing_names]
+            for n in existing_names: 
                 _cleanup_views(f"{interaction.guild.id}:{n}")
             
             # [FIX CHÍ MẠNG] Sử dụng 'is not None' thay vì truth value testing
             if db is not None:
                 gid = str(interaction.guild.id)
-                names_in = {"$in": embed_names}
+                names_in = {"$in": existing_names}
                 
-                # 2. [INDUSTRIAL BATCH] Dọn dẹp liên kết ma tại Configs và Forms
+                # 3. [INDUSTRIAL BATCH] Dọn dẹp liên kết ma tại Configs và Forms
                 db_tasks = [
                     # Gỡ ở Ticket (Nằm trong configs module ticket)
                     db.configs.update_many(
@@ -418,11 +435,11 @@ class EmbedGroup(app_commands.Group):
             # Thực thi mạch dọn dẹp tối ưu
             await perform_cleanup()
             
-            # 3. BÁO CÁO TỔNG KẾT
-            if len(embed_names) > 1:
-                await interaction.followup.send(f"{Emojis.MATTRANG} đã xoá thành công `{len(embed_names)}` embed. toàn bộ liên kết tại ticket và hệ thống banner đã được dọn dẹp sạch sẽ.")
+            # 4. BÁO CÁO TỔNG KẾT (Bảo tồn văn phong sếp dặn)
+            if len(existing_names) > 1:
+                await interaction.followup.send(f"{Emojis.MATTRANG} đã xoá thành công `{len(existing_names)}` embed. toàn bộ liên kết tại ticket và hệ thống banner đã được dọn dẹp sạch sẽ.")
             else:
-                await interaction.followup.send(f"{Emojis.MATTRANG} embed `{name}` đã được xoá vĩnh viễn và gỡ bỏ liên kết hệ thống.")
+                await interaction.followup.send(f"{Emojis.MATTRANG} embed `{existing_names[0]}` đã được xoá vĩnh viễn và gỡ bỏ liên kết hệ thống.")
         except Exception as e:
             print(f"[Delete Error - Industrial] {e}", flush=True)
             await interaction.followup.send(f"{Emojis.HOICHAM} phát sinh lỗi khi xóa embed: `{e}`")
