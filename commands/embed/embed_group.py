@@ -370,34 +370,45 @@ class EmbedGroup(app_commands.Group):
     )
     @app_commands.autocomplete(name=embed_name_autocomplete, extra_embeds=embed_name_autocomplete)
     async def delete(self, interaction: discord.Interaction, name: str, extra_embeds: str = None):
-        # [QUY TẮC 3S] Defer ngay để giữ kết nối, tăng thời gian chờ cho hệ thống dọn dẹp
+        # [QUY TẮC 3S] Defer ngay để giữ kết nối
         await interaction.response.defer(ephemeral=False)
         
         embed_names = [name]
         if extra_embeds:
             embed_names.extend([n.strip() for n in extra_embeds.split(",") if n.strip()])
 
-        # [DEF - TRUY XUẤT DATABASE GỐC] Bỏ qua lớp wrapper để tương tác trực tiếp với cỗ máy Motor
+        # [DEF - TRUY XUẤT DATABASE GỐC] So sánh chuẩn NoneType để tránh crash Motor
         wrapper = getattr(interaction.client, "db", None)
-        db = getattr(wrapper, "db", wrapper) if wrapper else None
+        db = getattr(wrapper, "db", None)
 
-        # [ATK - THỰC THI SONG SONG] Chạy đồng thời xóa kho và dọn dẹp liên kết
         async def perform_cleanup():
-            # 1. Dọn dẹp trong Storage và Views (Parallel execution)
+            # 1. Dọn dẹp trong Storage và Views (Xóa dữ liệu RAM và Cloud Embed)
             storage_tasks = [delete_embed(interaction.guild.id, n) for n in embed_names]
-            for n in embed_names: _cleanup_views(f"{interaction.guild.id}:{n}")
+            for n in embed_names: 
+                _cleanup_views(f"{interaction.guild.id}:{n}")
             
-            if db:
-                guild_filter = {"guild_id": str(interaction.guild.id)}
+            # [FIX CHÍ MẠNG] Sử dụng 'is not None' thay vì truth value testing
+            if db is not None:
+                gid = str(interaction.guild.id)
                 names_in = {"$in": embed_names}
                 
-                # 2. [INDUSTRIAL BATCH] Gộp tất cả lệnh xóa liên kết vào 1 phiên xử lý hàng loạt
+                # 2. [INDUSTRIAL BATCH] Dọn dẹp liên kết ma tại Configs và Forms
                 db_tasks = [
-                    db.tickets.update_many({**guild_filter, "embed_name": names_in}, {"$set": {"embed_name": None}}),
-                    db.forms.update_many({**guild_filter, "embed_name": names_in}, {"$set": {"embed_name": None}}),
-                    db.guild_settings.update_many({**guild_filter, "greet_embed": names_in}, {"$set": {"greet_embed": None}}),
-                    db.guild_settings.update_many({**guild_filter, "leave_embed": names_in}, {"$set": {"leave_embed": None}}),
-                    db.guild_settings.update_many({**guild_filter, "yiyi_embed": names_in}, {"$set": {"yiyi_embed": None}})
+                    # Gỡ ở Ticket (Nằm trong configs module ticket)
+                    db.configs.update_many(
+                        {"guild_id": gid, "module": "ticket", "settings.embed_name": names_in}, 
+                        {"$set": {"settings.embed_name": None}}
+                    ),
+                    # Gỡ ở Forms
+                    db.forms.update_many(
+                        {"guild_id": gid, "embed_name": names_in}, 
+                        {"$set": {"embed_name": None}}
+                    ),
+                    # Gỡ ở các module Banner hệ thống (configs)
+                    db.configs.update_many(
+                        {"guild_id": gid, "module": {"$in": ["greet", "leave", "wellcome", "booster"]}, "settings.embed_name": names_in},
+                        {"$set": {"settings.embed_name": None}}
+                    )
                 ]
                 await asyncio.gather(*(storage_tasks + db_tasks))
             else:
@@ -407,7 +418,7 @@ class EmbedGroup(app_commands.Group):
             # Thực thi mạch dọn dẹp tối ưu
             await perform_cleanup()
             
-            # 3. BÁO CÁO TỔNG KẾT (Giữ nguyên văn phong sếp)
+            # 3. BÁO CÁO TỔNG KẾT
             if len(embed_names) > 1:
                 await interaction.followup.send(f"{Emojis.MATTRANG} đã xoá thành công `{len(embed_names)}` embed. toàn bộ liên kết tại ticket và hệ thống banner đã được dọn dẹp sạch sẽ.")
             else:
