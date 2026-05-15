@@ -141,9 +141,9 @@ class FormsGroup(app_commands.Group):
         try:
             btn_data = {
                 "type": "button",
-                "style": "success",
-                "label": label,
-                "emoji": "📝",
+                "style": "secondary",
+                "label": f"\u2800{label}",
+                "emoji": f"{Emojis.MATTRANG}",
                 "custom_id": f"yiyi:forms:open:{embed_name}", 
                 "system": "forms"
             }
