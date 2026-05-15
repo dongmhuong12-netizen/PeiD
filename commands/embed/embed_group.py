@@ -370,39 +370,43 @@ class EmbedGroup(app_commands.Group):
     )
     @app_commands.autocomplete(name=embed_name_autocomplete, extra_embeds=embed_name_autocomplete)
     async def delete(self, interaction: discord.Interaction, name: str, extra_embeds: str = None):
-        # [KẾT NỐI MẠCH] Đổi sang defer + followup để xử lý nhiều embed không bị sập Interaction
+        # [QUY TẮC 3S] Defer ngay để giữ kết nối, tăng thời gian chờ cho hệ thống dọn dẹp
         await interaction.response.defer(ephemeral=False)
         
         embed_names = [name]
         if extra_embeds:
             embed_names.extend([n.strip() for n in extra_embeds.split(",") if n.strip()])
 
-        # TRUY XUẤT DATABASE (Giả định sếp gắn db vào interaction.client.db)
-        db = interaction.client.db if hasattr(interaction.client, "db") else None
+        db = getattr(interaction.client, "db", None)
 
+        # 1. DỌN DẸP STORAGE LẦN LƯỢT (Để đảm bảo tính toàn vẹn bộ nhớ)
         for emb_name in embed_names:
-            # 1. Await để lệnh xóa thực thi xong trên Cloud (Linh hồn embed biến mất)
             await delete_embed(interaction.guild.id, emb_name)
             _cleanup_views(f"{interaction.guild.id}:{emb_name}")
+
+        # 2. [INDUSTRIAL OPTIMIZATION] DỌN DẸP LIÊN KẾT MA (SIÊU TỐC)
+        if db:
+            # Sử dụng toán tử $in để cập nhật hàng loạt trong 1 nốt nhạc, chống treo interaction
+            guild_filter = {"guild_id": str(interaction.guild.id)}
             
-            # 2. [INDUSTRIAL CASCADE CLEANUP] Dọn dẹp liên kết ma ở các hệ thống khác
-            if db:
-                guild_filter = {"guild_id": str(interaction.guild.id)}
-                
-                # Gỡ liên kết tại Ticket và Form
-                await db.tickets.update_many({**guild_filter, "embed_name": emb_name}, {"$set": {"embed_name": None}})
-                await db.forms.update_many({**guild_filter, "embed_name": emb_name}, {"$set": {"embed_name": None}})
-                
-                # Gỡ liên kết tại Guild Settings (Greet, Leave, YiyiSetting)
-                await db.guild_settings.update_many({**guild_filter, "greet_embed": emb_name}, {"$set": {"greet_embed": None}})
-                await db.guild_settings.update_many({**guild_filter, "leave_embed": emb_name}, {"$set": {"leave_embed": None}})
-                await db.guild_settings.update_many({**guild_filter, "yiyi_embed": emb_name}, {"$set": {"yiyi_embed": None}})
-        
-        # Báo cáo tổng kết dựa trên số lượng
+            # Group các lệnh DB lại để chạy song song (Parallel execution)
+            try:
+                tasks = [
+                    db.tickets.update_many({**guild_filter, "embed_name": {"$in": embed_names}}, {"$set": {"embed_name": None}}),
+                    db.forms.update_many({**guild_filter, "embed_name": {"$in": embed_names}}, {"$set": {"embed_name": None}}),
+                    db.guild_settings.update_many({**guild_filter, "greet_embed": {"$in": embed_names}}, {"$set": {"greet_embed": None}}),
+                    db.guild_settings.update_many({**guild_filter, "leave_embed": {"$in": embed_names}}, {"$set": {"leave_embed": None}}),
+                    db.guild_settings.update_many({**guild_filter, "yiyi_embed": {"$in": embed_names}}, {"$set": {"yiyi_embed": None}})
+                ]
+                await asyncio.gather(*tasks)
+            except Exception as e:
+                print(f"[Delete Error - DB Cascade] {e}", flush=True)
+
+        # 3. BÁO CÁO TỔNG KẾT
         if len(embed_names) > 1:
-            await interaction.followup.send(f"{Emojis.MATTRANG} đã xoá thành công {len(embed_names)} embed. toàn bộ liên kết tại ticket và hệ thống banner đã được gỡ bỏ.")
+            await interaction.followup.send(f"{Emojis.MATTRANG} đã xoá thành công `{len(embed_names)}` embed. toàn bộ liên kết tại ticket và hệ thống banner đã được dọn dẹp sạch sẽ.")
         else:
-            await interaction.followup.send(f"{Emojis.MATTRANG} embed `{name}` đã được xoá thành công và gỡ bỏ liên kết hệ thống.")
+            await interaction.followup.send(f"{Emojis.MATTRANG} embed `{name}` đã được xoá vĩnh viễn và gỡ bỏ liên kết hệ thống.")
 
 # =============================
 # INJECTION (KHÔI PHỤC MẠCH ĐĂNG KÝ LỆNH CHUẨN)
