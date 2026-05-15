@@ -5,9 +5,29 @@ import asyncio
 import re
 
 # Nạp công cụ Storage và Trí nhớ Ticket mới (Industrial Standard)
-from core.embed_storage import load_embed, atomic_update_button
+from core.embed_storage import load_embed, atomic_update_button, get_all_embed_names
 from core.ticket_storage import update_ticket_config, get_ticket_config
 from utils.emojis import Emojis
+
+# =============================
+# HELPERS (Bổ trợ) - GIỮ NGUYÊN 100% DNA CỦA NGUYỆT
+# =============================
+
+async def embed_name_autocomplete(interaction: discord.Interaction, current: str):
+    """
+    Autocomplete thần tốc chống lỗi 404 cho hệ thống Ticket.
+    """
+    guild = interaction.guild
+    if not guild: return []
+    try:
+        names = await get_all_embed_names(guild.id)
+        choices = [
+            app_commands.Choice(name=name, value=name) 
+            for name in names if current.lower() in name.lower()
+        ][:25]
+        return choices
+    except Exception:
+        return []
 
 class TicketGroup(app_commands.Group):
     def __init__(self):
@@ -97,6 +117,7 @@ class TicketGroup(app_commands.Group):
     # =========================
     @app_commands.command(name="apply", description="Liên kết Ticket vào Embed")
     @app_commands.describe(embed_name="Tên embed muốn gắn nút Ticket")
+    @app_commands.autocomplete(embed_name=embed_name_autocomplete)
     async def apply(self, interaction: discord.Interaction, embed_name: str):
         await interaction.response.defer(ephemeral=True)
         guild_id = interaction.guild.id
@@ -145,6 +166,50 @@ class TicketGroup(app_commands.Group):
             color=0xf8bbd0
         )
         await interaction.followup.send(embed=embed_ok)
+
+    # =========================
+    # LỆNH 3: SETTING (Kiểm tra & Validate dữ liệu liên kết)
+    # =========================
+    @app_commands.command(name="setting", description="Xem cấu hình hiện tại của hệ thống Ticket")
+    async def ticket_setting(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        guild = interaction.guild
+        config = await get_ticket_config(guild.id)
+
+        if not config:
+            return await interaction.followup.send(f"{Emojis.HOICHAM} hệ thống ticket chưa được cấu hình trên server này.", ephemeral=True)
+
+        # [VALIDATION LOGIC] Kiểm tra xem Embed liên kết có còn tồn tại không
+        embed_name = config.get("embed_name")
+        display_embed = "Chưa liên kết"
+        
+        if embed_name:
+            # Xác minh linh hồn embed trong kho
+            exists = await load_embed(guild.id, embed_name)
+            if not exists:
+                display_embed = f"`{embed_name}` (⚠️ **Đã bị xoá**)"
+                # Tự động dọn dẹp liên kết ma trong DB để đồng bộ hoàn toàn
+                config["embed_name"] = None
+                await update_ticket_config(guild.id, config)
+            else:
+                display_embed = f"`{embed_name}`"
+
+        cat = guild.get_channel(int(config.get("category_id", 0)))
+        log = guild.get_channel(int(config.get("log_channel_id", 0)))
+        staff_ids = config.get("staff_roles", [])
+        staff_mentions = ", ".join([f"<@&{r}>" for r in staff_ids]) or "Chưa có"
+
+        embed_setting = discord.Embed(
+            title=f"{Emojis.MATTRANG} cấu hình ticket của `{guild.name}`",
+            description=(
+                f"• **Danh mục:** {cat.mention if cat else '`Không tìm thấy`'}\n"
+                f"• **Kênh Logs:** {log.mention if log else '`Không tìm thấy`'}\n"
+                f"• **Staff Roles:** {staff_mentions}\n"
+                f"• **Embed liên kết:** {display_embed}"
+            ),
+            color=0xf8bbd0
+        )
+        await interaction.followup.send(embed=embed_setting)
 
 async def setup(bot: commands.Bot):
     p_cmd = bot.tree.get_command("p")
