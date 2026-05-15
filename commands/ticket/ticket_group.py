@@ -186,7 +186,7 @@ class TicketGroup(app_commands.Group):
         await interaction.followup.send(f"{Emojis.HOICHAM} Role này hổng có trong danh sách hỗ trợ nên hổng xóa được nhe.")
 
     # =========================
-    # LỆNH 4: APPLY (ĐỘC QUYỀN - SINGLE INSTANCE)
+    # LỆNH 4: APPLY (INDUSTRIAL DEEP CLEAN - ONLY ONE)
     # =========================
     @app_commands.command(name="apply", description="Liên kết Ticket vào Embed (Chỉ cho phép duy nhất 1 embed)")
     @app_commands.describe(embed_name="Tên embed muốn gắn nút Ticket")
@@ -212,10 +212,12 @@ class TicketGroup(app_commands.Group):
             "emoji": f"{Emojis.NO}", "custom_id": "yiyi:ticket:open", "system": "ticket"
         }
 
-        # [MẠCH THANH TRỪNG - INDUSTRIAL SINGLE INSTANCE]
-        old_embed = config.get("embed_name")
-        if old_embed and str(old_embed) != str(embed_name):
-            await atomic_update_button(guild_id, old_embed, action="remove_by_id", custom_id="yiyi:ticket:open")
+        # [MẠCH THANH TRỪNG TRIỆT ĐỂ - INDUSTRIAL DEEP CLEAN]
+        # Quét sạch mọi embed của server để gỡ bỏ nút Ticket, đảm bảo tính duy nhất
+        all_embed_names = await get_all_embed_names(guild_id)
+        for name in all_embed_names:
+            if str(name) != str(embed_name):
+                await atomic_update_button(guild_id, name, action="remove_by_id", custom_id="yiyi:ticket:open")
 
         # Gắn nút vào embed mục tiêu
         updated = await atomic_update_button(guild_id, embed_name, action="update_by_id", custom_id="yiyi:ticket:open", button_data=btn_data)
@@ -227,7 +229,7 @@ class TicketGroup(app_commands.Group):
 
         embed_ok = discord.Embed(
             title=f"{Emojis.MATTRANG} liên kết Ticket vào embed `{embed_name}` thành công.",
-            description="*hệ thống đã tự động gỡ nút Ticket ở các vị trí cũ để đảm bảo tính duy nhất.*",
+            description="*hệ thống đã quét và gỡ nút Ticket ở các vị trí khác để đảm bảo tính duy nhất.*",
             color=0xf8bbd0
         )
         await interaction.followup.send(embed=embed_ok)
@@ -253,14 +255,18 @@ class TicketGroup(app_commands.Group):
 
         cat = guild.get_channel(int(config.get("category_id", 0)))
         log = guild.get_channel(int(config.get("log_channel_id", 0)))
+        
+        display_cat = cat.mention if cat else "`none`"
+        display_log = log.mention if log else "`none`"
+        
         staff_ids = config.get("staff_roles", [])
         staff_mentions = ", ".join([f"<@&{r}>" for r in staff_ids]) if staff_ids else "`none`"
 
         embed_setting = discord.Embed(
             title=f"{Emojis.MATTRANG} chi tiết cấu hình ticket của {guild.name}",
             description=(
-                f"• **danh mục:** {cat.mention if cat else '`none`'}\n"
-                f"• **kênh logs:** {log.mention if log else '`none`'}\n"
+                f"• **danh mục:** {display_cat}\n"
+                f"• **kênh logs:** {display_log}\n"
                 f"• **staff roles:** {staff_mentions}\n"
                 f"• **embed liên kết:** {display_embed}"
             ),
@@ -275,4 +281,4 @@ async def setup(bot: commands.Bot):
         existing = next((c for c in p_cmd.commands if c.name == "ticket"), None)
         if existing: p_cmd.remove_command("ticket")
         p_cmd.add_command(TicketGroup())
-        print("[LOAD] Success: commands.ticket.ticket_group (Full Monitoring Optimized)", flush=True)
+        print("[LOAD] Success: commands.ticket.ticket_group (Deep Clean Optimized)", flush=True)
