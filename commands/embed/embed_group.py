@@ -159,35 +159,46 @@ class EmbedGroup(app_commands.Group):
         view.message = msg
 
     @app_commands.command(name="edit", description="chỉnh sửa embed hiện có")
-    @app_commands.describe(name="chọn embed muốn chỉnh sửa từ danh sách")
+    @app_commands.describe(
+        name="chọn embed muốn chỉnh sửa từ danh sách",
+        extra_embeds="nhập tên các embed khác, cách nhau bằng dấu phẩy (vd: b, c)"
+    )
     @app_commands.autocomplete(name=embed_name_autocomplete)
-    async def edit(self, interaction: discord.Interaction, name: str):
+    async def edit(self, interaction: discord.Interaction, name: str, extra_embeds: str = None):
         # IT Standard Defer: Tránh lỗi "Interaction Failed" khi Cloud phản hồi chậm
         await interaction.response.defer(ephemeral=False)
         
-        # [KẾT NỐI MẠCH] Await để nạp linh hồn embed từ MongoDB
-        data = await load_embed(interaction.guild.id, name)
-        if not data:
-            embed_none = discord.Embed(
-                title=f"{Emojis.HOICHAM} hmm...?",
-                description=f"**yiyi** không tìm thấy embed có tên `{name}`, xin hãy nhập lại lần nữa",
-                color=0xf8bbd0
+        # Gom danh sách
+        embed_names = [name]
+        if extra_embeds:
+            embed_names.extend([n.strip() for n in extra_embeds.split(",") if n.strip()])
+
+        # Vòng lặp xả bảng UI chỉnh sửa hàng loạt
+        for emb_name in embed_names:
+            # [KẾT NỐI MẠCH] Await để nạp linh hồn embed từ MongoDB
+            data = await load_embed(interaction.guild.id, emb_name)
+            if not data:
+                embed_none = discord.Embed(
+                    title=f"{Emojis.HOICHAM} hmm...?",
+                    description=f"**yiyi** không tìm thấy embed có tên `{emb_name}`, xin hãy nhập lại lần nữa",
+                    color=0xf8bbd0
+                )
+                await interaction.followup.send(embed=embed_none)
+                continue
+
+            key = f"{interaction.guild.id}:{emb_name}"
+            _cleanup_views(key)
+
+            # Khởi tạo UI Editor
+            view = EmbedUIView(interaction.guild.id, emb_name, data, timeout=600.0)
+            embed = view.build_embed()
+
+            msg = await interaction.followup.send(
+                content=f" **yiyi** mang embed `{emb_name}` về rồi, xin hãy tiếp tục chỉnh sửa {Emojis.YIYITIM}", 
+                embed=embed, 
+                view=view
             )
-            return await interaction.followup.send(embed=embed_none)
-
-        key = f"{interaction.guild.id}:{name}"
-        _cleanup_views(key)
-
-        # Khởi tạo UI Editor
-        view = EmbedUIView(interaction.guild.id, name, data, timeout=600.0)
-        embed = view.build_embed()
-
-        msg = await interaction.followup.send(
-            content=f" **yiyi** mang embed `{name}` về rồi, xin hãy tiếp tục chỉnh sửa {Emojis.YIYITIM}", 
-            embed=embed, 
-            view=view
-        )
-        view.message = msg
+            view.message = msg
 
     @app_commands.command(name="show", description="gửi embed vào channel")
     @app_commands.describe(
@@ -346,14 +357,29 @@ class EmbedGroup(app_commands.Group):
             await interaction.followup.send(f"{Emojis.MATTRANG} đã cập nhật thành công {success_count}/{len(embed_names)} tin nhắn!", ephemeral=True)
 
     @app_commands.command(name="delete", description="xóa embed vĩnh viễn")
-    @app_commands.describe(name="chọn embed muốn xóa vĩnh viễn từ danh sách")
+    @app_commands.describe(
+        name="chọn embed muốn xóa vĩnh viễn từ danh sách",
+        extra_embeds="nhập tên các embed khác muốn xoá, cách nhau bằng dấu phẩy (vd: b, c)"
+    )
     @app_commands.autocomplete(name=embed_name_autocomplete)
-    async def delete(self, interaction: discord.Interaction, name: str):
-        # [KẾT NỐI MẠCH] Await để lệnh xóa thực thi xong trên Cloud mới báo thành công
-        await delete_embed(interaction.guild.id, name)
-        _cleanup_views(f"{interaction.guild.id}:{name}")
+    async def delete(self, interaction: discord.Interaction, name: str, extra_embeds: str = None):
+        # [KẾT NỐI MẠCH] Đổi sang defer + followup để xử lý nhiều embed không bị sập Interaction
+        await interaction.response.defer(ephemeral=False)
         
-        await interaction.response.send_message(f"{Emojis.MATTRANG} embed `{name}` đã được xoá thành công. có thể tạo lại embed mới bằng tên của embed này", ephemeral=False)
+        embed_names = [name]
+        if extra_embeds:
+            embed_names.extend([n.strip() for n in extra_embeds.split(",") if n.strip()])
+
+        for emb_name in embed_names:
+            # Await để lệnh xóa thực thi xong trên Cloud
+            await delete_embed(interaction.guild.id, emb_name)
+            _cleanup_views(f"{interaction.guild.id}:{emb_name}")
+        
+        # Báo cáo tổng kết dựa trên số lượng
+        if len(embed_names) > 1:
+            await interaction.followup.send(f"{Emojis.MATTRANG} đã xoá thành công {len(embed_names)} embed. có thể tạo lại embed mới bằng tên của các embed này")
+        else:
+            await interaction.followup.send(f"{Emojis.MATTRANG} embed `{name}` đã được xoá thành công. có thể tạo lại embed mới bằng tên của embed này")
 
 # =============================
 # INJECTION (KHÔI PHỤC MẠCH ĐĂNG KÝ LỆNH CHUẨN)
