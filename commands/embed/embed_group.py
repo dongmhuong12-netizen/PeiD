@@ -168,7 +168,7 @@ class EmbedGroup(app_commands.Group):
         if not data:
             embed_none = discord.Embed(
                 title=f"{Emojis.HOICHAM} hmm...?",
-                description=f"**yiyi** không tìm thấy embed có tên `{name}`, xin hãy nhập lại lần nữa",
+                description=f"**yiyi** không tìm thấy embed có tên `{emb_name}`, xin hãy nhập lại lần nữa",
                 color=0xf8bbd0
             )
             return await interaction.followup.send(embed=embed_none)
@@ -181,7 +181,7 @@ class EmbedGroup(app_commands.Group):
         embed = view.build_embed()
 
         msg = await interaction.followup.send(
-            content=f" **yiyi** mang embed về rồi, xin hãy tiếp tục chỉnh sửa {Emojis.YIYITIM}", 
+            content=f" **yiyi** mang embed `{emb_name}` về rồi, xin hãy tiếp tục chỉnh sửa {Emojis.YIYITIM}", 
             embed=embed, 
             view=view
         )
