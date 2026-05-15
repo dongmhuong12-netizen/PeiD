@@ -17,6 +17,17 @@ class MongoDB:
         self.embeds = None      # Chứa các thiết kế Embed
         self.configs = None     # Chứa cấu hình Greet/Leave/Booster/Wellcome
         self.identities = None  # Chứa danh tính Webhook (Identities)
+        self.tickets = None     # [CẬP NHẬT] Ngăn chứa hệ thống Ticket
+        self.forms = None       # [CẬP NHẬT] Ngăn chứa hệ thống Form
+
+    def __getattr__(self, name):
+        """
+        [ATK - FUTURE PROOF] Proxy tự động kết nối Collection.
+        Nếu gọi một collection chưa khai báo (vd: db.logs), bot sẽ tự động trỏ vào DB.
+        """
+        if self.db is not None:
+            return self.db[name]
+        raise AttributeError(f"MongoDB layer chưa được kết nối hoặc không có thuộc tính '{name}'")
 
     async def connect(self):
         """Thiết lập kết nối bất đồng bộ với Cloud Atlas"""
@@ -38,6 +49,8 @@ class MongoDB:
             self.embeds = self.db["embeds"]
             self.configs = self.db["guild_configs"]
             self.identities = self.db["identities"]
+            self.tickets = self.db["tickets"]
+            self.forms = self.db["forms"]
 
             # Kiểm tra kết nối bằng lệnh Ping
             await self.client.admin.command('ping')
@@ -65,6 +78,11 @@ class MongoDB:
             
             # Index cho Identities: Tìm theo Server + Tên gợi nhớ
             await self.identities.create_index([("guild_id", 1), ("name", 1)], unique=True)
+
+            # [DEF - GIA CỐ TICKET/FORM] 
+            # Quan trọng: Tạo Index cho embed_name để lệnh dọn dẹp liên hoàn chạy xé gió
+            await self.tickets.create_index([("guild_id", 1), ("embed_name", 1)])
+            await self.forms.create_index([("guild_id", 1), ("embed_name", 1)])
             
             print("[DB] All indexes synchronized successfully.", flush=True)
         except Exception as e:
