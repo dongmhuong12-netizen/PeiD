@@ -220,7 +220,7 @@ class EmbedGroup(app_commands.Group):
         if extra_embeds:
             embed_names.extend([n.strip() for n in extra_embeds.split(",") if n.strip()])
             
-        await interaction.response.send_message(f"{Emojis.MATTRANG} đang tiến hành gửi lần lượt {len(embed_names)} embed...", ephemeral=True)
+        await interaction.response.send_message(f"{Emojis.MATTRANG} đã gửi  {len(embed_names)} embed thành công.", ephemeral=True)
         
         for emb_name in embed_names:
             # Nạp dữ liệu từ Cloud Atlas
