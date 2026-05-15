@@ -2,11 +2,13 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 import asyncio
+import copy
 
 from core.embed_ui import EmbedUIView, ACTIVE_EMBED_VIEWS
 from core.embed_storage import load_embed, delete_embed, get_all_embed_names
-from core.embed_sender import send_embed
+from core.embed_sender import send_embed, _build_embed
 from systems.embed_system import EmbedSystem
+from core.variable_engine import apply_variables
 
 # IMPORT ENGINE IMAGE MỚI (Xử lý CDN vĩnh viễn)
 from core.image_engine import process_image_upload
@@ -251,6 +253,91 @@ class EmbedGroup(app_commands.Group):
             
             # [THỰC THI] Gửi embed thẳng vào kênh mục tiêu
             await send_embed(channel, data, interaction.guild, interaction.user, embed_name=emb_name, view=view)
+
+    # [LỆNH MỚI] CẬP NHẬT TRỰC TIẾP TIN NHẮN (LIVE SYNC)
+    @app_commands.command(name="update", description="cập nhật/sửa lại tin nhắn embed đã gửi bằng link")
+    @app_commands.describe(
+        message_link="dán link của tin nhắn embed cần sửa",
+        name="chọn embed chính muốn cập nhật từ danh sách",
+        extra_embeds="nhập tên các embed khác muốn ốp kèm, cách nhau bằng dấu phẩy (vd: b, c)"
+    )
+    @app_commands.autocomplete(name=embed_name_autocomplete)
+    async def update(self, interaction: discord.Interaction, message_link: str, name: str, extra_embeds: str = None):
+        await interaction.response.defer(ephemeral=True)
+        guild = interaction.guild
+
+        # 1. Bóc tách tọa độ từ Link
+        parts = message_link.strip().split("/")
+        try:
+            channel_id = int(parts[-2])
+            message_id = int(parts[-1])
+        except (ValueError, IndexError):
+            return await interaction.followup.send(f"{Emojis.HOICHAM} link tin nhắn không hợp lệ. xin hãy copy đúng link từ discord nhé.", ephemeral=True)
+
+        try:
+            channel = guild.get_channel(channel_id) or await guild.fetch_channel(channel_id)
+            target_msg = await channel.fetch_message(message_id)
+        except Exception:
+            return await interaction.followup.send(f"{Emojis.HOICHAM} không tìm thấy tin nhắn ở tọa độ này. có thể tin nhắn đã bị xóa hoặc yiyi không có quyền xem kênh.", ephemeral=True)
+
+        # 2. Gom danh sách embed
+        embed_names = [name]
+        if extra_embeds:
+            embed_names.extend([n.strip() for n in extra_embeds.split(",") if n.strip()])
+
+        embeds_list = []
+        main_view = None
+
+        for idx, emb_name in enumerate(embed_names):
+            data = await load_embed(guild.id, emb_name)
+            if not data:
+                embed_err = discord.Embed(
+                    title=f"{Emojis.HOICHAM} aree...hãy thử lại lần nữa nhé.",
+                    description=f"**yiyi** không tìm thấy embed có tên `{emb_name}`. xin hãy kiểm tra lại bằng `/p embed edit`",
+                    color=0xf8bbd0
+                )
+                await interaction.followup.send(embed=embed_err, ephemeral=True)
+                continue
+
+            # Xây dựng Embed độc lập không qua UI
+            data_copy = copy.deepcopy(data)
+            if data_copy.get("title") in ["Tiêu đề Embed mới", "tiêu đề embed mới", "embed mới"]:
+                data_copy["title"] = "tiêu đề embed mới"
+            if data_copy.get("description") in ["Nội dung mô tả mặc định", "Nội dung mô tả mặc định.", "nội dung mô tả mặc định", "nội dung mô tả"]:
+                data_copy["description"] = "nội dung mô tả mặc định"
+            if data_copy.get("color") in [0x5865f2, 0x5865F2, None]:
+                data_copy["color"] = 0xf8bbd0
+
+            data_v = apply_variables(data_copy, guild, interaction.user)
+            emb_obj = _build_embed(data_v)
+            embeds_list.append(emb_obj)
+
+            # Lấy view của embed đầu tiên làm view chính cho cả tin nhắn
+            if idx == 0:
+                main_view = create_embed_view(data)
+
+        if not embeds_list:
+            return
+
+        # 3. Phẫu thuật đè (Xuyên Webhook hoặc Bot)
+        try:
+            if target_msg.webhook_id:
+                webhooks = await channel.webhooks()
+                webhook = discord.utils.get(webhooks, id=target_msg.webhook_id)
+                if not webhook:
+                    return await interaction.followup.send(f"{Emojis.HOICHAM} không tìm thấy webhook quản lý tin nhắn này. nó có thể đã bị xóa.", ephemeral=True)
+                
+                await webhook.edit_message(message_id, embeds=embeds_list, view=main_view)
+            else:
+                if target_msg.author.id != interaction.client.user.id:
+                    return await interaction.followup.send(f"{Emojis.HOICHAM} **yiyi** chỉ có thể sửa tin nhắn do chính hệ thống peiD hoặc webhook giả danh gửi ra thôi.", ephemeral=True)
+                
+                await target_msg.edit(embeds=embeds_list, view=main_view)
+
+            await interaction.followup.send(f"{Emojis.MATTRANG} đã cập nhật thành công tin nhắn tại kênh {channel.mention}!", ephemeral=True)
+        except Exception as e:
+            print(f"[Update Error] {e}", flush=True)
+            await interaction.followup.send(f"{Emojis.HOICHAM} phát sinh lỗi khi cập nhật tin nhắn: `{e}`", ephemeral=True)
 
     @app_commands.command(name="delete", description="xóa embed vĩnh viễn")
     @app_commands.describe(name="chọn embed muốn xóa vĩnh viễn từ danh sách")
