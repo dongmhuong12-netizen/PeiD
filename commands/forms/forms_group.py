@@ -131,7 +131,7 @@ class FormsGroup(app_commands.Group):
             await interaction.followup.send(f"{Emojis.HOICHAM} Lỗi hệ thống khi cấu hình trường: `{e}`")
 
     # =========================
-    # LỆNH 3: APPLY (BẢN FIX LỖI HIỂN THỊ)
+    # LỆNH 3: APPLY (HỢP LÝ HÓA UI & ICON)
     # =========================
     @app_commands.command(name="apply", description="11. Liên kết Form vào Embed")
     @app_commands.describe(embed_name="Tên embed muốn liên kết nút gửi đơn")
@@ -139,11 +139,26 @@ class FormsGroup(app_commands.Group):
     async def apply(self, interaction: discord.Interaction, embed_name: str, label: str = "Gửi đơn đăng ký"):
         await interaction.response.defer(ephemeral=True)
         try:
+            # [MẠCH HỢP LÝ HÓA EMOJI] Tự động tách icon nếu sếp nhập kèm trong nhãn
+            final_emoji = f"{Emojis.MATTRANG}"
+            final_label = label
+            
+            # Regex nhận diện Emoji Unicode hoặc Emoji Discord Custom (<:name:id> / <a:name:id>)
+            emoji_pattern = r'^(\s*<a?:\w+:\d+>|\s*[\U00010000-\U0010ffff]|\s*[\u2600-\u27bf])'
+            match = re.search(emoji_pattern, label)
+
+            if match:
+                extracted_emoji = match.group(1).strip()
+                final_emoji = extracted_emoji
+                # Cắt emoji ra khỏi label để tránh hiện icon 2 lần trên nút
+                remaining_text = label.replace(extracted_emoji, "", 1).strip()
+                final_label = remaining_text if remaining_text else "Gửi đơn"
+
             btn_data = {
                 "type": "button",
                 "style": "secondary",
-                "label": f"\u2800{label}",
-                "emoji": f"{Emojis.MATTRANG}",
+                "label": f"\u2800{final_label}",
+                "emoji": final_emoji,
                 "custom_id": f"yiyi:forms:open:{embed_name}", 
                 "system": "forms"
             }
@@ -164,13 +179,11 @@ class FormsGroup(app_commands.Group):
                     )
                     return await interaction.followup.send(embed=embed_err)
 
-            # [BẢO TỒN LOGIC CỦA SẾP] Apply chỉ làm nhiệm vụ gắn nút, không đè config.
-
             embed_success = discord.Embed(
                 title=f"{Emojis.MATTRANG} liên kết với embed `{embed_name}` thành công",
                 color=0xf8bbd0
             )
-            # FIX: Thêm từ khóa 'embed=' để tránh lỗi hiển thị xác object
+            # Fix: Truyền tham số 'embed' rõ ràng để tránh lỗi hiển thị xác object
             await interaction.followup.send(embed=embed_success)
         except Exception as e:
             print(f"[LỖI FORM APPLY] {e}")
@@ -201,7 +214,7 @@ class FormsGroup(app_commands.Group):
 
             for form in all_forms:
                 emb_name = form.get("embed_name")
-                # Mạch Verify thực trạng thời gian thực
+                # Mạch Verify thực trạng thời gian thực - Không báo lỗi ảo
                 embed_exists = await load_embed(interaction.guild.id, emb_name) if emb_name else False
                 display_embed = f"`{emb_name}`" if embed_exists else "`none`"
                 
