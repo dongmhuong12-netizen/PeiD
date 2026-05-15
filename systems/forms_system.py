@@ -96,7 +96,7 @@ async def update_form_field(guild_id: int, embed_name: str, slot: int, label: st
     return False
 
 # ==========================================
-# INTERACTION LOGIC (CẤY MẠCH XỬ LÝ MODAL)
+# INTERACTION LOGIC (HỢP LÝ HOÁ VỊ TRÍ NGƯỜI GỬI)
 # ==========================================
 
 class YiyiFormModal(discord.ui.Modal):
@@ -133,11 +133,15 @@ class YiyiFormModal(discord.ui.Modal):
             timestamp=discord.utils.utcnow()
         )
         
+        # [VỊ TRÍ NGƯỜI GỬI] Đưa xuống làm Field ngay dưới Title
+        embed_log.add_field(name="Người gửi:", value=interaction.user.mention, inline=False)
+        
+        # Thêm các trường dữ liệu từ đơn (sắp xếp theo thứ tự slot)
         for slot in sorted(self.inputs.keys(), key=lambda x: int(x)):
             text_input = self.inputs[slot]
             embed_log.add_field(name=f"• {text_input.label}", value=text_input.value, inline=False)
         
-        embed_log.set_author(name=f"người gửi: {interaction.user.display_name}", icon_url=interaction.user.display_avatar.url)
+        # Hiện Avatar nếu sếp bật show_thumbnail
         if self.show_thumbnail:
             embed_log.set_thumbnail(url=interaction.user.display_avatar.url)
 
