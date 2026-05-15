@@ -46,7 +46,7 @@ class EditInformationModal(discord.ui.Modal, title="edit information"):
         is_default_title = curr_title in ["Tiêu đề Embed mới", "tiêu đề embed mới", "embed mới", None]
         
         self.etitle = discord.ui.TextInput(
-            label="tiêu đề mới",
+            label="tiêu đề mới (nhập 'none' để xoá)",
             placeholder="tiêu đề embed mới",
             required=False,
             default=None if is_default_title else curr_title
@@ -56,7 +56,7 @@ class EditInformationModal(discord.ui.Modal, title="edit information"):
         is_default_desc = curr_desc in ["Nội dung mô tả mặc định", "Nội dung mô tả mặc định.", "nội dung mô tả mặc định", "nội dung mô tả", None]
         
         self.description = discord.ui.TextInput(
-            label="mô tả mới",
+            label="mô tả mới (nhập 'none' để xoá)",
             style=discord.TextStyle.paragraph,
             placeholder="nội dung mô tả mặc định",
             required=False,
@@ -79,8 +79,22 @@ class EditInformationModal(discord.ui.Modal, title="edit information"):
     async def on_submit(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
 
-        self.view.data["title"] = self.etitle.value or self.etitle.placeholder
-        self.view.data["description"] = self.description.value or self.description.placeholder
+        # [CẤY GHÉP INDUSTRIAL] Logic xóa trắng dữ liệu an toàn
+        title_val = self.etitle.value.strip().lower()
+        if not title_val or title_val == "none":
+            self.view.data.pop("title", None)
+        else:
+            self.view.data["title"] = self.etitle.value
+
+        desc_val = self.description.value.strip().lower()
+        if not desc_val or desc_val == "none":
+            self.view.data.pop("description", None)
+        else:
+            self.view.data["description"] = self.description.value
+            
+        # [PHAO CỨU SINH 400 BAD REQUEST] Nếu cả title và desc đều bị pop mất, cấy khoảng trắng tàng hình
+        if "title" not in self.view.data and "description" not in self.view.data:
+            self.view.data["description"] = "\u200b"
         
         try:
             val = self.color.value.replace("#", "").lower() or "f8bbd0"
