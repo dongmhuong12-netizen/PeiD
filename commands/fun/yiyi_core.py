@@ -107,18 +107,15 @@ class YiyiGroup(app_commands.Group):
 
             # --- [BỘ LỌC FORM GATEKEEPER] ---
             linked_form_names = set()
-            links_by_embed = {} # Kho chứa Link Multi-Button
+            links_by_embed = {} 
 
             for emb_name, emb_info in embed_data.items():
                 if isinstance(emb_info, dict) and emb_info.get("buttons"):
                     for btn in emb_info["buttons"]:
                         cid = btn.get("custom_id", "")
-                        # 1. Lọc Form
                         if cid.startswith("yiyi:forms:open:"):
                             f_name = cid.split(":")[-1]
                             linked_form_names.add(f_name)
-                        
-                        # 2. Lọc Link (Dựa trên sự hiện diện của URL)
                         if btn.get("url"):
                             if emb_name not in links_by_embed:
                                 links_by_embed[emb_name] = []
@@ -129,17 +126,13 @@ class YiyiGroup(app_commands.Group):
             try:
                 db = getattr(State.bot, "db", None)
                 if db is not None:
-                    col_rr = None
-                    if hasattr(db, "reactions"): col_rr = db.reactions
-                    elif hasattr(db, "db"): col_rr = db.db["reactions"]
+                    col_rr = getattr(db, "reactions", None)
+                    if not col_rr and hasattr(db, "db"): col_rr = db.db["reactions"]
                     if col_rr is not None:
                         rr_count = await col_rr.count_documents({"guild_id": gid_str})
                     
-                    col_form = None
-                    if hasattr(db, "forms"): col_form = db.forms
-                    elif hasattr(db, "db"): col_form = db.db["forms"]
-                    elif hasattr(db, "embeds"): col_form = db.embeds.database["forms"]
-                    
+                    col_form = getattr(db, "forms", None)
+                    if not col_form and hasattr(db, "db"): col_form = db.db["forms"]
                     if col_form is not None:
                         cursor = col_form.find({"guild_id": gid_str})
                         all_forms = await cursor.to_list(length=None)
@@ -148,14 +141,36 @@ class YiyiGroup(app_commands.Group):
 
             form_configs_by_name = {f.get("embed_name"): f for f in all_forms if f.get("embed_name")}
 
-            # --- [BỘ LỌC FORM - HOÀN CHỈNH] ---
+            # --- [VERIFY HELPERS - CHỐNG DỮ LIỆU ẢO] ---
+            def verify_embed(e_nm):
+                if not e_nm or e_nm == "none": return f"`none`"
+                if e_nm in embed_data: return f"`{e_nm}`"
+                return f"`{e_nm}` (⚠️ **Đã bị xoá**)"
+
+            # --- [HÀM PARSE MẪU - GIỮ NGUYÊN VĂN PHONG DÀN HÀNG DỌC] ---
+            def parse_module(module_key):
+                data = greet_full.get(module_key, {})
+                c_id = data.get("channel_id")
+                e_nm = data.get("embed_name")
+                msg = data.get("message")
+                status = f"`ON`" if (c_id or e_nm or msg) else f"`OFF`"
+                return status, f"<#{c_id}>" if c_id else f"`none`", verify_embed(e_nm), f"`có`" if msg else f"`none`"
+
+            def parse_booster():
+                c_id = boost_cfg.get("channel")
+                e_nm = boost_cfg.get("embed")
+                msg = boost_cfg.get("message")
+                r_id = boost_cfg.get("booster_role")
+                status = f"`ON`" if (c_id or e_nm or msg or r_id) else f"`OFF`"
+                return status, f"<#{c_id}>" if c_id else f"`none`", verify_embed(e_nm), f"`có`" if msg else f"`none`", f"<@&{r_id}>" if r_id else f"`none`"
+
+            # --- [RÁP GIAO DIỆN FORM ĐỘNG] ---
             hoan_chinh_count = 0
             for f_name in linked_form_names:
                 f_doc = form_configs_by_name.get(f_name, {})
                 if f_doc.get("log_channel_id") and len(f_doc.get("fields", {})) > 0:
                     hoan_chinh_count += 1
 
-            # --- [RÁP GIAO DIỆN FORM ĐỘNG] ---
             f_st = f"`ON`" if linked_form_names else f"`OFF`"
             form_section_lines = [f"• **form (tuỳ chọn)**: {f_st}", f"  └ số form hoàn chỉnh: `{hoan_chinh_count}`"]
             
@@ -168,55 +183,40 @@ class YiyiGroup(app_commands.Group):
                     f_ttl = f_doc.get("form_title") or "none"
                     f_th = f"`ON`" if f_doc.get("show_thumbnail") else f"`OFF`"
                     f_log = f_doc.get("log_channel_id")
-                    form_section_lines.extend([f"  └ embed: `{f_name}`", f"  └ số ô nhập liệu: `{f_flds}`", f"  └ tiêu đề: `{f_ttl}`", f"  └ thumbnail: {f_th}", f"  └ kênh gửi log: {f'<#{f_log}>' if f_log else 'none'}"])
+                    form_section_lines.extend([f"  └ embed: {verify_embed(f_name)}", f"  └ số ô nhập liệu: `{f_flds}`", f"  └ tiêu đề: `{f_ttl}`", f"  └ thumbnail: {f_th}", f"  └ kênh gửi log: {f'<#{f_log}>' if f_log else 'none'}"])
             
             form_display = "\n".join(form_section_lines)
             
-            # --- [RÁP GIAO DIỆN LINK MULTI-DÀN DỌC CHUẨN MỚI] ---
+            # --- [RÁP GIAO DIỆN LINK] ---
             lk_st = f"`ON`" if links_by_embed else f"`OFF`"
             link_lines = [f"• **link (đường dẫn)**: {lk_st}"]
-            
             if not links_by_embed:
                 link_lines.extend(["  └ embed: `none`","  └ số nút link: `0`","  └ label (nhãn): `none`","  └ url: `none`","  └ emoji: `none`"])
             else:
                 for ename, btns in links_by_embed.items():
                     link_lines.append(f"  └ embed `[{ename}]`: số nút link: `{len(btns)}`")
                     for b in btns:
-                        emo = b.get("emoji") or "none"
-                        lbl = b.get("label") or "none"
-                        url = b.get("url") or "none"
-                        link_lines.append(f"    └ {emo} `{lbl}` → [Link]({url})")
-            
+                        link_lines.append(f"    └ {b.get('emoji') or 'none'} `{b.get('label') or 'none'}` → [Link]({b.get('url') or 'none'})")
             link_display = "\n".join(link_lines)
 
-            # --- HELPERS ĐỊNH DẠNG ---
-            def parse_module(module_key):
-                data = greet_full.get(module_key, {})
-                c_id, e_nm, msg = data.get("channel_id"), data.get("embed_name"), data.get("message")
-                status = f"`ON`" if (c_id or e_nm or msg) else f"`OFF`"
-                return status, f"<#{c_id}>" if c_id else f"`none`", f"`{e_nm}`" if e_nm else f"`none`", f"`có`" if msg else f"`none`"
-
-            def parse_booster():
-                c_id = boost_cfg.get("channel")
-                e_nm = boost_cfg.get("embed")
-                msg = boost_cfg.get("message")
-                r_id = boost_cfg.get("booster_role")
-                status = f"`ON`" if (c_id or e_nm or msg or r_id) else f"`OFF`"
-                return status, f"<#{c_id}>" if c_id else f"`none`", f"`{e_nm}`" if e_nm else f"`none`", f"`có`" if msg else f"`none`", f"<@&{r_id}>" if r_id else f"`none`"
-
-            embed_with_buttons = sum(1 for e in embed_data.values() if isinstance(e, dict) and e.get("buttons"))
+            # --- [TICKET MULTI-STAFF FIX] ---
+            t_st = f"`ON`" if ticket_cfg.get("category_id") else f"`OFF`"
+            s_roles = ticket_cfg.get("staff_roles", [])
+            # Mạch bốc toàn bộ danh sách staff (Không chỉ lấy s_roles[0])
+            if isinstance(s_roles, list) and s_roles:
+                t_rl = ", ".join([f"<@&{rid}>" for rid in s_roles])
+            elif s_roles:
+                t_rl = f"<@&{s_roles}>"
+            else:
+                t_rl = f"`none`"
 
             g_st, g_ch, g_eb, g_tx = parse_module("greet")
             l_st, l_ch, l_eb, l_tx = parse_module("leave")
             w_st, w_ch, w_eb, w_tx = parse_module("wellcome")
             b_st, b_ch, b_eb, b_tx, b_rl = parse_booster()
+            embed_with_buttons = sum(1 for e in embed_data.values() if isinstance(e, dict) and e.get("buttons"))
 
-            # Ticket
-            t_st = f"`ON`" if ticket_cfg.get("category_id") else f"`OFF`"
-            s_roles = ticket_cfg.get("staff_roles", [])
-            t_rl = f"<@&{s_roles[0]}>" if (isinstance(s_roles, list) and s_roles) else f"<@&{s_roles}>" if s_roles else f"`none`"
-
-            # ================= RÁP DASHBOARD TỔNG =================
+            # ================= RÁP DASHBOARD TỔNG (VĂN PHONG DÀN HÀNG DỌC CỦA SẾP) =================
             desc = f"""{Emojis.MATTRANG} **hệ thống tiếp tân & tương tác**
 • **greet (chào mừng)**: {g_st}
   └ kênh: {g_ch}
@@ -243,10 +243,10 @@ class YiyiGroup(app_commands.Group):
 
 {Emojis.MATTRANG} **tiện ích button**
 • **ticket (hỗ trợ)**: {t_st}
-  └ embed: `{ticket_cfg.get('embed_name', 'none')}`
+  └ embed: {verify_embed(ticket_cfg.get('embed_name'))}
   └ role hỗ trợ: {t_rl}
-  └ danh mục: <#{ticket_cfg.get('category_id', 'none')}>
-  └ kênh gửi log: <#{ticket_cfg.get('log_channel_id', 'none')}>
+  └ danh mục: {f"<#{ticket_cfg.get('category_id')}>" if ticket_cfg.get('category_id') else '`none`'}
+  └ kênh gửi log: {f"<#{ticket_cfg.get('log_channel_id')}>" if ticket_cfg.get('log_channel_id') else '`none`'}
 {form_display}
 • **identity (giả danh)**:
   └ số vỏ: `{len(ident_data)}`
@@ -265,4 +265,4 @@ class YiyiGroup(app_commands.Group):
 
 async def setup(bot: commands.Bot):
     bot.tree.add_command(YiyiGroup(bot))
-    print("[load] success: commands.fun.yiyi_core (Multi-Link Listing Fixed)", flush=True)
+    print("[load] success: commands.fun.yiyi_core (Multi-IT Setting Optimized)", flush=True)
