@@ -377,36 +377,44 @@ class EmbedGroup(app_commands.Group):
         if extra_embeds:
             embed_names.extend([n.strip() for n in extra_embeds.split(",") if n.strip()])
 
-        db = getattr(interaction.client, "db", None)
+        # [DEF - TRUY XUẤT DATABASE GỐC] Bỏ qua lớp wrapper để tương tác trực tiếp với cỗ máy Motor
+        wrapper = getattr(interaction.client, "db", None)
+        db = getattr(wrapper, "db", wrapper) if wrapper else None
 
-        # 1. DỌN DẸP STORAGE LẦN LƯỢT (Để đảm bảo tính toàn vẹn bộ nhớ)
-        for emb_name in embed_names:
-            await delete_embed(interaction.guild.id, emb_name)
-            _cleanup_views(f"{interaction.guild.id}:{emb_name}")
-
-        # 2. [INDUSTRIAL OPTIMIZATION] DỌN DẸP LIÊN KẾT MA (SIÊU TỐC)
-        if db:
-            # Sử dụng toán tử $in để cập nhật hàng loạt trong 1 nốt nhạc, chống treo interaction
-            guild_filter = {"guild_id": str(interaction.guild.id)}
+        # [ATK - THỰC THI SONG SONG] Chạy đồng thời xóa kho và dọn dẹp liên kết
+        async def perform_cleanup():
+            # 1. Dọn dẹp trong Storage và Views (Parallel execution)
+            storage_tasks = [delete_embed(interaction.guild.id, n) for n in embed_names]
+            for n in embed_names: _cleanup_views(f"{interaction.guild.id}:{n}")
             
-            # Group các lệnh DB lại để chạy song song (Parallel execution)
-            try:
-                tasks = [
-                    db.tickets.update_many({**guild_filter, "embed_name": {"$in": embed_names}}, {"$set": {"embed_name": None}}),
-                    db.forms.update_many({**guild_filter, "embed_name": {"$in": embed_names}}, {"$set": {"embed_name": None}}),
-                    db.guild_settings.update_many({**guild_filter, "greet_embed": {"$in": embed_names}}, {"$set": {"greet_embed": None}}),
-                    db.guild_settings.update_many({**guild_filter, "leave_embed": {"$in": embed_names}}, {"$set": {"leave_embed": None}}),
-                    db.guild_settings.update_many({**guild_filter, "yiyi_embed": {"$in": embed_names}}, {"$set": {"yiyi_embed": None}})
+            if db:
+                guild_filter = {"guild_id": str(interaction.guild.id)}
+                names_in = {"$in": embed_names}
+                
+                # 2. [INDUSTRIAL BATCH] Gộp tất cả lệnh xóa liên kết vào 1 phiên xử lý hàng loạt
+                db_tasks = [
+                    db.tickets.update_many({**guild_filter, "embed_name": names_in}, {"$set": {"embed_name": None}}),
+                    db.forms.update_many({**guild_filter, "embed_name": names_in}, {"$set": {"embed_name": None}}),
+                    db.guild_settings.update_many({**guild_filter, "greet_embed": names_in}, {"$set": {"greet_embed": None}}),
+                    db.guild_settings.update_many({**guild_filter, "leave_embed": names_in}, {"$set": {"leave_embed": None}}),
+                    db.guild_settings.update_many({**guild_filter, "yiyi_embed": names_in}, {"$set": {"yiyi_embed": None}})
                 ]
-                await asyncio.gather(*tasks)
-            except Exception as e:
-                print(f"[Delete Error - DB Cascade] {e}", flush=True)
+                await asyncio.gather(*(storage_tasks + db_tasks))
+            else:
+                await asyncio.gather(*storage_tasks)
 
-        # 3. BÁO CÁO TỔNG KẾT
-        if len(embed_names) > 1:
-            await interaction.followup.send(f"{Emojis.MATTRANG} đã xoá thành công `{len(embed_names)}` embed. toàn bộ liên kết tại ticket và hệ thống banner đã được dọn dẹp sạch sẽ.")
-        else:
-            await interaction.followup.send(f"{Emojis.MATTRANG} embed `{name}` đã được xoá vĩnh viễn và gỡ bỏ liên kết hệ thống.")
+        try:
+            # Thực thi mạch dọn dẹp tối ưu
+            await perform_cleanup()
+            
+            # 3. BÁO CÁO TỔNG KẾT (Giữ nguyên văn phong sếp)
+            if len(embed_names) > 1:
+                await interaction.followup.send(f"{Emojis.MATTRANG} đã xoá thành công `{len(embed_names)}` embed. toàn bộ liên kết tại ticket và hệ thống banner đã được dọn dẹp sạch sẽ.")
+            else:
+                await interaction.followup.send(f"{Emojis.MATTRANG} embed `{name}` đã được xoá vĩnh viễn và gỡ bỏ liên kết hệ thống.")
+        except Exception as e:
+            print(f"[Delete Error - Industrial] {e}", flush=True)
+            await interaction.followup.send(f"{Emojis.HOICHAM} phát sinh lỗi khi xóa embed: `{e}`")
 
 # =============================
 # INJECTION (KHÔI PHỤC MẠCH ĐĂNG KÝ LỆNH CHUẨN)
