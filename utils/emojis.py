@@ -7,6 +7,7 @@ class Emojis:
     # --- NHÓM CUSTOM (CẬU CUNG CẤP) ---
     HOICHAM  = "<:emoji_50:1498482166949216276>"
     MATTRANG = "<:emoji_44:1494618535870333019>"
+    NO       = "<:emoji_51:1504814309916803253>"
     YIYITIM  = "<:emoji_49:1495407155971625021>"
 
     # --- HÀM TIỆN ÍCH HỆ THỐNG ---
