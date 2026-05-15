@@ -170,19 +170,19 @@ class FormsGroup(app_commands.Group):
                 title=f"{Emojis.MATTRANG} liên kết với embed `{embed_name}` thành công",
                 color=0xf8bbd0
             )
-            await interaction.followup.send(embed=embed_success)
+            await interaction.followup.send(embed_success)
         except Exception as e:
             print(f"[LỖI FORM APPLY] {e}")
             await interaction.followup.send(f"{Emojis.HOICHAM} Lỗi liên kết nút: `{e}`")
 
     # =========================
-    # LỆNH 4: SETTING (Industrial Verification)
+    # LỆNH 4: SETTING (REAL-TIME MONITORING)
     # =========================
-    @app_commands.command(name="setting", description="Xem danh sách các Form đang hoạt động và lộ trình setup")
+    @app_commands.command(name="setting", description="Xem danh sách cấu hình các Form thực tế")
     async def forms_setting(self, interaction: discord.Interaction):
         """
-        [DEFENSE LAYER] 
-        Quét thực tế toàn bộ kho Form để phát hiện liên kết ma.
+        [REAL-TIME MONITORING] 
+        Quét thực tế trạng thái cấu hình của toàn bộ Form.
         """
         await interaction.response.defer(ephemeral=True)
         try:
@@ -190,35 +190,36 @@ class FormsGroup(app_commands.Group):
             all_forms = await get_all_forms(interaction.guild.id)
             
             if not all_forms:
-                return await interaction.followup.send(f"{Emojis.HOICHAM} hiện tại chưa có form nào được setup.")
+                return await interaction.followup.send(f"{Emojis.HOICHAM} hiện tại chưa có cấu hình form nào.")
 
             embed_dashboard = discord.Embed(
-                title=f"{Emojis.MATTRANG} bảng điều khiển biểu mẫu",
-                description="dưới đây là trạng thái thực tế của các form trên server:",
+                title=f"{Emojis.MATTRANG} chi tiết cấu hình biểu mẫu của {interaction.guild.name}",
+                description="báo cáo hạ tầng form theo thời gian thực:",
                 color=0xf8bbd0
             )
 
             for form in all_forms:
-                emb_name = form.get("embed_name", "Không rõ")
-                # [VERIFY CHÉO]
-                embed_exists = await load_embed(interaction.guild.id, emb_name)
+                emb_name = form.get("embed_name")
+                # Mạch Verify thực trạng thời gian thực
+                embed_exists = await load_embed(interaction.guild.id, emb_name) if emb_name else False
+                display_embed = f"`{emb_name}`" if embed_exists else "`none`"
                 
-                status_icon = "✅" if embed_exists else "⚠️"
-                status_text = "Đang hoạt động" if embed_exists else "**Đã bị xoá (Liên kết ma)**"
+                log_id = form.get("log_channel_id")
+                display_log = f"<#{log_id}>" if log_id and str(log_id) != "none" else "`none`"
                 
                 fields_count = len(form.get("fields", {}))
                 
                 embed_dashboard.add_field(
-                    name=f"{status_icon} Form: {form.get('title', 'Chưa đặt tiêu đề')}",
+                    name=f"• form: **{form.get('form_title') or 'none'}**",
                     value=(
-                        f"• Embed: `{emb_name}`\n"
-                        f"• Kênh Log: <#{form.get('log_channel_id')}> \n"
-                        f"• Số trường: `{fields_count}/5`\n"
-                        f"• Trạng thái: {status_text}"
+                        f"  └ embed: {display_embed}\n"
+                        f"  └ kênh trả đơn: {display_log}\n"
+                        f"  └ số ô nhập liệu: `{fields_count}/5`"
                     ),
                     inline=False
                 )
 
+            embed_dashboard.set_footer(text="yiyi iu cậu • báo cáo hạ tầng form")
             await interaction.followup.send(embed=embed_dashboard)
         except Exception as e:
             print(f"[LỖI FORM SETTING] {e}")
@@ -230,4 +231,4 @@ async def setup(bot: commands.Bot):
         existing = next((c for c in p_cmd.commands if c.name == "forms"), None)
         if existing: p_cmd.remove_command("forms")
         p_cmd.add_command(FormsGroup())
-        print("[LOAD] Success: commands.forms.forms_group (Industrial Anti-Hang Fix)", flush=True)
+        print("[LOAD] Success: commands.forms.forms_group (Full Monitoring Optimized)", flush=True)
