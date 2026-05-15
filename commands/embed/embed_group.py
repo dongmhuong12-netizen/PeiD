@@ -21,9 +21,8 @@ from utils.emojis import Emojis
 
 async def embed_name_autocomplete(interaction: discord.Interaction, current: str):
     """
-    [VÁ LỖI CHÍ MẠNG] 
-    Autocomplete thần tốc chống lỗi 404 Unknown Interaction.
-    Đảm bảo danh sách luôn hiện ra đầy đủ khi sếp gõ lệnh.
+    [VÁ LỖI CHÍ MẠNG - NÂNG CẤP INDUSTRIAL] 
+    Autocomplete thần tốc hỗ trợ cả chuỗi đơn và chuỗi nhiều tên (cách nhau bởi dấu phẩy).
     """
     guild = interaction.guild
     if not guild: return []
@@ -32,15 +31,23 @@ async def embed_name_autocomplete(interaction: discord.Interaction, current: str
         # [KẾT NỐI MẠCH] Phải await vì storage giờ đã lên Cloud Atlas
         names = await get_all_embed_names(guild.id)
         
-        # Logic lọc tên của sếp (Giữ nguyên văn phong logic)
+        # MẠCH XỬ LÝ CHUỖI ĐA TẦNG: Hỗ trợ gợi ý sau dấu phẩy
+        if "," in current:
+            parts = current.split(",")
+            to_complete = parts[-1].strip().lower()
+            prefix = ",".join(parts[:-1]) + ", "
+        else:
+            to_complete = current.strip().lower()
+            prefix = ""
+
         choices = [
-            app_commands.Choice(name=name, value=name) 
-            for name in names if current.lower() in name.lower()
+            app_commands.Choice(name=f"{prefix}{name}", value=f"{prefix}{name}") 
+            for name in names if to_complete in name.lower()
         ][:25]
         
         return choices
     except Exception:
-        # IT Pro: Nếu interaction đã chết hoặc lag, trả về list rỗng thay vì nổ lỗi 404
+        # IT Pro: Tránh lỗi 404 Unknown Interaction
         return []
 
 def _cleanup_views(key: str):
@@ -163,7 +170,7 @@ class EmbedGroup(app_commands.Group):
         name="chọn embed muốn chỉnh sửa từ danh sách",
         extra_embeds="nhập tên các embed khác, cách nhau bằng dấu phẩy (vd: b, c)"
     )
-    @app_commands.autocomplete(name=embed_name_autocomplete)
+    @app_commands.autocomplete(name=embed_name_autocomplete, extra_embeds=embed_name_autocomplete)
     async def edit(self, interaction: discord.Interaction, name: str, extra_embeds: str = None):
         # IT Standard Defer: Tránh lỗi "Interaction Failed" khi Cloud phản hồi chậm
         await interaction.response.defer(ephemeral=False)
@@ -205,7 +212,7 @@ class EmbedGroup(app_commands.Group):
         name="chọn embed chính muốn gửi từ danh sách",
         extra_embeds="nhập tên các embed khác muốn gửi kèm, cách nhau bằng dấu phẩy (vd: b, c)"
     )
-    @app_commands.autocomplete(name=embed_name_autocomplete)
+    @app_commands.autocomplete(name=embed_name_autocomplete, extra_embeds=embed_name_autocomplete)
     async def show(self, interaction: discord.Interaction, name: str, extra_embeds: str = None):
         # [KẾT NỐI MẠCH] Gom danh sách các embed cần gửi lần lượt
         embed_names = [name]
@@ -238,7 +245,7 @@ class EmbedGroup(app_commands.Group):
         name="chọn embed chính muốn gửi từ danh sách",
         extra_embeds="nhập tên các embed khác muốn gửi kèm, cách nhau bằng dấu phẩy (vd: b, c)"
     )
-    @app_commands.autocomplete(name=embed_name_autocomplete)
+    @app_commands.autocomplete(name=embed_name_autocomplete, extra_embeds=embed_name_autocomplete)
     async def send(self, interaction: discord.Interaction, channel: discord.TextChannel, name: str, extra_embeds: str = None):
         # [KẾT NỐI MẠCH] Logic gửi liên thanh sang channel mục tiêu
         embed_names = [name]
@@ -272,7 +279,7 @@ class EmbedGroup(app_commands.Group):
         name="chọn embed chính muốn cập nhật từ danh sách",
         extra_embeds="nhập tên các embed khác, cách nhau bằng dấu phẩy (vd: b, c)"
     )
-    @app_commands.autocomplete(name=embed_name_autocomplete)
+    @app_commands.autocomplete(name=embed_name_autocomplete, extra_embeds=embed_name_autocomplete)
     async def update(self, interaction: discord.Interaction, message_link: str, name: str, extra_embeds: str = None):
         await interaction.response.defer(ephemeral=True)
         guild = interaction.guild
@@ -361,7 +368,7 @@ class EmbedGroup(app_commands.Group):
         name="chọn embed muốn xóa vĩnh viễn từ danh sách",
         extra_embeds="nhập tên các embed khác muốn xoá, cách nhau bằng dấu phẩy (vd: b, c)"
     )
-    @app_commands.autocomplete(name=embed_name_autocomplete)
+    @app_commands.autocomplete(name=embed_name_autocomplete, extra_embeds=embed_name_autocomplete)
     async def delete(self, interaction: discord.Interaction, name: str, extra_embeds: str = None):
         # [KẾT NỐI MẠCH] Đổi sang defer + followup để xử lý nhiều embed không bị sập Interaction
         await interaction.response.defer(ephemeral=False)
