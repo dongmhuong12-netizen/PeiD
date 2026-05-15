@@ -96,7 +96,7 @@ async def update_form_field(guild_id: int, embed_name: str, slot: int, label: st
     return False
 
 # ==========================================
-# INTERACTION LOGIC (HỢP LÝ HOÁ VỊ TRÍ & SPACING)
+# INTERACTION LOGIC (GIA CỐ KHOẢNG CÁCH)
 # ==========================================
 
 class YiyiFormModal(discord.ui.Modal):
@@ -125,7 +125,7 @@ class YiyiFormModal(discord.ui.Modal):
         # Mạch gửi đơn về kênh log khi user nhấn Submit
         channel = interaction.guild.get_channel(int(self.log_channel_id))
         if not channel:
-            return await interaction.response.send_message(f"{Emojis.HOICHAM} hổng tìm thấy kênh log để gửi đơn rồi sếp ơi!", ephemeral=True)
+            return await interaction.response.send_message(f"{Emojis.HOICHAM} hổng tìm thấy kênh log rồi sếp ơi!", ephemeral=True)
 
         embed_log = discord.Embed(
             title=f"{Emojis.MATTRANG} đơn đăng ký mới: {self.title}",
@@ -133,16 +133,18 @@ class YiyiFormModal(discord.ui.Modal):
             timestamp=discord.utils.utcnow()
         )
         
-        # [VỊ TRÍ NGƯỜI GỬI] Hiện ngay dưới Title
-        embed_log.add_field(name="Người gửi:", value=interaction.user.mention, inline=False)
+        # [KHOẢNG CÁCH INDUSTRIAL] Ép tạo dòng trống bằng \n\u200b
+        # Kỹ thuật này giúp "Người gửi" tách biệt hoàn toàn với các trường bên dưới
+        embed_log.add_field(
+            name="Người gửi:", 
+            value=f"{interaction.user.mention}\n\u200b", 
+            inline=False
+        )
         
-        # [KHOẢNG CÁCH INDUSTRIAL] Thêm một hàng trống để đơn nhìn thông thoáng hơn
-        embed_log.add_field(name="\u200b", value="\u200b", inline=False)
-        
-        # Thêm các trường dữ liệu từ đơn (sắp xếp theo thứ tự slot)
+        # Thêm các trường dữ liệu (Gỡ bỏ bullet point để giống ảnh mẫu của sếp)
         for slot in sorted(self.inputs.keys(), key=lambda x: int(x)):
             text_input = self.inputs[slot]
-            embed_log.add_field(name=f"• {text_input.label}", value=text_input.value, inline=False)
+            embed_log.add_field(name=text_input.label, value=text_input.value, inline=False)
         
         # Hiện Avatar nếu sếp bật show_thumbnail
         if self.show_thumbnail:
