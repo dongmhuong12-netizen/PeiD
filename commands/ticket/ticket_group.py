@@ -208,7 +208,7 @@ class TicketGroup(app_commands.Group):
             return await interaction.followup.send(f"{Emojis.HOICHAM} không tìm thấy embed `{embed_name}`.")
 
         btn_data = {
-            "type": "button", "style": "primary", "label": "\u2800Ticket",
+            "type": "button", "style": "secondary", "label": "\u2800Ticket",
             "emoji": f"{Emojis.NO}", "custom_id": "yiyi:ticket:open", "system": "ticket"
         }
 
