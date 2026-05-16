@@ -70,88 +70,116 @@ async def import_cmd(interaction: discord.Interaction, name: str, code: str):
         await interaction.followup.send(content=f"{Emojis.HOICHAM} mã import không hợp lệ hoặc đã bị hỏng.")
 
 
-@app_commands.command(name="clone", description="copy embed từ một tin nhắn discord bất kỳ")
+@app_commands.command(name="clone", description="copy hàng loạt embed từ link tin nhắn discord")
 @app_commands.describe(
-    name="tên embed muốn lưu",
-    link_or_id="dán link tin nhắn hoặc ID tin nhắn",
-    channel_id="nhập ID kênh nếu cậu chỉ dán ID tin nhắn ở trên"
+    names="tên các embed muốn lưu, cách nhau bởi dấu phẩy (vd: em1, em2)",
+    links="dán các link tin nhắn chứa embed, cách nhau bởi dấu phẩy (vd: link1, link2)"
 )
-async def clone_cmd(interaction: discord.Interaction, name: str, link_or_id: str, channel_id: str = None):
+async def clone_cmd(interaction: discord.Interaction, names: str, links: str):
     await interaction.response.defer(ephemeral=False)
     
-    # 1. DEFENSE: Chặn trùng tên
-    if await load_embed(interaction.guild.id, name):
-        return await interaction.followup.send(content=f"{Emojis.HOICHAM} tên `{name}` đã tồn tại rồi cậu.")
+    # Mạch bẻ chuỗi và dọn sạch khoảng trắng dư thừa
+    embed_list = [e.strip() for e in names.split(",") if e.strip()]
+    link_list = [l.strip() for l in links.split(",") if l.strip()]
 
-    # 2. ATTACK: Logic tọa độ vạn năng (Multi-IT Mode)
-    c_id, m_id = None, None
+    # [KIỂM DUYỆT ĐỊNH LƯỢNG] Tên và Link bắt buộc phải khớp định lượng 1:1
+    if len(embed_list) != len(link_list):
+        embed_err = discord.Embed(
+            title=f"{Emojis.HOICHAM} lượng dữ liệu không đồng đều nhe",
+            description=f"số lượng tên embed (`{len(embed_list)}`) và số lượng link tin nhắn (`{len(link_list)}`) phải bằng nhau nhe sếp.",
+            color=0xf8bbd0
+        )
+        return await interaction.followup.send(embed=embed_err)
 
-    # Ưu tiên bóc tách từ link nếu link_or_id là một URL
-    link_match = re.search(r'channels/(\d+|@me)/(\d+)/(\d+)', link_or_id)
-    if link_match:
-        c_id, m_id = int(link_match.group(2)), int(link_match.group(3))
-    else:
-        # Nếu không phải link, lọc sạch để lấy ID tin nhắn nguyên chất
-        m_id_raw = re.sub(r'\D', '', link_or_id)
-        if m_id_raw:
-            m_id = int(m_id_raw)
+    success_clones = []
+    failed_clones = []
+
+    # [VÒNG LẶP TRUY QUYÉT HÀNG LOẠT]
+    for i in range(len(embed_list)):
+        target_name = embed_list[i]
+        link_input = link_list[i]
+
+        # 1. DEFENSE: Chặn trùng tên trong hàng chờ sao chép
+        if await load_embed(interaction.guild.id, target_name):
+            failed_clones.append(f"• `{target_name}`: tên này đã tồn tại rồi cậu.")
+            continue
+
+        # 2. ATTACK: Logic bóc tách tọa độ vạn năng từ URL Link
+        link_match = re.search(r'channels/(\d+|@me)/(\d+)/(\d+)', link_input)
+        if not link_match:
+            failed_clones.append(f"• `{target_name}`: link tin nhắn không hợp lệ rồi cậu ơi.")
+            continue
+
+        c_id = int(link_match.group(2))
+        m_id = int(link_match.group(3))
         
-        # Lấy ID kênh từ tham số channel_id bổ sung
-        if channel_id:
-            c_id_raw = re.sub(r'\D', '', channel_id)
-            if c_id_raw:
-                c_id = int(c_id_raw)
-
-    # Kiểm tra xem đã đủ "tọa độ" để hành quân chưa
-    if not c_id or not m_id:
-        return await interaction.followup.send(content=f"{Emojis.HOICHAM} link hoặc ID tin nhắn không hợp lệ rồi cậu ơi.")
-    
-    try:
-        # 3. Mạch fetch tin nhắn xuyên thấu
-        channel = interaction.client.get_channel(c_id) or await interaction.client.fetch_channel(c_id)
-        msg = await channel.fetch_message(m_id)
-        
-        if not msg.embeds:
-            return await interaction.followup.send(content=f"{Emojis.HOICHAM} tin nhắn này làm gì có embed nào ta..?")
+        try:
+            # 3. Mạch fetch tin nhắn xuyên thấu
+            channel = interaction.client.get_channel(c_id) or await interaction.client.fetch_channel(c_id)
+            msg = await channel.fetch_message(m_id)
             
-        # 4. DEEP CLONE: Bóc tách linh kiện (Gìn giữ Logic Industrial)
-        raw = msg.embeds[0].to_dict()
-        
-        clean_data = {
-            "title": raw.get("title"),
-            "description": raw.get("description"),
-            "color": raw.get("color"),
-            "image": raw.get("image", {}).get("url"),
-            "thumbnail": raw.get("thumbnail", {}).get("url"),
-            "author": {
-                "name": raw.get("author", {}).get("name"), 
-                "icon_url": raw.get("author", {}).get("icon_url")
-            } if raw.get("author") else None,
-            "footer": {
-                "text": raw.get("footer", {}).get("text"), 
-                "icon_url": raw.get("footer", {}).get("icon_url")
-            } if raw.get("footer") else None,
-            "fields": [
-                {"name": f.get("name"), "value": f.get("value"), "inline": f.get("inline", False)} 
-                for f in raw.get("fields", [])
-            ]
-        }
-        
-        clean_data = {k: v for k, v in clean_data.items() if v is not None}
-        if "author" in clean_data: clean_data["author"] = {k: v for k, v in clean_data["author"].items() if v}
-        if "footer" in clean_data: clean_data["footer"] = {k: v for k, v in clean_data["footer"].items() if v}
-        
-        # 5. Lưu kho vĩnh viễn
-        await save_embed(interaction.guild.id, name, clean_data)
-        
-        # FIX: Bảo toàn văn phong và dấu backtick
-        await interaction.followup.send(content=f"{Emojis.YIYITIM} clone embed `{name}` thành công! cậu có thể dùng `/p embed edit` để `chỉnh sửa` lại theo ý muốn nhé.")
-        
-    except discord.Forbidden:
-        await interaction.followup.send(content=f"{Emojis.HOICHAM} **yiyi** không có quyền xem tin nhắn ở kênh đó, cậu check lại nhé.")
-    except Exception as e:
-        print(f"[clone error] {e}")
-        await interaction.followup.send(content=f"{Emojis.HOICHAM} **yiyi** không đọc được tin nhắn này. (Lỗi: `{type(e).__name__}`)")
+            if not msg.embeds:
+                failed_clones.append(f"• `{target_name}`: tin nhắn này làm gì có embed nào ta..?")
+                continue
+                
+            # 4. DEEP CLONE: Bóc tách linh kiện (Gìn giữ Logic Industrial)
+            raw = msg.embeds[0].to_dict()
+            
+            clean_data = {
+                "title": raw.get("title"),
+                "description": raw.get("description"),
+                "color": raw.get("color"),
+                "image": raw.get("image", {}).get("url"),
+                "thumbnail": raw.get("thumbnail", {}).get("url"),
+                "author": {
+                    "name": raw.get("author", {}).get("name"), 
+                    "icon_url": raw.get("author", {}).get("icon_url")
+                } if raw.get("author") else None,
+                "footer": {
+                    "text": raw.get("footer", {}).get("text"), 
+                    "icon_url": raw.get("footer", {}).get("icon_url")
+                } if raw.get("footer") else None,
+                "fields": [
+                    {"name": f.get("name"), "value": f.get("value"), "inline": f.get("inline", False)} 
+                    for f in raw.get("fields", [])
+                ]
+            }
+            
+            clean_data = {k: v for k, v in clean_data.items() if v is not None}
+            if "author" in clean_data: clean_data["author"] = {k: v for k, v in clean_data["author"].items() if v}
+            if "footer" in clean_data: clean_data["footer"] = {k: v for k, v in clean_data["footer"].items() if v}
+            
+            # 5. Lưu kho vĩnh viễn
+            await save_embed(interaction.guild.id, target_name, clean_data)
+            success_clones.append(f"• `{target_name}` (Kênh: <#{c_id}>)")
+            
+        except discord.Forbidden:
+            failed_clones.append(f"• `{target_name}`: **yiyi** không có quyền xem tin nhắn ở kênh đó, cậu check lại nhé.")
+        except Exception as e:
+            print(f"[clone error] {e}")
+            failed_clones.append(f"• `{target_name}`: **yiyi** không đọc được tin nhắn này. (Lỗi: `{type(e).__name__}`)")
+
+    # [MẠCH XUẤT BÁO CÁO THỰC TRẠNG]
+    embed_report = discord.Embed(
+        title=f"{Emojis.MATTRANG} báo cáo kết quả sao chép hàng loạt",
+        color=0xf8bbd0
+    )
+
+    if success_clones:
+        embed_report.add_field(
+            name="✅ Sao chép thành công:", 
+            value="\n".join(success_clones), 
+            inline=False
+        )
+    if failed_clones:
+        embed_report.add_field(
+            name="❌ Thất bại hoặc bỏ qua:", 
+            value="\n".join(failed_clones), 
+            inline=False
+        )
+
+    embed_report.set_footer(text="yiyi iu cậu • hạ tầng lưu trữ hàng loạt")
+    await interaction.followup.send(embed=embed_report)
 
 # =============================
 # INJECTION (BẢO TOÀN KIẾN TRÚC)
