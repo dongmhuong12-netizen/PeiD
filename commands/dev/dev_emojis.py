@@ -15,6 +15,12 @@ class DevEmojis(commands.Cog):
         # Mạch bóc tách an toàn để tương thích với mọi cấu trúc Wrapper MongoDB Atlas của hệ thống peiD
         self.db_col = getattr(bot.db, "db", bot.db)["cloud_emojis_sys"]
 
+    # =========================================================================
+    # [QUY HOẠCH CHIẾN LƯỢC] KHỞI TẠO GROUP LỆNH CHUẨN MULTI-IT
+    # Khai tử dấu gạch dưới, lấy /dev làm nền tảng cho mọi cấu phần Premium sau này
+    # =========================================================================
+    dev = app_commands.Group(name="dev", description="[PREMIUM] Bộ điều khiển tối cao dành cho nhà phát triển hệ thống")
+
     def is_owner(self, interaction: discord.Interaction) -> bool:
         """Mạch bảo mật đối chiếu trực tiếp định danh Thực thể tối cao (Owner ID) thời gian thực"""
         return interaction.user.id == interaction.client.boss_id
@@ -28,7 +34,7 @@ class DevEmojis(commands.Cog):
         )
         return embed
 
-    @app_commands.command(name="dev_register", description="[PREMIUM] đúc emoji vào kho chứa thực thể và cấy nóng thành biến hệ thống")
+    @dev.command(name="register", description="[PREMIUM] đúc emoji vào kho chứa thực thể và cấy nóng thành biến hệ thống")
     @app_commands.describe(
         variable_name="tên biến muốn gọi trong code (vd: alert, peid_omg)",
         emoji_input="dán emoji trực tiếp hoặc nhập chuỗi id số của emoji gốc"
@@ -124,7 +130,7 @@ class DevEmojis(commands.Cog):
             )
             await interaction.followup.send(embed=embed_fail)
 
-    @app_commands.command(name="dev_list", description="[PREMIUM] soi chiếu toàn bộ bảng biến mã nguồn tĩnh vật lý và động")
+    @dev.command(name="list", description="[PREMIUM] soi chiếu toàn bộ bảng biến mã nguồn tĩnh vật lý và động")
     async def dev_list_cmd(self, interaction: discord.Interaction):
         # Bộ lọc an toàn tối cao chặn đứng các thực thể không hợp lệ
         if not self.is_owner(interaction):
@@ -132,19 +138,23 @@ class DevEmojis(commands.Cog):
 
         await interaction.response.defer(ephemeral=True)
 
-        # 1. Thuật toán Phản Chiếu (Reflection): Quét sạch và bóc tách toàn bộ biến cứng trong file vật lý utils/emojis.py
-        hardcoded_list = []
-        for attr, val in Emojis.__dict__.items():
-            if not attr.startswith("__") and isinstance(val, str):
-                hardcoded_list.append(f"• `{attr}` ──> {val}")
-
-        # 2. Truy quét toàn bộ danh sách định danh biến động đã lưu trữ dưới MongoDB Atlas đám mây
+        # 2. Truy quét toàn bộ danh sách định danh biến động đã lưu trữ dưới MongoDB Atlas đám mây trước
         dynamic_list = []
+        dynamic_keys = set()  # [MẠCH NÂNG CẤP RANH GIỚI] Lưu cache tên để lọc loại trừ triệt để
         async for item in self.db_col.find({}):
             v_id = item["vault_emoji_id"]
             o_name = item["original_name"]
             fmt = f"<a:{o_name}:{v_id}>" if item["is_animated"] else f"<:{o_name}:{v_id}>"
             dynamic_list.append(f"• `{item['custom_name']}` ──> {fmt}")
+            dynamic_keys.add(item["custom_name"])
+
+        # 1. Thuật toán Phản Chiếu (Reflection): Quét sạch và bóc tách toàn bộ biến cứng trong file vật lý utils/emojis.py
+        hardcoded_list = []
+        for attr, val in Emojis.__dict__.items():
+            if not attr.startswith("__") and isinstance(val, str):
+                # Ranh giới sạch sẽ tuyệt đối: Nếu biến đã được cấy động từ database thì bỏ qua không in vào khu file cứng
+                if attr.upper() not in dynamic_keys:
+                    hardcoded_list.append(f"• `{attr}` ──> {val}")
 
         # 3. Dựng Dashboard điều khiển phân khu hiển thị đồ họa trực quan chi tiết
         embed_dashboard = discord.Embed(
@@ -165,6 +175,74 @@ class DevEmojis(commands.Cog):
 
         embed_dashboard.set_footer(text="Hệ thống quản lý tài nguyên tối cao của yiyi")
         await interaction.followup.send(embed=embed_dashboard)
+
+    # =========================================================================
+    # [CẤY MỚI HOÀN TOÀN] MẠCH HỦY TÀI NGUYÊN VÀ GIẢI PHÓNG BỘ NHỚ RAM TỐI CAO
+    # Tự động dọn dẹp thực thể tại Vault Server, gỡ DB và trục xuất hoàn toàn khỏi RAM
+    # =========================================================================
+    @dev.command(name="delete", description="[PREMIUM] xóa sổ biến động khỏi cơ sở dữ liệu, kho chứa và giải phóng bộ nhớ RAM")
+    @app_commands.describe(variable_name="tên biến dynamic sếp muốn xóa sổ (vd: alert, peid_omg)")
+    async def dev_delete_cmd(self, interaction: discord.Interaction, variable_name: str):
+        # Bộ lọc an toàn tối cao chặn đứng các thực thể không hợp lệ
+        if not self.is_owner(interaction):
+            return await interaction.response.send_message(embed=self.get_unauthorized_embed(), ephemeral=True)
+
+        await interaction.response.defer(ephemeral=True)
+        var_name_clean = variable_name.strip().upper()
+
+        # Kiểm toán sự tồn tại: Tìm bản ghi định vị thực thể trong MongoDB Atlas
+        target_emoji = await self.db_col.find_one({"custom_name": var_name_clean})
+        if not target_emoji:
+            embed_not_found = discord.Embed(
+                title=f"{Emojis.BUOMA} không tìm thấy biến này",
+                description=f"biến `{var_name_clean}` không tồn tại trong danh mục biến động hệ thống cậu ơi.",
+                color=0xe6e2dd
+            )
+            return await interaction.followup.send(embed=embed_not_found)
+
+        errors_log = []
+        vault_emoji_id = target_emoji["vault_emoji_id"]
+
+        # 1. Mạch giải phóng tài nguyên thực thể: Mò vào Server Kho Chứa gỡ bỏ emoji để thu hồi slot trống
+        try:
+            vault_guild = self.bot.get_guild(VAULT_GUILD_ID)
+            if vault_guild:
+                # Tìm nạp thực thể sống của emoji để xóa sổ qua API Discord
+                emoji_obj = discord.utils.get(vault_guild.emojis, id=int(vault_emoji_id))
+                if not emoji_obj:
+                    # Nếu cache rỗng, kích hoạt mạch nạp cưỡng bức để truy tìm tận gốc
+                    try:
+                        emoji_obj = await vault_guild.fetch_emoji(int(vault_emoji_id))
+                    except:
+                        emoji_obj = None
+                
+                if emoji_obj:
+                    await vault_guild.delete_custom_emoji(emoji_obj)
+                else:
+                    errors_log.append("Thực thể emoji không còn tồn tại trên Server Kho Chứa (có thể đã bị xóa thủ công).")
+            else:
+                errors_log.append("Không thể tiếp cận Server Kho Chứa để dọn dẹp thực thể slot.")
+        except Exception as e:
+            errors_log.append(f"Mạch gỡ thực thể dính lỗi phát sinh: {str(e)}")
+
+        # 2. Mạch xóa sổ dữ liệu: Loại bỏ vĩnh viễn bản ghi khỏi bộ nhớ MongoDB đám mây
+        await self.db_col.delete_one({"custom_name": var_name_clean})
+
+        # 3. Mạch trục xuất RAM: Trục xuất thuộc tính động khỏi Class Emojis thời gian thực
+        if hasattr(Emojis, var_name_clean):
+            delattr(Emojis, var_name_clean)
+
+        # 4. Xuất Embed báo cáo kết quả chuẩn gam màu và văn phong yiyi
+        desc_msg = f"đã trục xuất biến `{var_name_clean}` ra khỏi bộ nhớ RAM và cơ sở dữ liệu thành công rồi cậu."
+        if errors_log:
+            desc_msg += f"\n\n⚠️ **Lưu ý trong quá trình dọn kho bãi:**\n- " + "\n- ".join(errors_log)
+
+        embed_del_success = discord.Embed(
+            title=f"{Emojis.BUOMA} xóa sổ biến động thành công!",
+            description=desc_msg,
+            color=0xe6e2dd
+        )
+        await interaction.followup.send(embed=embed_del_success)
 
 async def load_dynamic_emojis(bot):
     """Hàm lõi đồng bộ hóa: Hút toàn bộ biến động từ MongoDB và nạp đè vào RAM khi khởi động bot"""
