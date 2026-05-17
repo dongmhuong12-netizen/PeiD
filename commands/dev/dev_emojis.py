@@ -7,7 +7,7 @@ import os
 from utils.emojis import Emojis
 
 # CẤU HÌNH SERVER KHO CHỨA TRUNG TÂM TOÀN CỤC NẠP TỪ BIẾN MÔI TRƯỜNG TRƯỚC
-VAULT_GUILD_ID = int(os.getenv("VAULT_GUILD_ID", 123456789012345678))  # <--- Sếp cấu hình ID Server Kho Chứa của sếp tại đây nhe
+VAULT_GUILD_ID = int(os.getenv("VAULT_GUILD_ID", 1439489572936613951))  # <--- Sếp cấu hình ID Server Kho Chứa của sếp tại đây nhe
 
 class DevEmojis(commands.Cog):
     def __init__(self, bot):
