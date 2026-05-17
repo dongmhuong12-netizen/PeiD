@@ -76,6 +76,7 @@ EXTENSIONS = [
     "commands.ticket.ticket_group",  
     "commands.forms.forms_group",    
     "commands.fun.yiyi_resources",
+    "commands.dev.dev_emojis",  # [CẤY MỚI PREMIUM] Mở rộng trình đăng ký quản lý biến emoji hệ thống tối cao
 ]
 
 async def load_extensions():
@@ -134,6 +135,14 @@ async def main():
         bot.db = MongoDB(uri)
         await bot.db.connect()
         print("[DB] MongoDB Atlas đã kết nối thành công!", flush=True)
+        
+        # [CẤY MỚI PREMIUM - ĐÚNG NIÊN ĐẠI HẠ TẦNG] Nạp toàn bộ biến động vào RAM trước khi các Cogs được load
+        try:
+            from commands.dev.dev_emojis import load_dynamic_emojis
+            await load_dynamic_emojis(bot)
+        except Exception as e:
+            print(f"[PREMIUM BOOT ERROR] Mạch đồng bộ nạp RAM Emoji biến động thất bại: {e}", flush=True)
+            
     else:
         print("[DB WARNING] Không tìm thấy MONGO_URI. Bot đang chạy chế độ RAM-Only!", flush=True)
 
