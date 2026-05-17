@@ -346,6 +346,29 @@ class EmbedUIView(discord.ui.View):
             
         if guild:
             data_copy = apply_variables(data_copy, guild, member)
+
+        # =========================================================================
+        # [MẠCH VÁ LỖI NỘI SUY EMOJI]
+        # Tự động quét chuỗi {Emojis.TÊN_BIẾN} và dịch sang mã Graphic thời gian thực
+        # =========================================================================
+        def translate_emoji_tags(text):
+            if not isinstance(text, str): return text
+            return re.sub(r'\{Emojis\.([A-Za-z0-9_]+)\}', lambda m: str(getattr(Emojis, m.group(1).upper(), m.group(0))), text)
+
+        if "title" in data_copy:
+            data_copy["title"] = translate_emoji_tags(data_copy["title"])
+        if "description" in data_copy:
+            data_copy["description"] = translate_emoji_tags(data_copy["description"])
+        if "footer" in data_copy and isinstance(data_copy["footer"], dict) and "text" in data_copy["footer"]:
+            data_copy["footer"]["text"] = translate_emoji_tags(data_copy["footer"]["text"])
+        if "author" in data_copy and isinstance(data_copy["author"], dict) and "name" in data_copy["author"]:
+            data_copy["author"]["name"] = translate_emoji_tags(data_copy["author"]["name"])
+        if "fields" in data_copy and isinstance(data_copy["fields"], list):
+            for field in data_copy["fields"]:
+                if "name" in field: field["name"] = translate_emoji_tags(field["name"])
+                if "value" in field: field["value"] = translate_emoji_tags(field["value"])
+        # =========================================================================
+
         return _build_embed(data_copy)
 
     async def update_message(self, interaction: discord.Interaction):
