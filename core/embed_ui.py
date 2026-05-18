@@ -321,7 +321,7 @@ class EmbedUIView(discord.ui.View):
 
         self.add_item(discord.ui.Button(
             label="need help? join support server", 
-            url="https://discord.gg/wqfYZVEjgg", 
+            url="https://discord.gg/EK6pf8nCM3", 
             row=3
         ))
 
