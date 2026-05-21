@@ -5,7 +5,7 @@ import asyncio
 import copy
 
 from core.embed_ui import EmbedUIView, ACTIVE_EMBED_VIEWS
-from core.embed_storage import load_embed, delete_embed, get_all_embed_names
+from core.embed_storage import load_embed, delete_embed, get_all_embed_names, save_embed # [CẤY MỚI] GỌI HÀM SAVE ĐỂ LƯU TEXT
 from core.embed_storage import _nid # [HỖ TRỢ CHUẨN HÓA]
 from core.embed_sender import send_embed, _build_embed
 from systems.embed_system import EmbedSystem
@@ -337,6 +337,9 @@ class EmbedGroup(app_commands.Group):
             data_v = apply_variables(data_copy, guild, interaction.user)
             emb_obj = _build_embed(data_v)
             view = create_embed_view(data)
+            
+            # [CẤY MẠCH TEXT] Bóc text từ database để đè lên tin nhắn cũ
+            text_content = data.get("content", None)
 
             # Phẫu thuật đè 1-1 (Xuyên Webhook hoặc Bot)
             try:
@@ -347,14 +350,16 @@ class EmbedGroup(app_commands.Group):
                         await interaction.followup.send(f"{Emojis.HOICHAM} không tìm thấy webhook quản lý tin nhắn `{link}`.", ephemeral=True)
                         continue
                     
-                    await webhook.edit_message(message_id, embed=emb_obj, view=view)
+                    # [CẤY MẠCH TEXT] Truyền content vào hàm edit webhook
+                    await webhook.edit_message(message_id, content=text_content, embed=emb_obj, view=view)
                     success_count += 1
                 else:
                     if target_msg.author.id != interaction.client.user.id:
                         await interaction.followup.send(f"{Emojis.HOICHAM} **yiyi** không thể sửa tin nhắn `{link}` vì nó không phải của bot.", ephemeral=True)
                         continue
                     
-                    await target_msg.edit(embed=emb_obj, view=view)
+                    # [CẤY MẠCH TEXT] Truyền content vào hàm edit tin nhắn gốc
+                    await target_msg.edit(content=text_content, embed=emb_obj, view=view)
                     success_count += 1
             except Exception as e:
                 print(f"[Update Error] {e}", flush=True)
@@ -443,6 +448,91 @@ class EmbedGroup(app_commands.Group):
         except Exception as e:
             print(f"[Delete Error - Industrial] {e}", flush=True)
             await interaction.followup.send(f"{Emojis.HOICHAM} phát sinh lỗi khi xóa embed: `{e}`")
+
+    # =========================================================================
+    # [CẤY MỚI] BỘ LỆNH QUẢN LÝ TEXT MESSAGE LIÊN KẾT ĐỘNG VÀ BẢO MẬT HỆ THỐNG
+    # =========================================================================
+    
+    @app_commands.command(name="link_text", description="liên kết hoặc cập nhật text message nằm ngoài hộp embed")
+    @app_commands.describe(
+        name="chọn embed muốn liên kết text từ danh sách",
+        text_content="nội dung lời nhắn ngoài embed (vd: @everyone xin chào cả nhà)"
+    )
+    @app_commands.autocomplete(name=embed_name_autocomplete)
+    async def link_text_cmd(self, interaction: discord.Interaction, name: str, text_content: str):
+        await interaction.response.defer(ephemeral=True)
+        embed_name_clean = name.strip().lower()
+
+        # Bộ lọc phòng vệ ngăn chặn xung đột ngầm với module hệ thống
+        system_blacklist = ["welcome", "wellcome", "goodbye", "greet", "leave", "boost", "booster"]
+        if any(keyword in embed_name_clean for keyword in system_blacklist):
+            embed_deny = discord.Embed(
+                title=f"{Emojis.BUOMA} không được rồi, xin lỗi cậu nhe..",
+                description="embed này đang liên kết với hệ thống tự động của máy chủ nhe cậu. cậu hãy dùng lệnh cấu hình text riêng của hệ thống đó để tránh xung đột mạch hiển thị nha.",
+                color=0xe6e2dd
+            )
+            return await interaction.followup.send(embed=embed_deny)
+
+        # Hút dữ liệu lõi lên RAM để kiểm toán
+        data = await load_embed(interaction.guild.id, embed_name_clean)
+        if not data:
+            embed_none = discord.Embed(
+                title=f"{Emojis.HOICHAM} hmm...?",
+                description=f"**yiyi** không tìm thấy embed có tên `{embed_name_clean}`, xin hãy kiểm tra lại nhé",
+                color=0xf8bbd0
+            )
+            return await interaction.followup.send(embed=embed_none)
+
+        # Ghi đè Payload dữ liệu Text và nén lại vào Database
+        data["content"] = text_content
+        await save_embed(interaction.guild.id, embed_name_clean, data)
+
+        embed_success = discord.Embed(
+            title=f"{Emojis.MATTRANG} cập nhật liên kết text thành công",
+            description=f"đã găm mạch text message vào embed `{embed_name_clean}`.\n\n• **Nội dung:** {text_content}",
+            color=0xf8bbd0
+        )
+        await interaction.followup.send(embed=embed_success)
+
+    @app_commands.command(name="unlink_text", description="hủy liên kết text message ra khỏi hộp embed")
+    @app_commands.describe(name="chọn embed muốn hủy liên kết text")
+    @app_commands.autocomplete(name=embed_name_autocomplete)
+    async def unlink_text_cmd(self, interaction: discord.Interaction, name: str):
+        await interaction.response.defer(ephemeral=True)
+        embed_name_clean = name.strip().lower()
+
+        # Bộ lọc phòng vệ bảo vệ hạ tầng tự động
+        system_blacklist = ["welcome", "wellcome", "goodbye", "greet", "leave", "boost", "booster"]
+        if any(keyword in embed_name_clean for keyword in system_blacklist):
+            embed_deny = discord.Embed(
+                title=f"{Emojis.BUOMA} không được rồi, xin lỗi cậu nhe..",
+                description="embed này đang liên kết với hệ thống tự động của máy chủ nhe cậu. cậu hãy dùng lệnh cấu hình text riêng của hệ thống đó để tránh xung đột nha.",
+                color=0xe6e2dd
+            )
+            return await interaction.followup.send(embed=embed_deny)
+
+        # Hút dữ liệu lõi
+        data = await load_embed(interaction.guild.id, embed_name_clean)
+        if not data:
+            embed_none = discord.Embed(
+                title=f"{Emojis.HOICHAM} hmm...?",
+                description=f"**yiyi** không tìm thấy embed có tên `{embed_name_clean}`, xin hãy kiểm tra lại nhé",
+                color=0xf8bbd0
+            )
+            return await interaction.followup.send(embed=embed_none)
+
+        # Trục xuất mạch Text khỏi từ điển và đồng bộ đám mây
+        if "content" in data:
+            data.pop("content", None)
+            await save_embed(interaction.guild.id, embed_name_clean, data)
+
+        embed_success = discord.Embed(
+            title=f"{Emojis.MATTRANG} hủy liên kết text thành công",
+            description=f"đã tháo gỡ mạch text message khỏi embed `{embed_name_clean}`. hộp embed đã trở về trạng thái thuần túy nhe cậu.",
+            color=0xf8bbd0
+        )
+        await interaction.followup.send(embed=embed_success)
+
 
 # =============================
 # INJECTION (KHÔI PHỤC MẠCH ĐĂNG KÝ LỆNH CHUẨN)
