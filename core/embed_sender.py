@@ -234,18 +234,22 @@ async def send_embed(
 
         # 3. gửi tin nhắn an toàn
         message = None
+        
+        # [CẤY MẠCH TEXT] Hút content liên kết từ dữ liệu (đã bọc apply_variables)
+        text_content = embed_copy.get("content", None)
+
         if isinstance(destination, discord.Interaction):
             if destination.response.is_done():
-                message = await destination.followup.send(embed=embed, view=view)
+                message = await destination.followup.send(content=text_content, embed=embed, view=view)
             else:
-                await destination.response.send_message(embed=embed, view=view)
+                await destination.response.send_message(content=text_content, embed=embed, view=view)
                 message = await destination.original_response()
         else:
             perms = destination.permissions_for(guild.me)
             if not perms.send_messages or not perms.embed_links:
                 print(f"[send error] bot thiếu quyền gửi embed tại channel {destination.id}", flush=True)
                 return False
-            message = await destination.send(embed=embed, view=view)
+            message = await destination.send(content=text_content, embed=embed, view=view)
 
         if not message:
             return False
