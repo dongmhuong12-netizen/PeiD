@@ -339,7 +339,7 @@ class EmbedGroup(app_commands.Group):
             view = create_embed_view(data)
             
             # [CẤY MẠCH TEXT] Bóc text từ database để đè lên tin nhắn cũ
-            text_content = data.get("content", None)
+            text_content = data_v.get("content", None)
 
             # Phẫu thuật đè 1-1 (Xuyên Webhook hoặc Bot)
             try:
