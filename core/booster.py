@@ -37,8 +37,8 @@ class BoostGroup(app_commands.Group):
         await save_guild_config(interaction.guild.id, config)
         
         embed = discord.Embed(
-            title=f"{Emojis.MATTRANG} cập nhật role `booster` thành công: {role.name}",
-            color=0xf8bbd0
+            title=f"{Emojis.BUOMA} cập nhật role `booster` thành công: {role.name}",
+            color=0xe6e2dd
         )
         await interaction.followup.send(embed=embed)
 
@@ -59,8 +59,8 @@ class BoostGroup(app_commands.Group):
         await save_guild_config(interaction.guild.id, config)
         
         embed = discord.Embed(
-            title=f"{Emojis.MATTRANG} cập nhật kênh `boost` thành công: {channel.name}",
-            color=0xf8bbd0
+            title=f"{Emojis.BUOMA} cập nhật kênh `boost` thành công: {channel.name}",
+            color=0xe6e2dd
         )
         await interaction.followup.send(embed=embed)
 
@@ -76,8 +76,8 @@ class BoostGroup(app_commands.Group):
         
         display_text = apply_variables(text, interaction.guild, interaction.user)
         embed = discord.Embed(
-            title=f"{Emojis.MATTRANG} cập nhật tin nhắn `boost` thành công: {display_text}",
-            color=0xf8bbd0
+            title=f"{Emojis.BUOMA} cập nhật tin nhắn `boost` thành công: {display_text}",
+            color=0xe6e2dd
         )
         await interaction.followup.send(embed=embed)
 
@@ -91,7 +91,7 @@ class BoostGroup(app_commands.Group):
             embed_err = discord.Embed(
                 title=f"{Emojis.HOICHAM} aree... có lỗi gì đó ở đây",
                 description=f"**yiyi** không tìm thấy embed có tên `{name}`. hãy kiểm tra lại bằng `/p embed edit` nhé",
-                color=0xf8bbd0
+                color=0xe6e2dd
             )
             return await interaction.followup.send(embed=embed_err)
         
@@ -102,8 +102,8 @@ class BoostGroup(app_commands.Group):
         await save_guild_config(interaction.guild.id, config)
         
         embed_success = discord.Embed(
-            title=f"{Emojis.MATTRANG} cập nhật embed `{name}` cho hệ thống `boost` thành công",
-            color=0xf8bbd0
+            title=f"{Emojis.BUOMA} cập nhật embed `{name}` cho hệ thống `boost` thành công",
+            color=0xe6e2dd
         )
         await interaction.followup.send(embed=embed_success)
 
@@ -135,15 +135,15 @@ class BoostGroup(app_commands.Group):
         
         if success:
             embed = discord.Embed(
-                title=f"{Emojis.MATTRANG} test hệ thống `boost` thành công",
+                title=f"{Emojis.BUOMA} test hệ thống `boost` thành công",
                 description=f"yiyi sẽ cho phép cậu giữ role {rolesetup} trong 5 phút tới để kiểm tra cấu hình. sau 5 phút, yiyi sẽ gỡ role nếu cậu không có boost nhé",
-                color=0xf8bbd0
+                color=0xe6e2dd
             )
         else:
             embed = discord.Embed(
                 title=f"{Emojis.HOICHAM} aree... có lỗi gì đó ở đây",
                 description=f"hãy đảm bảo rằng cậu đã setup đủ cấu hình cho `booster`, hoặc xem lại quyền của **yiyi** và quyền của kênh nhé",
-                color=0xf8bbd0
+                color=0xe6e2dd
             )
         await interaction.followup.send(embed=embed)
 
