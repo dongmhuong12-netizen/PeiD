@@ -46,7 +46,7 @@ class EditInformationModal(discord.ui.Modal, title="edit information"):
         is_default_title = curr_title in ["Tiêu đề Embed mới", "tiêu đề embed mới", "embed mới", None]
         
         self.etitle = discord.ui.TextInput(
-            label="tiêu đề mới (nhập 'none' để xoá)",
+            label="tiêu đề mới",
             placeholder="tiêu đề embed mới",
             required=False,
             default=None if is_default_title else curr_title
@@ -56,18 +56,18 @@ class EditInformationModal(discord.ui.Modal, title="edit information"):
         is_default_desc = curr_desc in ["Nội dung mô tả mặc định", "Nội dung mô tả mặc định.", "nội dung mô tả mặc định", "nội dung mô tả", None]
         
         self.description = discord.ui.TextInput(
-            label="mô tả mới (nhập 'none' để xoá)",
+            label="mô tả mới",
             style=discord.TextStyle.paragraph,
             placeholder="nội dung mô tả mặc định",
             required=False,
             default=None if is_default_desc else curr_desc
         )
         
-        curr_color_hex = hex(self.view.data.get("color", 0xf8bbd0)).replace("0x", "").lower()
+        curr_color_hex = hex(self.view.data.get("color", 0xe6e2dd)).replace("0x", "").lower()
         
         self.color = discord.ui.TextInput(
             label="mã màu hex",
-            placeholder="f8bbd0",
+            placeholder="e6e2dd",
             required=True,
             default=curr_color_hex 
         )
@@ -97,7 +97,7 @@ class EditInformationModal(discord.ui.Modal, title="edit information"):
             self.view.data["description"] = "\u200b"
         
         try:
-            val = self.color.value.replace("#", "").lower() or "f8bbd0"
+            val = self.color.value.replace("#", "").lower() or "e6e2dd"
             self.view.data["color"] = int(val, 16)
             
             await save_embed(self.view.guild_id, self.view.name, self.view.data)
@@ -273,7 +273,7 @@ class ReactionRoleModal(discord.ui.Modal, title="reaction role setup"):
             embed_err = discord.Embed(
                 title=f"{Emojis.HOICHAM} lỗi cấu hình reaction role",
                 description="xin hãy nhập lại\n- " + "\n- ".join(errors),
-                color=0xf8bbd0
+                color=0xe6e2dd
             )
             return await interaction.followup.send(embed=embed_err, ephemeral=True)
 
@@ -292,8 +292,8 @@ class ReactionRoleModal(discord.ui.Modal, title="reaction role setup"):
             await State.atomic_embed_register(guild.id, self.view.name, self.view.message.id)
 
         embed_success = discord.Embed(
-            title=f"{Emojis.MATTRANG} cập nhật reaction role cho `{self.view.name}` thành công",
-            color=0xf8bbd0
+            title=f"{Emojis.BUOMA} cập nhật reaction role cho `{self.view.name}` thành công",
+            color=0xe6e2dd
         )
         await interaction.followup.send(embed=embed_success, ephemeral=False)
 
@@ -342,7 +342,7 @@ class EmbedUIView(discord.ui.View):
             data_copy["description"] = "nội dung mô tả mặc định"
         
         if data_copy.get("color") in [0x5865f2, 0x5865F2, None]:
-            data_copy["color"] = 0xf8bbd0
+            data_copy["color"] = 0xe6e2dd
             
         if guild:
             data_copy = apply_variables(data_copy, guild, member)
