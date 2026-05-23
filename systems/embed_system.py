@@ -38,7 +38,7 @@ class EmbedSystem:
                     # TRẢ VỀ EMBED LỖI ĐỂ HIỂN THỊ TRỰC QUAN
                     embed_err = discord.Embed(
                         description=f"{Emojis.HOICHAM} aree... tên embed này đã tồn tại rồi. cậu hãy chọn một cái tên khác nhé",
-                        color=0xf8bbd0
+                        color=0xe6e2dd
                     )
                     return False, embed_err
 
@@ -48,7 +48,7 @@ class EmbedSystem:
                 if len(all_embeds) >= EmbedSystem.LIMIT:
                     embed_limit = discord.Embed(
                         description=f"{Emojis.HOICHAM} hmm..? server của cậu đã đạt giới hạn {EmbedSystem.LIMIT} embed rồi. hãy xoá bớt trước khi tạo mới nhé",
-                        color=0xf8bbd0
+                        color=0xe6e2dd
                     )
                     return False, embed_limit
 
@@ -57,7 +57,7 @@ class EmbedSystem:
                 default_data = {
                     "title": "tiêu đề embed mới",
                     "description": "nội dung mô tả mặc định",
-                    "color": 0xf8bbd0, # Màu hồng thương hiệu của Yiyi
+                    "color": 0xe6e2dd, # Màu hồng thương hiệu của Yiyi
                     "image": None,
                     "thumbnail": None,
                     "author": {"name": None, "icon_url": None, "url": None},
