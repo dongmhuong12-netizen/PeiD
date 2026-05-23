@@ -99,8 +99,8 @@ async def rotate_status():
         
         statuses = [
             ("˚₊‧꒰ა yiyi iu ໒꒱ ‧₊˚", None),
-            ("vương dỹ nguyệt", emoji_no),
-            ("vạn diệp  〆  ≋", emoji_htt)
+            ("⏆  ―  vương dỹ nguyệt", emoji_no),
+            ("୨୧  vạn diệp  〆  ≋", emoji_htt)
         ]
         
         # Lấy ra cả chữ và emoji theo chu kỳ
