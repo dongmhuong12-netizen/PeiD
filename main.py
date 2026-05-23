@@ -11,11 +11,18 @@ from core.mongodb import MongoDB
 
 # [FIX CỐT LÕI] Nạp môi trường bằng đường dẫn tuyệt đối, tránh lỗi "TOKEN not found" khi PM2 đổi đường dẫn chạy
 basedir = os.path.abspath(os.path.dirname(__file__))
-load_dotenv(os.path.join(basedir, '.env'))
+dotenv_path = os.path.join(basedir, '.env')
+load_dotenv(dotenv_path=dotenv_path)
+
+# Debug kiểm tra file (Không in giá trị Token ra log để đảm bảo an toàn)
+if os.path.exists(dotenv_path):
+    print(f"[SYSTEM] Đã tìm thấy file .env tại: {dotenv_path}", flush=True)
+else:
+    print(f"[LỖI] KHÔNG TÌM THẤY FILE .ENV TẠI: {dotenv_path}", flush=True)
 
 TOKEN = os.getenv("TOKEN")
 if not TOKEN:
-    raise RuntimeError("TOKEN environment variable not found")
+    raise RuntimeError(f"TOKEN environment variable not found! Hãy kiểm tra file {dotenv_path}")
 
 # =========================
 # WEB SERVER (RENDER KEEP ALIVE)
