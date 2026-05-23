@@ -215,13 +215,14 @@ class EmbedGroup(app_commands.Group):
     )
     @app_commands.autocomplete(name=embed_name_autocomplete, extra_embeds=embed_name_autocomplete)
     async def show(self, interaction: discord.Interaction, name: str, extra_embeds: str = None):
+        await interaction.response.defer(ephemeral=True)
+        
         # [KẾT NỐI MẠCH] Gom danh sách các embed cần gửi lần lượt
         embed_names = [name]
         if extra_embeds:
             embed_names.extend([n.strip() for n in extra_embeds.split(",") if n.strip()])
             
-        await interaction.response.send_message(f"{Emojis.BUOMA} đã gửi  {len(embed_names)} embed thành công.", ephemeral=True)
-        
+        valid_embeds = []
         for emb_name in embed_names:
             # Nạp dữ liệu từ Cloud Atlas
             data = await load_embed(interaction.guild.id, emb_name)
@@ -232,13 +233,16 @@ class EmbedGroup(app_commands.Group):
                     color=0xe6e2dd
                 )
                 await interaction.followup.send(embed=embed_err, ephemeral=True)
-                continue
-            
-            # Giữ nguyên DNA: Tạo View nút bấm linh hoạt cho toàn bộ hệ thống
-            view = create_embed_view(data)
-            
-            # [THỰC THI] Gửi embed thông qua Engine vạn năng
-            await send_embed(interaction.channel, data, interaction.guild, interaction.user, embed_name=emb_name, view=view)
+            else:
+                valid_embeds.append((emb_name, data))
+                
+        if valid_embeds:
+            await interaction.followup.send(f"{Emojis.BUOMA} đã gửi {len(valid_embeds)} embed thành công.", ephemeral=True)
+            for emb_name, data in valid_embeds:
+                # Giữ nguyên DNA: Tạo View nút bấm linh hoạt cho toàn bộ hệ thống
+                view = create_embed_view(data)
+                # [THỰC THI] Gửi embed thông qua Engine vạn năng
+                await send_embed(interaction.channel, data, interaction.guild, interaction.user, embed_name=emb_name, view=view)
 
     @app_commands.command(name="send", description="gửi embed vào kênh được chỉ định")
     @app_commands.describe(
@@ -248,13 +252,14 @@ class EmbedGroup(app_commands.Group):
     )
     @app_commands.autocomplete(name=embed_name_autocomplete, extra_embeds=embed_name_autocomplete)
     async def send(self, interaction: discord.Interaction, channel: discord.TextChannel, name: str, extra_embeds: str = None):
+        await interaction.response.defer(ephemeral=True)
+        
         # [KẾT NỐI MẠCH] Logic gửi liên thanh sang channel mục tiêu
         embed_names = [name]
         if extra_embeds:
             embed_names.extend([n.strip() for n in extra_embeds.split(",") if n.strip()])
             
-        await interaction.response.send_message(f"{Emojis.BUOMA} đang tiến hành gửi lần lượt {len(embed_names)} embed vào {channel.mention}...", ephemeral=True)
-        
+        valid_embeds = []
         for emb_name in embed_names:
             # Nạp dữ liệu từ Cloud Atlas
             data = await load_embed(interaction.guild.id, emb_name)
@@ -265,13 +270,16 @@ class EmbedGroup(app_commands.Group):
                     color=0xe6e2dd
                 )
                 await interaction.followup.send(embed=embed_err, ephemeral=True)
-                continue
-            
-            # Giữ nguyên DNA: Tạo View nút bấm linh hoạt cho toàn bộ hệ thống
-            view = create_embed_view(data)
-            
-            # [THỰC THI] Gửi embed thẳng vào kênh mục tiêu
-            await send_embed(channel, data, interaction.guild, interaction.user, embed_name=emb_name, view=view)
+            else:
+                valid_embeds.append((emb_name, data))
+                
+        if valid_embeds:
+            await interaction.followup.send(f"{Emojis.BUOMA} đang tiến hành gửi lần lượt {len(valid_embeds)} embed vào {channel.mention}...", ephemeral=True)
+            for emb_name, data in valid_embeds:
+                # Giữ nguyên DNA: Tạo View nút bấm linh hoạt cho toàn bộ hệ thống
+                view = create_embed_view(data)
+                # [THỰC THI] Gửi embed thẳng vào kênh mục tiêu
+                await send_embed(channel, data, interaction.guild, interaction.user, embed_name=emb_name, view=view)
 
     # [LỆNH MỚI] CẬP NHẬT TRỰC TIẾP TIN NHẮN (LIVE SYNC V2 - 1 ĐỔI 1)
     @app_commands.command(name="update", description="cập nhật/sửa lại tin nhắn embed đã gửi bằng link")
