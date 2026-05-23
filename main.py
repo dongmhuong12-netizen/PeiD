@@ -3,10 +3,14 @@ from discord.ext import commands
 import asyncio
 import os
 from aiohttp import web
+from dotenv import load_dotenv
 
 from core.state import State
 # [CẤY MỚI] Nạp lớp MongoDB để khởi động cỗ máy dữ liệu
 from core.mongodb import MongoDB 
+
+# Nạp môi trường ngay lập tức
+load_dotenv()
 
 TOKEN = os.getenv("TOKEN")
 if not TOKEN:
