@@ -72,13 +72,13 @@ def _build_embed(embed_copy: dict):
         try:
             color = int(color.replace("#", "").replace("0x", ""), 16)
         except:
-            color = 0xf8bbd0
+            color = 0xe6e2dd
     
-    # mặc định về màu hồng f8bbd0 nếu không có màu cụ thể
+    # mặc định về màu trắng 0xe6e2dd nếu không có màu cụ thể
     embed = discord.Embed(
         title=embed_copy.get("title"),
         description=embed_copy.get("description"),
-        color=color if color not in [0x5865F2, None] else 0xf8bbd0
+        color=color if color not in [0x5865F2, None] else 0xe6e2dd
     )
 
     # --- mạch timestamp (chỉ kích hoạt khi nhập yes) ---
