@@ -1,5 +1,5 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks # [CẤY MỚI] Thêm tasks từ discord.ext
 import asyncio
 import os
 from aiohttp import web
@@ -80,6 +80,33 @@ bot.boss_id = 1055476307372294155
 State.bot = bot 
 
 # =========================
+# [CẤY MỚI] HỆ THỐNG VÒNG LẶP STATUS CHIẾN LƯỢC
+# =========================
+bot.status_index = 0
+
+# Rate limit API: 5 lần đổi / 60 giây / 1 Shard. Đặt 30s là chu kỳ "ngắn nhất & an toàn nhất"
+@tasks.loop(seconds=30)
+async def rotate_status():
+    # Cấu trúc tách biệt: ("Phần_chữ_thuần_túy", Biến_Custom_Emoji_Object)
+    statuses = [
+        ("˚₊‧꒰ა yiyi iu ໒꒱ ‧₊˚", None),
+        ("vương dỹ nguyệt", Emojis.NO),
+        ("vạn diệp  〆  ≋", Emojis.HT)
+    ]
+    
+    # Lấy ra cả chữ và emoji theo chu kỳ
+    current_text, current_emoji = statuses[bot.status_index % len(statuses)]
+    bot.status_index += 1
+    
+    # Ép cố định chế độ mặt trăng (Idle) và truyền chuẩn vào 2 tham số name và emoji
+    activity = discord.CustomActivity(name=current_text, emoji=current_emoji)
+    await bot.change_presence(status=discord.Status.idle, activity=activity)
+
+@rotate_status.before_loop
+async def before_rotate_status():
+    await bot.wait_until_ready()
+
+# =========================
 # EXTENSIONS (QUY HOẠCH CHIẾN LƯỢC)
 # =========================
 
@@ -134,6 +161,10 @@ async def on_ready():
     if bot._ready_once:
         return
     bot._ready_once = True
+
+    # [CẤY MỚI] Khởi động vòng lặp an toàn không block event loop
+    if not rotate_status.is_running():
+        rotate_status.start()
 
     # 1. SLASH SYNC
     try:
