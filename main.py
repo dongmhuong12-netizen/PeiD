@@ -4,7 +4,7 @@ import asyncio
 import os
 from aiohttp import web
 
-# [FIX] Đưa Emojis lên import đầu file để tránh NameError trong vòng lặp
+# [FIX DỨT ĐIỂM] Đưa Emojis lên import đầu file để Task background truy cập được ở mức global
 from utils.emojis import Emojis 
 from core.state import State
 # [CẤY MỚI] Nạp lớp MongoDB để khởi động cỗ máy dữ liệu
@@ -90,7 +90,7 @@ bot.status_index = 0
 @tasks.loop(seconds=30)
 async def rotate_status():
     try:
-        # Sử dụng Emojis đã import ở đầu file để tránh lỗi NameError
+        # Sử dụng Emojis đã được import ở đầu file (global scope)
         emoji_no = getattr(Emojis, "NO", None)
         emoji_htt = getattr(Emojis, "HTT", None)
         
