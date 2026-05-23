@@ -90,9 +90,9 @@ bot.status_index = 0
 @tasks.loop(seconds=30)
 async def rotate_status():
     try:
-        # Sử dụng getattr để lấy giá trị động từ Class Emojis an toàn
+        # Sử dụng getattr để lấy giá trị từ Class Emojis an toàn
         emoji_no = getattr(Emojis, "NO", None)
-        emoji_ht = getattr(Emojis, "HTT", None)
+        emoji_htt = getattr(Emojis, "HTT", None) # Đã sửa đúng tên biến cho khớp
         
         statuses = [
             ("˚₊‧꒰ა yiyi iu ໒꒱ ‧₊˚", None),
