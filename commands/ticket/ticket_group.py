@@ -87,14 +87,14 @@ class TicketGroup(app_commands.Group):
                 embed_err = discord.Embed(
                     title=f"{Emojis.HOICHAM} aree... có lỗi gì đó ở đây",
                     description=f"**yiyi** không tìm thấy kênh hoặc danh mục hợp lệ. cậu hãy kiểm tra lại ID nhé.",
-                    color=0xf8bbd0
+                    color=0xe6e2dd
                 )
                 return await interaction.followup.send(embed=embed_err)
         except (ValueError, TypeError):
             embed_err = discord.Embed(
                 title=f"{Emojis.HOICHAM} hmm...? định dạng lỗi",
                 description="dữ liệu ID không đúng định dạng số, xin hãy kiểm tra lại.",
-                color=0xf8bbd0
+                color=0xe6e2dd
             )
             return await interaction.followup.send(embed=embed_err)
 
@@ -107,13 +107,13 @@ class TicketGroup(app_commands.Group):
         
         if await update_ticket_config(guild.id, config):
             embed_res = discord.Embed(
-                title=f"{Emojis.MATTRANG} cập nhật hạ tầng Ticket thành công",
+                title=f"{Emojis.BUOMA} cập nhật hạ tầng Ticket thành công",
                 description=(
                     f"• danh mục: `{cat.name}`\n"
                     f"• kênh logs: `{log.name}`\n\n"
                     f"*sử dụng `/p ticket staff-add` để thêm nhân sự hỗ trợ nhee.*"
                 ),
-                color=0xf8bbd0
+                color=0xe6e2dd
             )
             await interaction.followup.send(embed=embed_res)
         else:
@@ -137,7 +137,7 @@ class TicketGroup(app_commands.Group):
             if role: valid_objs.append(role)
 
         if not valid_objs:
-            return await interaction.followup.send(f"{Emojis.HOICHAM} hổng thấy role nào hợp lệ để thêm hết á.")
+            return await interaction.followup.send(f"{Emojis.HOICHAM} **yiyi** không tìm thấy role hợp lệ để thêm.")
 
         # [ATK - MẠCH CẬP NHẬT LŨY TIẾN]
         config = await get_ticket_config(guild.id) or {}
@@ -150,9 +150,9 @@ class TicketGroup(app_commands.Group):
         if await update_ticket_config(guild.id, config):
             role_mentions = "\n".join([f"• {r.mention}" for r in valid_objs])
             embed = discord.Embed(
-                title=f"{Emojis.MATTRANG} cập nhật nhân sự thành công",
+                title=f"{Emojis.BUOMA} cập nhật nhân sự thành công",
                 description=f"**yiyi** đã thêm các role sau vào danh sách hỗ trợ:\n{role_mentions}",
-                color=0xf8bbd0
+                color=0xe6e2dd
             )
             await interaction.followup.send(embed=embed)
         else:
@@ -178,12 +178,12 @@ class TicketGroup(app_commands.Group):
             if await update_ticket_config(interaction.guild.id, config):
                 role = interaction.guild.get_role(int(clean_id))
                 embed = discord.Embed(
-                    description=f"{Emojis.MATTRANG} đã gỡ bỏ quyền hỗ trợ của role `{role.name if role else clean_id}` nhee.",
-                    color=0xf8bbd0
+                    description=f"{Emojis.BUOMA} gỡ bỏ quyền hỗ trợ Ticket của role `{role.name if role else clean_id}` thành công",
+                    color=0xe6e2dd
                 )
                 return await interaction.followup.send(embed=embed)
         
-        await interaction.followup.send(f"{Emojis.HOICHAM} Role này hổng có trong danh sách hỗ trợ nên hổng xóa được nhe.")
+        await interaction.followup.send(f"{Emojis.HOICHAM} **yiyi** không thấy role này trong danh sách Ticket staff, cậu hãy kiểm tra lại qua `/p ticket setting` nhé.")
 
     # =========================
     # LỆNH 4: APPLY (INDUSTRIAL DEEP CLEAN - ONLY ONE)
@@ -200,7 +200,7 @@ class TicketGroup(app_commands.Group):
             embed_no_config = discord.Embed(
                 title=f"{Emojis.HOICHAM} chưa có cấu hình.",
                 description="cậu cần thực hiện lệnh `/p ticket setup` trước nhé.",
-                color=0xf8bbd0
+                color=0xe6e2dd
             )
             return await interaction.followup.send(embed=embed_no_config)
 
@@ -228,9 +228,9 @@ class TicketGroup(app_commands.Group):
         await update_ticket_config(guild_id, config)
 
         embed_ok = discord.Embed(
-            title=f"{Emojis.MATTRANG} liên kết Ticket vào embed `{embed_name}` thành công.",
-            description="*hệ thống đã quét và gỡ nút Ticket ở các vị trí khác để đảm bảo tính duy nhất.*",
-            color=0xf8bbd0
+            title=f"{Emojis.BUOMA} liên kết Ticket vào embed `{embed_name}` thành công.",
+            description="các embed khác được liên kết với Ticket đã được gỡ bỏ",
+            color=0xe6e2dd
         )
         await interaction.followup.send(embed=embed_ok)
 
@@ -263,14 +263,14 @@ class TicketGroup(app_commands.Group):
         staff_mentions = ", ".join([f"<@&{r}>" for r in staff_ids]) if staff_ids else "`none`"
 
         embed_setting = discord.Embed(
-            title=f"{Emojis.MATTRANG} chi tiết cấu hình ticket của {guild.name}",
+            title=f"{Emojis.BUOMA} chi tiết cấu hình ticket của {guild.name}",
             description=(
                 f"• **danh mục:** {display_cat}\n"
                 f"• **kênh logs:** {display_log}\n"
                 f"• **staff roles:** {staff_mentions}\n"
                 f"• **embed liên kết:** {display_embed}"
             ),
-            color=0xf8bbd0
+            color=0xe6e2dd
         )
         embed_setting.set_footer(text="yiyi iu cậu • báo cáo hạ tầng hỗ trợ")
         await interaction.followup.send(embed=embed_setting)
