@@ -125,11 +125,11 @@ class YiyiFormModal(discord.ui.Modal):
         # Mạch gửi đơn về kênh log khi user nhấn Submit
         channel = interaction.guild.get_channel(int(self.log_channel_id))
         if not channel:
-            return await interaction.response.send_message(f"{Emojis.HOICHAM} hổng tìm thấy kênh log rồi sếp ơi!", ephemeral=True)
+            return await interaction.response.send_message(f"{Emojis.HOICHAM} **yiyi** không tìm thấy kênh gửi log, xin hãy kiểm tra lại cấu hình setup.", ephemeral=True)
 
         embed_log = discord.Embed(
-            title=f"{Emojis.MATTRANG} đơn đăng ký mới: {self.title}",
-            color=0xf8bbd0,
+            title=f"{Emojis.BUOMA} đơn đăng ký mới: {self.title}",
+            color=0xe6e2dd,
             timestamp=discord.utils.utcnow()
         )
         
@@ -151,7 +151,7 @@ class YiyiFormModal(discord.ui.Modal):
             embed_log.set_thumbnail(url=interaction.user.display_avatar.url)
 
         await channel.send(embed=embed_log)
-        await interaction.response.send_message(f"{Emojis.MATTRANG} đơn của cậu đã được gửi đi thành công nhee!", ephemeral=True)
+        await interaction.response.send_message(f"{Emojis.BUOMA} đơn đã được gửi đi thành công.", ephemeral=True)
 
 async def handle_forms_interaction(interaction: discord.Interaction):
     """
@@ -167,7 +167,7 @@ async def handle_forms_interaction(interaction: discord.Interaction):
     config = await get_form_config(interaction.guild.id, embed_name)
 
     if not config or not config.get("fields"):
-        return await interaction.response.send_message(f"{Emojis.HOICHAM} form này chưa được sếp thiết lập nội dung (field) rồi!", ephemeral=True)
+        return await interaction.response.send_message(f"{Emojis.HOICHAM} form này chưa được thiết lập nội dung field.", ephemeral=True)
 
     # Hiện Modal xịn xò cho user
     modal = YiyiFormModal(
