@@ -7,6 +7,8 @@ from aiohttp import web
 from core.state import State
 # [CẤY MỚI] Nạp lớp MongoDB để khởi động cỗ máy dữ liệu
 from core.mongodb import MongoDB 
+# [CẤY MỚI] Nạp class Emojis để định danh các biến động trong hệ thống
+from utils.emojis import Emojis
 
 # ==========================================
 # [GIẢI PHÁP TỐI THƯỢNG] TỰ CẠY FILE .ENV, ĐÁ BAY DOTENV
@@ -88,6 +90,7 @@ bot.status_index = 0
 @tasks.loop(seconds=30)
 async def rotate_status():
     # Cấu trúc tách biệt: ("Phần_chữ_thuần_túy", Biến_Custom_Emoji_Object)
+    # Discord sẽ tự động đưa Custom Emoji lên đầu dòng hiển thị
     statuses = [
         ("˚₊‧꒰ა yiyi iu ໒꒱ ‧₊˚", None),
         ("vương dỹ nguyệt", Emojis.NO),
