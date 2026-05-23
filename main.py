@@ -3,26 +3,37 @@ from discord.ext import commands
 import asyncio
 import os
 from aiohttp import web
-from dotenv import load_dotenv
 
 from core.state import State
 # [CẤY MỚI] Nạp lớp MongoDB để khởi động cỗ máy dữ liệu
 from core.mongodb import MongoDB 
 
-# [FIX CỐT LÕI] Nạp môi trường bằng đường dẫn tuyệt đối, tránh lỗi "TOKEN not found" khi PM2 đổi đường dẫn chạy
+# ==========================================
+# [GIẢI PHÁP TỐI THƯỢNG] TỰ CẠY FILE .ENV, ĐÁ BAY DOTENV
+# ==========================================
 basedir = os.path.abspath(os.path.dirname(__file__))
-dotenv_path = os.path.join(basedir, '.env')
-load_dotenv(dotenv_path=dotenv_path, override=True)
+env_path = os.path.join(basedir, '.env')
 
-# Debug kiểm tra file (Không in giá trị Token ra log để đảm bảo an toàn)
-if os.path.exists(dotenv_path):
-    print(f"[SYSTEM] Đã tìm thấy file .env tại: {dotenv_path}", flush=True)
-else:
-    print(f"[LỖI] KHÔNG TÌM THẤY FILE .ENV TẠI: {dotenv_path}", flush=True)
+_TOKEN = None
+_MONGO_URI = None
+
+# Tự động đọc file chay, bỏ qua mọi lỗi của PM2 hay hệ thống
+if os.path.exists(env_path):
+    with open(env_path, 'r', encoding='utf-8', errors='ignore') as f:
+        for line in f:
+            line = line.strip() # Cắt bỏ mọi khoảng trắng hay ký tự lỗi rác
+            if line.startswith("TOKEN="):
+                _TOKEN = line.split("=", 1)[1].strip(' "\'')
+            elif line.startswith("MONGO_URI="):
+                _MONGO_URI = line.split("=", 1)[1].strip(' "\'')
+
+# Bơm thẳng vào não hệ thống
+if _TOKEN: os.environ["TOKEN"] = _TOKEN
+if _MONGO_URI: os.environ["MONGO_URI"] = _MONGO_URI
 
 TOKEN = os.getenv("TOKEN")
 if not TOKEN:
-    raise RuntimeError(f"TOKEN environment variable not found! Hãy kiểm tra file {dotenv_path}")
+    raise RuntimeError(f"Vẫn không có TOKEN! Sếp hãy gõ lệnh 'cat .env' kiểm tra xem có đúng dòng 'TOKEN=...' chưa!")
 
 # =========================
 # WEB SERVER (RENDER KEEP ALIVE)
