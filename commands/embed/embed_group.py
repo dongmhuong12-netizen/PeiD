@@ -132,9 +132,9 @@ class EmbedGroup(app_commands.Group):
         # [KẾT NỐI MẠCH] Load từ Cloud phải dùng await
         if await load_embed(guild.id, name):
             embed_exists = discord.Embed(
-                title=f"{Emojis.MATTRANG} embed tên `{name}` đã tồn tại",
+                title=f"{Emojis.BUOMA} embed tên `{name}` đã tồn tại",
                 description=f"nếu cậu không tìm thấy embed, hãy thử dùng `/p embed edit` để tìm lại nhé",
-                color=0xf8bbd0
+                color=0xe6e2dd
             )
             return await interaction.followup.send(embed=embed_exists)
 
@@ -189,7 +189,7 @@ class EmbedGroup(app_commands.Group):
                 embed_none = discord.Embed(
                     title=f"{Emojis.HOICHAM} hmm...?",
                     description=f"**yiyi** không tìm thấy embed có tên `{emb_name}`, xin hãy nhập lại lần nữa",
-                    color=0xf8bbd0
+                    color=0xe6e2dd
                 )
                 await interaction.followup.send(embed=embed_none)
                 continue
@@ -220,7 +220,7 @@ class EmbedGroup(app_commands.Group):
         if extra_embeds:
             embed_names.extend([n.strip() for n in extra_embeds.split(",") if n.strip()])
             
-        await interaction.response.send_message(f"{Emojis.MATTRANG} đã gửi  {len(embed_names)} embed thành công.", ephemeral=True)
+        await interaction.response.send_message(f"{Emojis.BUOMA} đã gửi  {len(embed_names)} embed thành công.", ephemeral=True)
         
         for emb_name in embed_names:
             # Nạp dữ liệu từ Cloud Atlas
@@ -229,7 +229,7 @@ class EmbedGroup(app_commands.Group):
                 embed_err = discord.Embed(
                     title=f"{Emojis.HOICHAM} aree...hãy thử lại lần nữa nhé.",
                     description=f"**yiyi** không tìm thấy embed có tên `{emb_name}`. xin hãy kiểm tra lại bằng `/p embed edit`",
-                    color=0xf8bbd0
+                    color=0xe6e2dd
                 )
                 await interaction.followup.send(embed=embed_err, ephemeral=True)
                 continue
@@ -253,7 +253,7 @@ class EmbedGroup(app_commands.Group):
         if extra_embeds:
             embed_names.extend([n.strip() for n in extra_embeds.split(",") if n.strip()])
             
-        await interaction.response.send_message(f"{Emojis.MATTRANG} đang tiến hành gửi lần lượt {len(embed_names)} embed vào {channel.mention}...", ephemeral=True)
+        await interaction.response.send_message(f"{Emojis.BUOMA} đang tiến hành gửi lần lượt {len(embed_names)} embed vào {channel.mention}...", ephemeral=True)
         
         for emb_name in embed_names:
             # Nạp dữ liệu từ Cloud Atlas
@@ -262,7 +262,7 @@ class EmbedGroup(app_commands.Group):
                 embed_err = discord.Embed(
                     title=f"{Emojis.HOICHAM} aree...hãy thử lại lần nữa nhé.",
                     description=f"**yiyi** không tìm thấy embed có tên `{emb_name}`. xin hãy kiểm tra lại bằng `/p embed edit`",
-                    color=0xf8bbd0
+                    color=0xe6e2dd
                 )
                 await interaction.followup.send(embed=embed_err, ephemeral=True)
                 continue
@@ -332,7 +332,7 @@ class EmbedGroup(app_commands.Group):
             if data_copy.get("description") in ["Nội dung mô tả mặc định", "Nội dung mô tả mặc định.", "nội dung mô tả mặc định", "nội dung mô tả"]:
                 data_copy["description"] = "nội dung mô tả mặc định"
             if data_copy.get("color") in [0x5865f2, 0x5865F2, None]:
-                data_copy["color"] = 0xf8bbd0
+                data_copy["color"] = 0xe6e2dd
 
             data_v = apply_variables(data_copy, guild, interaction.user)
             emb_obj = _build_embed(data_v)
@@ -367,7 +367,7 @@ class EmbedGroup(app_commands.Group):
 
         # Chốt sổ
         if success_count > 0:
-            await interaction.followup.send(f"{Emojis.MATTRANG} đã cập nhật thành công {success_count}/{len(embed_names)} tin nhắn!", ephemeral=True)
+            await interaction.followup.send(f"{Emojis.BUOMA} đã cập nhật thành công {success_count}/{len(embed_names)} tin nhắn!", ephemeral=True)
 
     @app_commands.command(name="delete", description="xóa embed vĩnh viễn")
     @app_commands.describe(
@@ -399,7 +399,7 @@ class EmbedGroup(app_commands.Group):
             embed_none = discord.Embed(
                 title=f"{Emojis.HOICHAM} hmm...?",
                 description=f"**yiyi** không tìm thấy embed nào có tên như cậu nhập, hãy thử kiểm tra lại nhe",
-                color=0xf8bbd0
+                color=0xe6e2dd
             )
             return await interaction.followup.send(embed=embed_none)
 
@@ -442,9 +442,9 @@ class EmbedGroup(app_commands.Group):
             
             # 4. BÁO CÁO TỔNG KẾT (Bảo tồn văn phong sếp dặn)
             if len(existing_names) > 1:
-                await interaction.followup.send(f"{Emojis.MATTRANG} đã xoá thành công `{len(existing_names)}` embed. toàn bộ liên kết tại ticket và hệ thống banner đã được dọn dẹp sạch sẽ.")
+                await interaction.followup.send(f"{Emojis.BUOMA} đã xoá thành công `{len(existing_names)}` embed. toàn bộ liên kết tại ticket và hệ thống banner đã được dọn dẹp sạch sẽ.")
             else:
-                await interaction.followup.send(f"{Emojis.MATTRANG} embed `{existing_names[0]}` đã được xoá vĩnh viễn và gỡ bỏ liên kết hệ thống.")
+                await interaction.followup.send(f"{Emojis.BUOMA} embed `{existing_names[0]}` đã được xoá vĩnh viễn và gỡ bỏ liên kết hệ thống.")
         except Exception as e:
             print(f"[Delete Error - Industrial] {e}", flush=True)
             await interaction.followup.send(f"{Emojis.HOICHAM} phát sinh lỗi khi xóa embed: `{e}`")
@@ -479,7 +479,7 @@ class EmbedGroup(app_commands.Group):
             embed_none = discord.Embed(
                 title=f"{Emojis.HOICHAM} hmm...?",
                 description=f"**yiyi** không tìm thấy embed có tên `{embed_name_clean}`, xin hãy kiểm tra lại nhé",
-                color=0xf8bbd0
+                color=0xe6e2dd
             )
             return await interaction.followup.send(embed=embed_none)
 
@@ -488,9 +488,9 @@ class EmbedGroup(app_commands.Group):
         await save_embed(interaction.guild.id, embed_name_clean, data)
 
         embed_success = discord.Embed(
-            title=f"{Emojis.MATTRANG} cập nhật liên kết text thành công",
+            title=f"{Emojis.BUOMA} cập nhật liên kết text thành công",
             description=f"đã găm mạch text message vào embed `{embed_name_clean}`.\n\n• **Nội dung:** {text_content}",
-            color=0xf8bbd0
+            color=0xe6e2dd
         )
         await interaction.followup.send(embed=embed_success)
 
@@ -517,7 +517,7 @@ class EmbedGroup(app_commands.Group):
             embed_none = discord.Embed(
                 title=f"{Emojis.HOICHAM} hmm...?",
                 description=f"**yiyi** không tìm thấy embed có tên `{embed_name_clean}`, xin hãy kiểm tra lại nhé",
-                color=0xf8bbd0
+                color=0xe6e2dd
             )
             return await interaction.followup.send(embed=embed_none)
 
@@ -527,9 +527,9 @@ class EmbedGroup(app_commands.Group):
             await save_embed(interaction.guild.id, embed_name_clean, data)
 
         embed_success = discord.Embed(
-            title=f"{Emojis.MATTRANG} hủy liên kết text thành công",
+            title=f"{Emojis.BUOMA} hủy liên kết text thành công",
             description=f"đã tháo gỡ mạch text message khỏi embed `{embed_name_clean}`. hộp embed đã trở về trạng thái thuần túy nhe cậu.",
-            color=0xf8bbd0
+            color=0xe6e2dd
         )
         await interaction.followup.send(embed=embed_success)
 
