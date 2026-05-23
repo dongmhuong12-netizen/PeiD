@@ -79,26 +79,26 @@ bot.status_index = 0
 @tasks.loop(seconds=30)
 async def rotate_status():
     try:
-        # Sử dụng getattr để tránh NameError nếu biến chưa kịp nạp
-        emoji_no = getattr(Emojis, "NO", None)
-        emoji_ht = getattr(Emojis, "HT", None)
-        
+        # Sử dụng Tên biến dưới dạng String để truy vấn động thông qua getattr
+        # Điều này giúp bot không bị crash nếu biến chưa kịp được nạp từ DB
         statuses = [
             ("˚₊‧꒰ა yiyi iu ໒꒱ ‧₊˚", None),
-            ("vương dỹ nguyệt", emoji_no),
-            ("vạn diệp  〆  ≋", emoji_ht)
+            ("vương dỹ nguyệt", "NO"),
+            ("vạn diệp  〆  ≋", "HT")
         ]
         
-        current_text, current_emoji = statuses[bot.status_index % len(statuses)]
+        current_text, emoji_key = statuses[bot.status_index % len(statuses)]
         bot.status_index += 1
+        
+        # Lấy giá trị biến từ class Emojis một cách an toàn
+        emoji_val = getattr(Emojis, emoji_key, None) if emoji_key else None
         
         # Xử lý ép kiểu: Nếu là string (mã thô), convert sang PartialEmoji
         final_emoji = None
-        if current_emoji:
-            if isinstance(current_emoji, str):
-                final_emoji = discord.PartialEmoji.from_str(current_emoji)
-            else:
-                final_emoji = current_emoji
+        if emoji_val and isinstance(emoji_val, str):
+            final_emoji = discord.PartialEmoji.from_str(emoji_val)
+        else:
+            final_emoji = emoji_val
         
         activity = discord.CustomActivity(name=current_text, emoji=final_emoji)
         await bot.change_presence(status=discord.Status.idle, activity=activity)
