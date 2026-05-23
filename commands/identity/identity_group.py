@@ -54,7 +54,7 @@ class IdentityGroup(app_commands.Group):
             # Tối ưu: Lọc sạch ký tự lạ khỏi ID
             clean_id = re.sub(r'\D', '', str(target_id))
             if not clean_id:
-                return await interaction.followup.send(f"{Emojis.HOICHAM} id không hợp hệ, hãy thử nhập lại nhé.")
+                return await interaction.followup.send(f"{Emojis.HOICHAM} id không hợp lệ, hãy thử nhập lại nhé.")
             try:
                 target_user = await interaction.client.fetch_user(int(clean_id))
                 display_name = target_user.display_name
@@ -65,9 +65,9 @@ class IdentityGroup(app_commands.Group):
                 return await interaction.followup.send(f"{Emojis.HOICHAM} **yiyi** không tìm thấy người dùng `{clean_id}`.")
         else:
             if not display_name:
-                return await interaction.followup.send(f"{Emojis.HOICHAM} Cậu cần nhập 'Tên hiển thị' nhé.")
+                return await interaction.followup.send(f"{Emojis.HOICHAM} cậu cần nhập 'Tên hiển thị' nhé.")
             if avatar_url and not avatar_url.startswith(("http://", "https://", "{")):
-                return await interaction.followup.send(f"{Emojis.HOICHAM} Link ảnh có vẻ không đúng định dạng rồi.")
+                return await interaction.followup.send(f"{Emojis.HOICHAM} link ảnh có vẻ không đúng định dạng rồi.")
             ident_type = "manual"
 
         # Lưu vào kho lưu trữ
