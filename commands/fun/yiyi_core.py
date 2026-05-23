@@ -164,12 +164,28 @@ class YiyiGroup(app_commands.Group):
             f_st = f"`ON`" if linked_form_names else f"`OFF`"
             form_section_lines = [f"• **form (tuỳ chọn)**: {f_st}", f"  └ số form hoàn chỉnh: `{hoan_chinh_count}`"]
             
+            # [FIX] Tách biến để chống xung đột dấu nháy f-string
             if not linked_form_names:
                 form_section_lines.extend(["  └ embed: `none`","  └ số ô nhập liệu: `0`","  └ tiêu đề: `none`","  └ thumbnail: `OFF`","  └ kênh gửi log: `none`"])
             else:
                 for f_name in linked_form_names:
                     f_doc = form_configs_by_name.get(f_name, {})
-                    form_section_lines.extend([f"  └ embed: {verify_embed(f_name)}", f"  └ số ô nhập liệu: `{len(f_doc.get('fields', {}))}`", f"  └ tiêu đề: `{f_doc.get('form_title') or 'none'}`", f"  └ thumbnail: {f'`ON`' if f_doc.get('show_thumbnail') else f'`OFF`'}", f"  └ kênh gửi log: {f'<#{f_doc.get('log_channel_id')}>' if f_doc.get('log_channel_id') else 'none'}"])
+                    
+                    embed_val = verify_embed(f_name)
+                    field_count = len(f_doc.get('fields', {}))
+                    title_val = f_doc.get('form_title') or 'none'
+                    thumb_val = '`ON`' if f_doc.get('show_thumbnail') else '`OFF`'
+                    
+                    log_id = f_doc.get('log_channel_id')
+                    log_val = f"<#{log_id}>" if log_id else "none"
+                    
+                    form_section_lines.extend([
+                        f"  └ embed: {embed_val}", 
+                        f"  └ số ô nhập liệu: `{field_count}`", 
+                        f"  └ tiêu đề: `{title_val}`", 
+                        f"  └ thumbnail: {thumb_val}", 
+                        f"  └ kênh gửi log: {log_val}"
+                    ])
             form_display = "\n".join(form_section_lines)
             
             # --- [RÁP GIAO DIỆN LINK] ---
