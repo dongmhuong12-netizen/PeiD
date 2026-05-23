@@ -42,7 +42,7 @@ class FormsGroup(app_commands.Group):
     # =========================
     # LỆNH 1: SETUP NỀN (Fix Treo & Chuẩn hóa logic Thumbnail)
     # =========================
-    @app_commands.command(name="setup", description="1. Setup đơn, tiêu đề và kênh nhận kết quả")
+    @app_commands.command(name="setup", description="Setup đơn, tiêu đề và kênh nhận kết quả")
     @app_commands.describe(
         embed_name="2. Tên embed gắn form",
         form_title="4. Tiêu đề hiển thị trên đơn",
@@ -133,7 +133,7 @@ class FormsGroup(app_commands.Group):
     # =========================
     # LỆNH 3: APPLY (HỢP LÝ HÓA UI & ICON)
     # =========================
-    @app_commands.command(name="apply", description="11. Liên kết Form vào Embed")
+    @app_commands.command(name="apply", description="Liên kết Form vào Embed")
     @app_commands.describe(embed_name="Tên embed muốn liên kết nút gửi đơn")
     @app_commands.autocomplete(embed_name=embed_name_autocomplete)
     async def apply(self, interaction: discord.Interaction, embed_name: str, label: str = "Gửi đơn đăng ký"):
