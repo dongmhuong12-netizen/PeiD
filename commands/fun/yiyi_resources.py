@@ -63,12 +63,12 @@ async def resources_cmd(interaction: discord.Interaction):
 
         # 3. Tạo Embed báo cáo
         embed = discord.Embed(
-            title=f"{Emojis.MATTRANG} báo cáo tài nguyên hệ thống PeiD",
+            title=f"{Emojis.MOONBL} báo cáo tài nguyên hệ thống PeiD",
             description=(
                 f"trạng thái kết nối với **MongoDB Atlas** hiện đang rất ổn định.\n"
                 f"mọi dữ liệu đang được đồng bộ hóa thời gian thực."
             ),
-            color=0xf8bbd0
+            color=0xe6e2dd
         )
         
         # --- Thông tin Database ---
