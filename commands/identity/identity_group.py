@@ -54,7 +54,7 @@ class IdentityGroup(app_commands.Group):
             # Tối ưu: Lọc sạch ký tự lạ khỏi ID
             clean_id = re.sub(r'\D', '', str(target_id))
             if not clean_id:
-                return await interaction.followup.send(f"{Emojis.HOICHAM} ID không hợp lệ rồi cậu ơi.")
+                return await interaction.followup.send(f"{Emojis.HOICHAM} id không hợp hệ, hãy thử nhập lại nhé.")
             try:
                 target_user = await interaction.client.fetch_user(int(clean_id))
                 display_name = target_user.display_name
@@ -79,7 +79,7 @@ class IdentityGroup(app_commands.Group):
         if success:
             info_detail = f"Mượn xác: **{display_name}**" if ident_type == "target" else f"Tên hiển thị: **{display_name}**"
             await interaction.followup.send(
-                f"{Emojis.YIYITIM} **Đã lưu danh tính thành công!**\n"
+                f"{Emojis.BUOMA} **Đã lưu danh tính thành công!**\n"
                 f"> 🆔 Tên gợi nhớ: `{id_name}`\n"
                 f"> 🎭 Thông tin: {info_detail}"
             )
@@ -92,9 +92,9 @@ class IdentityGroup(app_commands.Group):
         
         success = await delete_identity(interaction.guild.id, name)
         if success:
-            await interaction.followup.send(f"{Emojis.MATTRANG} Đã xóa sạch dấu vết của vỏ `{name}`!")
+            await interaction.followup.send(f"{Emojis.BUOMA} xoá vỏ `{name}` thành công.")
         else:
-            await interaction.followup.send(f"{Emojis.HOICHAM} Không tìm thấy vỏ nào tên `{name}` để xóa cả.")
+            await interaction.followup.send(f"{Emojis.HOICHAM} **yiyi** không tìm thấy vỏ nào có tên `{name}`. hãy thử nhập lại hoặc kiểm tra tên vỏ bằng `/p identity list`.")
 
     # --- LỆNH 3: LIỆT KÊ DANH SÁCH ---
     @app_commands.command(name="list", description="xem danh sách các 'vỏ' đang có ở server này")
@@ -103,11 +103,11 @@ class IdentityGroup(app_commands.Group):
         
         names = await get_all_identity_names(interaction.guild.id)
         if not names:
-            return await interaction.followup.send(f"{Emojis.HOICHAM} Server mình chưa có cái 'vỏ' nào cả cậu ạ.")
+            return await interaction.followup.send(f"{Emojis.HOICHAM} máy chủ này hiện chưa có `vỏ`.")
 
         embed = discord.Embed(
-            title=f"{Emojis.YIYITIM} Kho Danh Tính - {interaction.guild.name}", 
-            color=0xf8bbd0
+            title=f"{Emojis.BUOMA} Kho Danh Tính - {interaction.guild.name}", 
+            color=0xe6e2dd
         )
         
         for n in names:
