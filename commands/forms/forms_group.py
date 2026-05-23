@@ -69,14 +69,14 @@ class FormsGroup(app_commands.Group):
             
             if success:
                 embed_res = discord.Embed(
-                    title=f"{Emojis.MATTRANG} thiết lập form thành công",
+                    title=f"{Emojis.BUOMA} thiết lập form thành công",
                     description=(
                         f"• embed: `{embed_name}`\n"
                         f"• tiêu đề: **{form_title}**\n"
                         f"• kênh trả đơn: <#{clean_log_id}>\n"
                         f"• hiện avatar lên đơn log: `{'Có' if show_thumbnail else 'Không'}`"
                     ),
-                    color=0xf8bbd0
+                    color=0xe6e2dd
                 )
                 await interaction.followup.send(embed=embed_res)
             else:
@@ -114,14 +114,14 @@ class FormsGroup(app_commands.Group):
 
             if success:
                 embed_res = discord.Embed(
-                    title=f"{Emojis.MATTRANG} cập nhật nội dung trường `{slot}` thành công",
+                    title=f"{Emojis.BUOMA} cập nhật nội dung trường `{slot}` thành công",
                     description=(
                         f"• embed: `{embed_name}`\n"
                         f"• nội dung: `{label}`\n"
                         f"• chú thích: `{placeholder}`\n"
                         f"• bắt buộc điền: `{'Có' if required else 'Không'}`"
                     ),
-                    color=0xf8bbd0
+                    color=0xe6e2dd
                 )
                 await interaction.followup.send(embed=embed_res)
             else:
@@ -140,7 +140,7 @@ class FormsGroup(app_commands.Group):
         await interaction.response.defer(ephemeral=True)
         try:
             # [MẠCH HỢP LÝ HÓA EMOJI] Tự động tách icon nếu sếp nhập kèm trong nhãn
-            final_emoji = f"{Emojis.MATTRANG}"
+            final_emoji = f"{Emojis.BUOMA}"
             final_label = label
             
             # Regex nhận diện Emoji Unicode hoặc Emoji Discord Custom (<:name:id> / <a:name:id>)
@@ -175,13 +175,13 @@ class FormsGroup(app_commands.Group):
                     embed_err = discord.Embed(
                         title=f"{Emojis.HOICHAM} hmm...? có lỗi gì đó ở đây",
                         description=f"embed đã full nút hoặc không thể gắn thêm nút form vào lúc này.",
-                        color=0xf8bbd0
+                        color=0xe6e2dd
                     )
                     return await interaction.followup.send(embed=embed_err)
 
             embed_success = discord.Embed(
-                title=f"{Emojis.MATTRANG} liên kết với embed `{embed_name}` thành công",
-                color=0xf8bbd0
+                title=f"{Emojis.BUOMA} liên kết với embed `{embed_name}` thành công",
+                color=0xe6e2dd
             )
             # Fix: Truyền tham số 'embed' rõ ràng để tránh lỗi hiển thị xác object
             await interaction.followup.send(embed=embed_success)
@@ -207,9 +207,9 @@ class FormsGroup(app_commands.Group):
                 return await interaction.followup.send(f"{Emojis.HOICHAM} hiện tại chưa có cấu hình form nào.")
 
             embed_dashboard = discord.Embed(
-                title=f"{Emojis.MATTRANG} chi tiết cấu hình biểu mẫu của {interaction.guild.name}",
+                title=f"{Emojis.BUOMA} chi tiết cấu hình biểu mẫu của {interaction.guild.name}",
                 description="báo cáo hạ tầng form theo thời gian thực:",
-                color=0xf8bbd0
+                color=0xe6e2dd
             )
 
             for form in all_forms:
