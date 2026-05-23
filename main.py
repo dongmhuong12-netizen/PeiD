@@ -77,6 +77,8 @@ bot = commands.AutoShardedBot(
 
 # [CẤY ID BOSS - KHÔNG THAY ĐỔI LOGIC CŨ]
 bot.boss_id = 1055476307372294155
+# Gán trực tiếp vào bot để các task gọi an toàn
+bot.emojis_sys = Emojis 
 
 # [CẤY MỚI] Gắn bot vào State để các module Storage có thể gọi bot.db
 State.bot = bot 
@@ -90,9 +92,10 @@ bot.status_index = 0
 @tasks.loop(seconds=30)
 async def rotate_status():
     try:
-        # Sử dụng Emojis đã được import ở đầu file (global scope)
-        emoji_no = getattr(Emojis, "NO", None)
-        emoji_htt = getattr(Emojis, "HTT", None)
+        # Gọi qua bot để đảm bảo namespace luôn tồn tại
+        emj = getattr(bot, "emojis_sys", Emojis)
+        emoji_no = getattr(emj, "NO", None)
+        emoji_htt = getattr(emj, "HTT", None)
         
         statuses = [
             ("˚₊‧꒰ა yiyi iu ໒꒱ ‧₊˚", None),
