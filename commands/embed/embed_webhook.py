@@ -181,9 +181,9 @@ async def send_cmd(interaction: discord.Interaction, name: str, identity: str = 
 
     # 3. Chốt sổ thành công (Dấu vết chỉ sếp thấy)
     if len(embed_names) > 1:
-        await interaction.followup.send(f"{Emojis.YIYITIM} Đã phóng liên hoàn {len(embed_names)} embed thành công!")
+        await interaction.followup.send(f"{Emojis.BUOMA} gửi đi {len(embed_names)} thành công")
     else:
-        await interaction.followup.send(f"{Emojis.YIYITIM} Đã phóng embed `{name}` thành công!")
+        await interaction.followup.send(f"{Emojis.BUOMA} embed `{name}` gửi đi thành công.")
 
 # =============================
 # INJECTION
