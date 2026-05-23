@@ -66,9 +66,9 @@ class EmojiSync(commands.Cog):
         await self.db_col.insert_one(data_doc)
 
         embed = discord.Embed(
-            title=f"{Emojis.MATTRANG} đã lưu vào gói `{pack_clean}`",
+            title=f"{Emojis.BUOMA} đã lưu vào gói `{pack_clean}`",
             description=f"đã đóng gói thành công ở vị trí số **{next_stt}**.\n\n• Nguồn: `{source_guild}`\n• Ký danh: `{e_name}`",
-            color=0xf8bbd0
+            color=0xe6e2dd
         )
         await interaction.followup.send(embed=embed)
 
@@ -83,7 +83,7 @@ class EmojiSync(commands.Cog):
         guild_emojis = interaction.guild.emojis
         if not guild_emojis:
             return await interaction.followup.send(embed=discord.Embed(
-                description=f"{Emojis.BUOMA} máy chủ này không có cái emoji nào cả cậu ơi.", color=0xe6e2dd
+                description=f"{Emojis.HOICHAM} máy chủ này không có emoji, **yiyi** hong copy được.", color=0xe6e2dd
             ))
 
         pack_clean = pack_name.strip().lower()
@@ -111,9 +111,9 @@ class EmojiSync(commands.Cog):
             await self.db_col.insert_many(docs_to_insert)
 
         embed = discord.Embed(
-            title=f"{Emojis.MATTRANG} thu hoạch thành công",
-            description=f"đã gói ghém **{len(docs_to_insert)}** emoji của `{interaction.guild.name}` vào gói `{pack_clean}`.",
-            color=0xf8bbd0
+            title=f"{Emojis.BUOMA} sao chép toàn bộ emoji thành công",
+            description=f"đã đóng gói **{len(docs_to_insert)}** emoji của `{interaction.guild.name}` vào gói `{pack_clean}`.",
+            color=0xe6e2dd
         )
         await interaction.followup.send(embed=embed)
 
@@ -135,11 +135,11 @@ class EmojiSync(commands.Cog):
             
             if not packs:
                 return await interaction.followup.send(embed=discord.Embed(
-                    description=f"{Emojis.BUOMA} cậu chưa có gói emoji nào cả, hãy dùng `/emoji copy` nhé.", color=0xe6e2dd
+                    description=f"{Emojis.BUOMA} **yiyi** chưa có emoji vào trong bộ nhớ, cậu hãy dùng `/emoji copy` nhé.", color=0xe6e2dd
                 ))
             
             desc = "\n".join([f"📦 **{p['_id']}** ── chứa `{p['count']}` emoji" for p in packs])
-            embed = discord.Embed(title="kho lưu trữ cá nhân", description=desc, color=0xf8bbd0)
+            embed = discord.Embed(title="kho lưu trữ cá nhân", description=desc, color=0xe6e2dd)
             return await interaction.followup.send(embed=embed)
 
         # Chi tiết một gói
@@ -149,7 +149,7 @@ class EmojiSync(commands.Cog):
 
         if not items:
             return await interaction.followup.send(embed=discord.Embed(
-                description=f"{Emojis.BUOMA} gói `{pack_clean}` trống trơn hoặc không tồn tại.", color=0xe6e2dd
+                description=f"{Emojis.BUOMA} gói {pack_clean} trống hoặc không tồn tại.", color=0xe6e2dd
             ))
 
         lines = []
@@ -168,7 +168,7 @@ class EmojiSync(commands.Cog):
         if len(desc) > 4000:
             desc = desc[:3950] + "\n\n*(...danh sách quá dài, một số mục đã bị ẩn)*"
 
-        embed = discord.Embed(title=f"chi tiết gói: {pack_clean}", description=desc, color=0xf8bbd0)
+        embed = discord.Embed(title=f"chi tiết gói: {pack_clean}", description=desc, color=0xe6e2dd)
         embed.set_footer(text=f"Nguồn gốc: {', '.join(list(source_set)[:3])}")
         await interaction.followup.send(embed=embed)
 
@@ -182,7 +182,9 @@ class EmojiSync(commands.Cog):
         # Kiểm tra quyền hạn kép
         if not interaction.user.guild_permissions.manage_emojis or not interaction.guild.me.guild_permissions.manage_emojis:
             return await interaction.response.send_message(embed=discord.Embed(
-                description=f"{Emojis.HOICHAM} cả bot và cậu đều cần quyền `Quản lý Emoji` ở máy chủ này nhé.", color=0xe6e2dd
+                title=f"{Emojis.HOICHAM} aree...? có lỗi gì đó ở đây",
+                description="**yiyi** hoặc cậu bị thiếu gì trong máy chủ này, hãy kiểm tra lại quyền trước khi dùng lệnh nhé",
+                color=0xe6e2dd
             ), ephemeral=True)
 
         await interaction.response.defer()
@@ -203,7 +205,7 @@ class EmojiSync(commands.Cog):
                     img_bytes = await resp.read()
 
             new_emoji = await interaction.guild.create_custom_emoji(name=item["emoji_name"], image=img_bytes)
-            await interaction.followup.send(f"đã tái bản thành công {new_emoji} vào máy chủ này!")
+            await interaction.followup.send(f"đã tái bản emoji {new_emoji} vào máy chủ thành công.")
         except Exception as e:
             await interaction.followup.send(embed=discord.Embed(
                 description=f"quá trình tái bản bị gián đoạn: {e}", color=0xe6e2dd
@@ -218,7 +220,9 @@ class EmojiSync(commands.Cog):
             
         if not interaction.user.guild_permissions.manage_emojis or not interaction.guild.me.guild_permissions.manage_emojis:
             return await interaction.response.send_message(embed=discord.Embed(
-                description=f"{Emojis.HOICHAM} cả bot và cậu đều cần quyền `Quản lý Emoji` ở máy chủ này nhé.", color=0xe6e2dd
+                title=f"{Emojis.HOICHAM} aree...? có lỗi gì đó ở đây",
+                description="**yiyi** hoặc cậu bị thiếu gì trong máy chủ này, hãy kiểm tra lại quyền trước khi dùng lệnh nhé",
+                color=0xe6e2dd
             ), ephemeral=True)
 
         await interaction.response.defer()
@@ -232,7 +236,7 @@ class EmojiSync(commands.Cog):
             ))
 
         await interaction.followup.send(embed=discord.Embed(
-            description=f"đang tiến hành tái bản **{len(items)}** emoji, cậu đợi xíu nhé...", color=0xf8bbd0
+            description=f"đang tiến hành tái bản **{len(items)}** emoji, cậu đợi xíu nhé...", color=0xe6e2dd
         ))
 
         success_count = 0
@@ -249,9 +253,9 @@ class EmojiSync(commands.Cog):
                     continue
 
         await interaction.channel.send(embed=discord.Embed(
-            title=f"{Emojis.MATTRANG} tái bản hoàn tất",
-            description=f"đã nhồi thành công **{success_count}/{len(items)}** emoji vào máy chủ.",
-            color=0xf8bbd0
+            title=f"{Emojis.BUOMA} tái bản hoàn tất",
+            description=f"đã sao chép thành công **{success_count}/{len(items)}** emoji vào máy chủ này",
+            color=0xe6e2dd
         ))
 
     # [6] LỆNH DELETE LẺ KÈM RE-INDEX
@@ -265,7 +269,7 @@ class EmojiSync(commands.Cog):
         target = await self.db_col.find_one_and_delete({"user_id": user_id_str, "pack_name": pack_clean, "stt": stt})
         if not target:
             return await interaction.followup.send(embed=discord.Embed(
-                description=f"{Emojis.BUOMA} không tìm thấy emoji số `{stt}`.", color=0xe6e2dd
+                description=f"{Emojis.HOICHAM} không tìm thấy emoji số {stt}.", color=0xe6e2dd
             ))
 
         # Mạch Re-indexing: Vá lỗ hổng STT
@@ -275,7 +279,7 @@ class EmojiSync(commands.Cog):
         )
 
         await interaction.followup.send(embed=discord.Embed(
-            description=f"{Emojis.MATTRANG} đã xóa emoji số `{stt}` và dồn lại mạch danh sách.", color=0xf8bbd0
+            description=f"{Emojis.BUOMA} đã xóa emoji số `{stt}` và dồn lại mạch danh sách.", color=0xe6e2dd
         ))
 
     # [7] LỆNH XÓA CẢ GÓI
@@ -289,11 +293,11 @@ class EmojiSync(commands.Cog):
         result = await self.db_col.delete_many({"user_id": user_id_str, "pack_name": pack_clean})
         if result.deleted_count == 0:
             return await interaction.followup.send(embed=discord.Embed(
-                description=f"{Emojis.BUOMA} không tìm thấy gói `{pack_clean}` để xóa.", color=0xe6e2dd
+                description=f"{Emojis.HOICHAM} không tìm thấy gói {pack_clean} để xoá.", color=0xe6e2dd
             ))
 
         await interaction.followup.send(embed=discord.Embed(
-            description=f"{Emojis.MATTRANG} đã xóa sổ gói `{pack_clean}` (dọn sạch {result.deleted_count} emoji).", color=0xf8bbd0
+            description=f"{Emojis.BUOMA} đã xóa sổ gói `{pack_clean}` (dọn sạch {result.deleted_count} emoji).", color=0xe6e2dd
         ))
 
 async def setup(bot: commands.Bot):
