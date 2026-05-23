@@ -66,7 +66,7 @@ async def _enqueue_reaction(message, emoji):
 # =========================
 
 def _build_embed(embed_copy: dict):
-    """hàm xây dựng đối tượng embed nguyên tử - đã đồng bộ tông màu f8bbd0"""
+    """hàm xây dựng đối tượng embed nguyên tử - đã đồng bộ tông màu 0xe6e2dd"""
     color = embed_copy.get("color")
     if isinstance(color, str):
         try:
