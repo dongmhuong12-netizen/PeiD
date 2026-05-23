@@ -46,7 +46,7 @@ class YiyiGroup(app_commands.Group):
             embed = discord.Embed(
                 title=random.choice(responses),
                 description=f"tốc độ xử lý (api): **{api_latency}ms** • tín hiệu (ws): **{ws_latency}ms**",
-                color=0xf8bbd0
+                color=0xe6e2dd
             )
             embed.set_footer(text=f"hệ thống ổn định • shard: 0")
             await interaction.followup.send(embed=embed)
@@ -74,7 +74,7 @@ class YiyiGroup(app_commands.Group):
                 ]
             
             await interaction.response.send_message(
-                embed=discord.Embed(title=random.choice(responses), color=0xf8bbd0)
+                embed=discord.Embed(title=random.choice(responses), color=0xe6e2dd)
             )
         except Exception as e:
             print(f"[yiyi_iu error] {e}", flush=True)
@@ -205,7 +205,7 @@ class YiyiGroup(app_commands.Group):
             embed_with_buttons = sum(1 for e in embed_data.values() if isinstance(e, dict) and e.get("buttons"))
 
             # ================= RÁP DASHBOARD TỔNG (DÀN HÀNG DỌC CHUẨN MẪU) =================
-            desc = f"""{Emojis.MATTRANG} **hệ thống tiếp tân & tương tác**
+            desc = f"""{Emojis.NO} **hệ thống tiếp tân & tương tác**
 • **greet (chào mừng)**: {g_st}
   └ kênh: {g_ch}
   └ embed: {g_eb}
@@ -224,12 +224,12 @@ class YiyiGroup(app_commands.Group):
   └ text: {b_tx}
   └ role: {b_rl}
 
-{Emojis.MATTRANG} **kho lưu trữ embed**
+{Emojis.NO} **kho lưu trữ embed**
 • **số embed đã tạo**: `{len(embed_data)}/50`
 • **số embed liên kết nút bấm**: `{embed_with_buttons}`
 • **reaction role**: `{rr_count}`
 
-{Emojis.MATTRANG} **tiện ích button**
+{Emojis.NO} **tiện ích button**
 • **ticket (hỗ trợ)**: {t_st}
   └ embed: {verify_embed(ticket_cfg.get('embed_name'))}
   └ role hỗ trợ: {t_rl}
@@ -241,8 +241,8 @@ class YiyiGroup(app_commands.Group):
 {link_display}"""
 
             report = discord.Embed(
-                title=f"{Emojis.MATTRANG} **chi tiết cấu hình của** {interaction.guild.name}", 
-                description=desc, color=0xf8bbd0
+                title=f"{Emojis.NO} **chi tiết cấu hình của** {interaction.guild.name}", 
+                description=desc, color=0xe6e2dd
             )
             report.set_footer(text="yiyi iu cậu • báo cáo chi tiết linh kiện cloud")
             await interaction.followup.send(embed=report)
