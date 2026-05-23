@@ -101,7 +101,7 @@ async def handle_ticket_interaction(interaction: discord.Interaction):
         
         view = discord.ui.View(timeout=None)
         # [MỤC 7] Nút đóng Ticket
-        close_btn = discord.ui.Button(label="Đóng Ticket", style=discord.ButtonStyle.danger, custom_id="yiyi:ticket:close", emoji=Emojis.BUOMB)
+        close_btn = discord.ui.Button(label="Đóng Ticket", style=discord.ButtonStyle.secondary, custom_id="yiyi:ticket:close", emoji=Emojis.BUOMB)
         view.add_item(close_btn)
 
         await channel.send(embed=welcome_embed, view=view)
