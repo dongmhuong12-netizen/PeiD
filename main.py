@@ -9,8 +9,9 @@ from core.state import State
 # [CẤY MỚI] Nạp lớp MongoDB để khởi động cỗ máy dữ liệu
 from core.mongodb import MongoDB 
 
-# Nạp môi trường ngay lập tức
-load_dotenv()
+# [FIX CỐT LÕI] Nạp môi trường bằng đường dẫn tuyệt đối, tránh lỗi "TOKEN not found" khi PM2 đổi đường dẫn chạy
+basedir = os.path.abspath(os.path.dirname(__file__))
+load_dotenv(os.path.join(basedir, '.env'))
 
 TOKEN = os.getenv("TOKEN")
 if not TOKEN:
