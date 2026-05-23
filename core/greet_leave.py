@@ -15,6 +15,23 @@ from utils.emojis import Emojis
 _config_locks = defaultdict(asyncio.Lock)
 
 # ======================
+# AUTOCOMPLETE HELPER (SAFE)
+# ======================
+
+async def _embed_name_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+    try:
+        # Giả định lớp storage của cậu có hàm list_embeds hoặc tương đương để lấy danh sách tên embed
+        from core.embed_storage import list_embeds
+        embed_list = await list_embeds(interaction.guild_id)
+        return [
+            app_commands.Choice(name=name, value=name)
+            for name in embed_list if current.lower() in name.lower()
+        ][:25]
+    except Exception:
+        # Trả về danh sách trống nếu chưa có hàm bổ trợ bên storage để tránh crash hệ thống
+        return []
+
+# ======================
 # SEND MESSAGE HANDLER (ATOMIC)
 # ======================
 
@@ -93,8 +110,8 @@ class GreetGroup(app_commands.Group):
         if gid in _config_locks and not lock.locked(): _config_locks.pop(gid, None)
         
         embed = discord.Embed(
-            title=f"{Emojis.MATTRANG} đặt kênh `greet` thành công: {channel.mention}",
-            color=0xf8bbd0
+            title=f"{Emojis.BUOMA} đặt kênh `greet` thành công: {channel.mention}",
+            color=0xe6e2dd
         )
         await interaction.followup.send(embed=embed)
 
@@ -110,8 +127,8 @@ class GreetGroup(app_commands.Group):
         
         display_msg = apply_variables(message, interaction.guild, interaction.user)
         embed = discord.Embed(
-            title=f"{Emojis.MATTRANG} cập nhật tin nhắn `greet` thành công: {display_msg}",
-            color=0xf8bbd0
+            title=f"{Emojis.BUOMA} cập nhật tin nhắn `greet` thành công: {display_msg}",
+            color=0xe6e2dd
         )
         await interaction.followup.send(embed=embed)
 
@@ -123,7 +140,7 @@ class GreetGroup(app_commands.Group):
             embed_err = discord.Embed(
                 title=f"{Emojis.HOICHAM} aree... có lỗi gì đó ở đây",
                 description=f"hãy thử lại lần nữa nhé. **yiyi** không tìm thấy embed có tên `{name}`. xin hãy kiểm tra embed cậu muốn dùng cho greet bằng `/p embed edit`",
-                color=0xf8bbd0
+                color=0xe6e2dd
             )
             return await interaction.followup.send(embed=embed_err)
         
@@ -135,10 +152,14 @@ class GreetGroup(app_commands.Group):
         if gid in _config_locks and not lock.locked(): _config_locks.pop(gid, None)
         
         embed_success = discord.Embed(
-            title=f"{Emojis.MATTRANG} cập nhật embed `{name}` cho hệ thống `greet` thành công",
-            color=0xf8bbd0
+            title=f"{Emojis.BUOMA} cập nhật embed `{name}` cho hệ thống `greet` thành công",
+            color=0xe6e2dd
         )
         await interaction.followup.send(embed=embed_success)
+
+    @embed.autocomplete('name')
+    async def embed_autocomplete(self, interaction: discord.Interaction, current: str):
+        return await _embed_name_autocomplete(interaction, current)
 
     @app_commands.command(name="test", description="gửi thử tin nhắn chào mừng")
     async def test(self, interaction: discord.Interaction):
@@ -147,15 +168,15 @@ class GreetGroup(app_commands.Group):
         
         if success:
             embed = discord.Embed(
-                title=f"{Emojis.MATTRANG} test `greet` thành công",
+                title=f"{Emojis.BUOMA} test `greet` thành công",
                 description="hãy kiểm tra tại kênh được setup nhé. nếu không thấy embed, hãy kiểm tra lại quyền của **yiyi** hoặc quyền của kênh",
-                color=0xf8bbd0
+                color=0xe6e2dd
             )
         else:
             embed = discord.Embed(
                 title=f"{Emojis.HOICHAM} hmm..? có vẻ có lỗi về cấu hình kênh hoặc embed",
                 description="hãy kiểm tra lại khi đã đầy đủ `channel` `embed` `message` trước khi test nhé",
-                color=0xf8bbd0
+                color=0xe6e2dd
             )
         await interaction.followup.send(embed=embed)
 
@@ -174,8 +195,8 @@ class LeaveGroup(app_commands.Group):
         if gid in _config_locks and not lock.locked(): _config_locks.pop(gid, None)
         
         embed = discord.Embed(
-            title=f"{Emojis.MATTRANG} đặt kênh `leave` thành công: {channel.mention}",
-            color=0xf8bbd0
+            title=f"{Emojis.BUOMA} đặt kênh `leave` thành công: {channel.mention}",
+            color=0xe6e2dd
         )
         await interaction.followup.send(embed=embed)
 
@@ -191,8 +212,8 @@ class LeaveGroup(app_commands.Group):
         
         display_msg = apply_variables(message, interaction.guild, interaction.user)
         embed = discord.Embed(
-            title=f"{Emojis.MATTRANG} cập nhật tin nhắn `leave` thành công: {display_msg}",
-            color=0xf8bbd0
+            title=f"{Emojis.BUOMA} cập nhật tin nhắn `leave` thành công: {display_msg}",
+            color=0xe6e2dd
         )
         await interaction.followup.send(embed=embed)
 
@@ -204,7 +225,7 @@ class LeaveGroup(app_commands.Group):
             embed_err = discord.Embed(
                 title=f"{Emojis.HOICHAM} aree... có lỗi gì đó ở đây",
                 description=f"hãy thử lại lần nữa nhé. **yiyi** không tìm thấy embed có tên `{name}`. xin hãy kiểm tra embed cậu muốn dùng cho leave bằng `/p embed edit`",
-                color=0xf8bbd0
+                color=0xe6e2dd
             )
             # [FIX TYPO] Đã sửa biến err thành embed_err
             return await interaction.followup.send(embed=embed_err)
@@ -216,10 +237,14 @@ class LeaveGroup(app_commands.Group):
         if gid in _config_locks and not lock.locked(): _config_locks.pop(gid, None)
         
         embed_success = discord.Embed(
-            title=f"{Emojis.MATTRANG} cập nhật embed `{name}` cho hệ thống `leave` thành công",
-            color=0xf8bbd0
+            title=f"{Emojis.BUOMA} cập nhật embed `{name}` cho hệ thống `leave` thành công",
+            color=0xe6e2dd
         )
         await interaction.followup.send(embed=embed_success)
+
+    @embed.autocomplete('name')
+    async def embed_autocomplete(self, interaction: discord.Interaction, current: str):
+        return await _embed_name_autocomplete(interaction, current)
 
     @app_commands.command(name="test", description="gửi thử tin nhắn tạm biệt")
     async def test(self, interaction: discord.Interaction):
@@ -228,15 +253,15 @@ class LeaveGroup(app_commands.Group):
         
         if success:
             embed = discord.Embed(
-                title=f"{Emojis.MATTRANG} test `leave` thành công",
+                title=f"{Emojis.BUOMA} test `leave` thành công",
                 description="hãy kiểm tra tại kênh được setup nhé. nếu không thấy embed, hãy kiểm tra lại quyền của **yiyi** hoặc quyền của kênh",
-                color=0xf8bbd0
+                color=0xe6e2dd
             )
         else:
             embed = discord.Embed(
                 title=f"{Emojis.HOICHAM} hmm..? có vẻ có lỗi về cấu hình kênh hoặc embed",
                 description="hãy kiểm tra lại khi đã đầy đủ `channel` `embed` `message` trước khi test nhé",
-                color=0xf8bbd0
+                color=0xe6e2dd
             )
         await interaction.followup.send(embed=embed)
 
