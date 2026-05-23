@@ -7,8 +7,6 @@ from aiohttp import web
 from core.state import State
 # [CẤY MỚI] Nạp lớp MongoDB để khởi động cỗ máy dữ liệu
 from core.mongodb import MongoDB 
-# [CẤY MỚI] Nạp class Emojis để định danh các biến động trong hệ thống
-from utils.emojis import Emojis
 
 # ==========================================
 # [GIẢI PHÁP TỐI THƯỢNG] TỰ CẠY FILE .ENV, ĐÁ BAY DOTENV
@@ -90,9 +88,12 @@ bot.status_index = 0
 @tasks.loop(seconds=30)
 async def rotate_status():
     try:
+        # Load Emojis trực tiếp ở đây để tránh lỗi NameError ngay từ lúc khởi động
+        from utils.emojis import Emojis
+        
         # Sử dụng getattr để lấy giá trị từ Class Emojis an toàn
         emoji_no = getattr(Emojis, "NO", None)
-        emoji_htt = getattr(Emojis, "HTT", None) # Đã sửa đúng tên biến cho khớp
+        emoji_htt = getattr(Emojis, "HTT", None)
         
         statuses = [
             ("˚₊‧꒰ა yiyi iu ໒꒱ ‧₊˚", None),
