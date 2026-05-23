@@ -19,7 +19,7 @@ async def handle_ticket_interaction(interaction: discord.Interaction):
         embed_no_config = discord.Embed(
             title=f"{Emojis.HOICHAM} hệ thống chưa có cấu hình.",
             description="cậu hãy liên hệ với các Admin để nhận sự hỗ trợ từ họ nhé.",
-            color=0xf8bbd0
+            color=0xe6e2dd
         )
         # Nếu là nút bấm mở ticket thì send_message, còn lại tùy biến theo mạch logic
         if not interaction.response.is_done():
@@ -49,7 +49,7 @@ async def handle_ticket_interaction(interaction: discord.Interaction):
                     "có vẻ danh mục chứa Ticket đã bị xóa hoặc không hợp lệ. "
                     "hãy liên hệ với staff/thành viên hỗ trợ để thiết lập lại bằng `/p ticket setup` nhé."
                 ),
-                color=0xf8bbd0
+                color=0xe6e2dd
             )
             return await interaction.followup.send(embed=embed_err, ephemeral=True)
 
@@ -58,8 +58,8 @@ async def handle_ticket_interaction(interaction: discord.Interaction):
         existing_channel = discord.utils.get(guild.channels, name=ticket_name)
         if existing_channel:
             embed_exist = discord.Embed(
-                description=f"{Emojis.MATTRANG} cậu đã có một Ticket đang mở sẵn từ chính cậu ở kênh {existing_channel.mention} rồi nhee, không được tạo thêm đâu.",
-                color=0xf8bbd0
+                description=f"{Emojis.BUOMA} cậu đã có một Ticket đang mở sẵn từ chính cậu ở kênh {existing_channel.mention} rồi nhee, không được tạo thêm đâu.",
+                color=0xe6e2dd
             )
             return await interaction.followup.send(embed=embed_exist, ephemeral=True)
 
@@ -89,27 +89,27 @@ async def handle_ticket_interaction(interaction: discord.Interaction):
 
         # [MỤC 5] Embed Lời Chào (Stylized theo DNA của sếp)
         welcome_embed = discord.Embed(
-            title=f"{Emojis.MATTRANG} TICKET HỖ TRỢ",
+            title=f"{Emojis.BUOMA} TICKET HỖ TRỢ",
             description=(
                 f"• **chào cậu nhé, {user.mention}.**\n\n"
                 "• kênh này được tạo ra để hỗ trợ giải đáp các thắc mắc của cậu. cậu có thể tự do đặt câu hỏi hoặc yêu cầu trợ giúp.\n"
                 "• **hãy yên tâm về quyền riêng tư:** chỉ có cậu và các staff được phân vai trò hỗ trợ mới có thể thấy kênh này.\n"
                 f"• nhấn nút bên dưới để đóng Ticket nếu cậu không còn câu hỏi hay yêu cầu nào khác nhé {Emojis.YIYITIM}"
             ),
-            color=0xf8bbd0
+            color=0xe6e2dd
         )
         
         view = discord.ui.View(timeout=None)
         # [MỤC 7] Nút đóng Ticket
-        close_btn = discord.ui.Button(label="Đóng Ticket", style=discord.ButtonStyle.danger, custom_id="yiyi:ticket:close", emoji="🔒")
+        close_btn = discord.ui.Button(label="Đóng Ticket", style=discord.ButtonStyle.danger, custom_id="yiyi:ticket:close", emoji=Emojis.BUOMB)
         view.add_item(close_btn)
 
         await channel.send(embed=welcome_embed, view=view)
         
         # [MỤC 8] Phản hồi tạo thành công
         embed_success = discord.Embed(
-            description=f"{Emojis.MATTRANG} tạo Ticket thành công. hãy tới kênh {channel.mention} để sử dụng nhé.",
-            color=0xf8bbd0
+            description=f"{Emojis.BUOMA} tạo Ticket thành công. hãy tới kênh {channel.mention} để sử dụng nhé.",
+            color=0xe6e2dd
         )
         await interaction.followup.send(embed=embed_success, ephemeral=True)
 
@@ -143,12 +143,12 @@ async def handle_ticket_interaction(interaction: discord.Interaction):
         if log_channel:
             # [MỤC 10] Embed Log khi đóng Ticket
             log_embed = discord.Embed(
-                description=f"{Emojis.MATTRANG} **Ticket Closed:** `{interaction.channel.name}` đã được đóng bởi {user.mention}. nội dung Ticket đã được lưu.",
-                color=0xf8bbd0
+                description=f"{Emojis.BUOMA} **Ticket Closed:** `{interaction.channel.name}` đã được đóng bởi {user.mention}. nội dung Ticket đã được lưu.",
+                color=0xe6e2dd
             )
             await log_channel.send(embed=log_embed, file=file)
 
         # [MỤC 11] Thông báo đếm ngược và Xóa kênh
-        await interaction.followup.send("🔒 Đang đóng và xóa kênh trong 5 giây...")
+        await interaction.followup.send(f"{Emojis.BUOMB} Đang đóng và xóa kênh trong 5 giây...")
         await asyncio.sleep(5)
         await interaction.channel.delete()
