@@ -127,12 +127,12 @@ class YiyiGroup(app_commands.Group):
                 db = getattr(State.bot, "db", None)
                 if db is not None:
                     col_rr = getattr(db, "reactions", None)
-                    if not col_rr and hasattr(db, "db"): col_rr = db.db["reactions"]
+                    if col_rr is None and hasattr(db, "db"): col_rr = db.db["reactions"]
                     if col_rr is not None:
                         rr_count = await col_rr.count_documents({"guild_id": gid_str})
                     
                     col_form = getattr(db, "forms", None)
-                    if not col_form and hasattr(db, "db"): col_form = db.db["forms"]
+                    if col_form is None and hasattr(db, "db"): col_form = db.db["forms"]
                     if col_form is not None:
                         cursor = col_form.find({"guild_id": gid_str})
                         all_forms = await cursor.to_list(length=None)
