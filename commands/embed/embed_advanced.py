@@ -41,7 +41,7 @@ async def export_cmd(interaction: discord.Interaction, name: str):
         
         # FIX: Gom mạch f-string trên các dòng hợp lệ để tránh SyntaxError
         response_text = (
-            f"{Emojis.MATTRANG} tạo mã thành công, có thể sao chép mã bên dưới để sử dụng\n"
+            f"{Emojis.BUOMA} tạo mã thành công, có thể sao chép mã bên dưới để sử dụng\n"
             f"lưu ý: **không được** chỉnh sửa đoạn mã này để tránh lỗi hệ thống.\n\n"
             f"```\n{export_code}\n```"
 
@@ -65,7 +65,7 @@ async def import_cmd(interaction: discord.Interaction, name: str, code: str):
         data = json.loads(decompressed)
         
         await save_embed(interaction.guild.id, name, data)
-        await interaction.followup.send(content=f"{Emojis.YIYITIM} import thành công! cậu dùng `/p embed edit name:{name}` để xem và chỉnh sửa thêm nhé.")
+        await interaction.followup.send(content=f"{Emojis.BUOMA} import thành công! cậu dùng `/p embed edit name:{name}` để xem và chỉnh sửa thêm nhé.")
     except Exception:
         await interaction.followup.send(content=f"{Emojis.HOICHAM} mã import không hợp lệ hoặc đã bị hỏng.")
 
@@ -85,9 +85,9 @@ async def clone_cmd(interaction: discord.Interaction, names: str, links: str):
     # [KIỂM DUYỆT ĐỊNH LƯỢNG] Tên và Link bắt buộc phải khớp định lượng 1:1
     if len(embed_list) != len(link_list):
         embed_err = discord.Embed(
-            title=f"{Emojis.HOICHAM} lượng dữ liệu không đồng đều nhe",
-            description=f"số lượng tên embed (`{len(embed_list)}`) và số lượng link tin nhắn (`{len(link_list)}`) phải bằng nhau nhe sếp.",
-            color=0xf8bbd0
+            title=f"{Emojis.HOICHAM} lượng dữ liệu không đồng nhất",
+            description=f"số lượng tên embed (`{len(embed_list)}`) và số lượng link tin nhắn (`{len(link_list)}`) phải bằng nhau",
+            color=0xe6e2dd
         )
         return await interaction.followup.send(embed=embed_err)
 
@@ -101,13 +101,13 @@ async def clone_cmd(interaction: discord.Interaction, names: str, links: str):
 
         # 1. DEFENSE: Chặn trùng tên trong hàng chờ sao chép
         if await load_embed(interaction.guild.id, target_name):
-            failed_clones.append(f"• `{target_name}`: tên này đã tồn tại rồi cậu.")
+            failed_clones.append(f"• `{target_name}` tên embed đã tồn tại.")
             continue
 
         # 2. ATTACK: Logic bóc tách tọa độ vạn năng từ URL Link
         link_match = re.search(r'channels/(\d+|@me)/(\d+)/(\d+)', link_input)
         if not link_match:
-            failed_clones.append(f"• `{target_name}`: link tin nhắn không hợp lệ rồi cậu ơi.")
+            failed_clones.append(f"• `{target_name}` link tin nhắn không hợp lệ")
             continue
 
         c_id = int(link_match.group(2))
@@ -119,7 +119,7 @@ async def clone_cmd(interaction: discord.Interaction, names: str, links: str):
             msg = await channel.fetch_message(m_id)
             
             if not msg.embeds:
-                failed_clones.append(f"• `{target_name}`: tin nhắn này làm gì có embed nào ta..?")
+                failed_clones.append(f"• `{target_name}` tin nhắn chưa có embed liên kết")
                 continue
                 
             # 4. DEEP CLONE: Bóc tách linh kiện (Gìn giữ Logic Industrial)
@@ -154,26 +154,26 @@ async def clone_cmd(interaction: discord.Interaction, names: str, links: str):
             success_clones.append(f"• `{target_name}` (Kênh: <#{c_id}>)")
             
         except discord.Forbidden:
-            failed_clones.append(f"• `{target_name}`: **yiyi** không có quyền xem tin nhắn ở kênh đó, cậu check lại nhé.")
+            failed_clones.append(f"• `{target_name}` **yiyi** không có quyền xem tin nhắn, cậu hãy kiểm tra lại quyền của **yiyi** nhé.")
         except Exception as e:
             print(f"[clone error] {e}")
             failed_clones.append(f"• `{target_name}`: **yiyi** không đọc được tin nhắn này. (Lỗi: `{type(e).__name__}`)")
 
     # [MẠCH XUẤT BÁO CÁO THỰC TRẠNG]
     embed_report = discord.Embed(
-        title=f"{Emojis.MATTRANG} báo cáo kết quả sao chép hàng loạt",
-        color=0xf8bbd0
+        title=f"{Emojis.BUOMA} báo cáo kết quả sao chép hàng loạt",
+        color=0xe6e2dd
     )
 
     if success_clones:
         embed_report.add_field(
-            name="✅ Sao chép thành công:", 
+            name="Sao chép thành công:", 
             value="\n".join(success_clones), 
             inline=False
         )
     if failed_clones:
         embed_report.add_field(
-            name="❌ Thất bại hoặc bỏ qua:", 
+            name="Thất bại hoặc bỏ qua:", 
             value="\n".join(failed_clones), 
             inline=False
         )
