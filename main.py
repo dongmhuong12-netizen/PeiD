@@ -92,12 +92,12 @@ async def rotate_status():
     try:
         # Sử dụng getattr để lấy giá trị động từ Class Emojis an toàn
         emoji_no = getattr(Emojis, "NO", None)
-        emoji_ht = getattr(Emojis, "HT", None)
+        emoji_ht = getattr(Emojis, "HTT", None)
         
         statuses = [
             ("˚₊‧꒰ა yiyi iu ໒꒱ ‧₊˚", None),
             ("vương dỹ nguyệt", emoji_no),
-            ("vạn diệp  〆  ≋", emoji_ht)
+            ("vạn diệp  〆  ≋", emoji_htt)
         ]
         
         # Lấy ra cả chữ và emoji theo chu kỳ
