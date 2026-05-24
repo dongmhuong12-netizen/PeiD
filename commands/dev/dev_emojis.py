@@ -225,7 +225,8 @@ class DevEmojis(commands.Cog):
                         emoji_obj = None
                 
                 if emoji_obj:
-                    await vault_guild.delete_custom_emoji(emoji_obj)
+                    # Vá lỗi: Gọi hàm delete trực tiếp lên đối tượng emoji theo chuẩn discord.py
+                    await emoji_obj.delete(reason=f"Mạch dọn dẹp tự động qua lệnh /dev delete bởi {interaction.user}")
                 else:
                     errors_log.append("Thực thể emoji không còn tồn tại trên Server Kho Chứa (có thể đã bị xóa thủ công).")
             else:
