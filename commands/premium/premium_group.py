@@ -136,7 +136,7 @@ class PremiumGroup(app_commands.Group):
             grantor_fmt = f"<@{g_by}>" if grantor_obj else f"`{g_by}`"
             time_fmt = f"<t:{ts}:R>" if ts else "Không rõ"
 
-            premium_lines.append(f"• {user_fmt}\n  └── Người cấp: {grantor_fmt} | Lên sàn: {time_fmt}")
+            premium_lines.append(f"• {user_fmt}\n  └── Người cấp: {grantor_fmt} | update: {time_fmt}")
 
         embed_list = discord.Embed(
             title=f"{Emojis.BUOMA} danh sách thực thể Premium",
@@ -152,7 +152,7 @@ class PremiumGroup(app_commands.Group):
         else:
             embed_list.description = "Hiện tại chưa có người dùng nào được cấy đặc quyền Premium hệ thống đâu a."
 
-        embed_list.set_footer(text="Hệ thống quản lý phân phối đặc quyền của **yiyi**")
+        embed_list.set_footer(text="Hệ thống quản lý phân phối đặc quyền của yiyi")
         await interaction.followup.send(embed=embed_list)
 
 async def setup(bot: commands.Bot):
