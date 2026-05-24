@@ -144,6 +144,8 @@ EXTENSIONS = [
     "commands.ticket.ticket_group",  
     "commands.forms.forms_group",    
     "commands.fun.yiyi_resources",
+    "commands.premium.premium_group",
+    "commands.dev.dev_say",
     "commands.emoji.emoji_sync",
     "commands.dev.dev_emojis",  # [CẤY MỚI PREMIUM] Mở rộng trình đăng ký quản lý biến emoji hệ thống tối cao
 ]
