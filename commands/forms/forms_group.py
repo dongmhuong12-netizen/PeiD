@@ -1,3 +1,4 @@
+Commands/forms/forms_group.py
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -83,11 +84,11 @@ class FormsGroup(app_commands.Group):
                 await interaction.followup.send(f"{Emojis.HOICHAM} có lỗi khi lưu cấu hình form vào Cloud.")
         except Exception as e:
             # [ANTI-HANG]: Chặn đứng việc Discord bị treo vô tận nếu Database lỗi
-            print(f"[LỖI FORM SETUP] {e}")
+            print(f"[LỖI FORM SETUP] {traceback.format_exc()}")
             await interaction.followup.send(f"{Emojis.HOICHAM} Lỗi hệ thống khi thiết lập: `{e}`. Hãy kiểm tra Database.")
 
     # =========================
-    # LỆNH 2: THIẾT LẬP TRƯỜNG (Fix Treo)
+    # LỆNH 2: THIẾT LẬP TRƯỜNG (Fix Treo & Vá lỗi biến emoji)
     # =========================
     @app_commands.command(name="field", description="Cấu hình nội dung cho từng ô nhập liệu (Tối đa 5)")
     @app_commands.describe(embed_name="Tên embed chứa form muốn cấu hình trường")
@@ -102,13 +103,17 @@ class FormsGroup(app_commands.Group):
     async def field(self, interaction: discord.Interaction, embed_name: str, slot: int, label: str, placeholder: str = "Nhập nội dung...", required: bool = True):
         await interaction.response.defer(ephemeral=True)
         try:
+            # [VÁ LỖI CỐ ĐỊNH] Ép cứng Label và Placeholder là văn bản thuần túy, chặn mọi Parser render emoji
+            raw_label = str(label)
+            raw_placeholder = str(placeholder)
+            
             # Đẩy dữ liệu slot vào mảng trường của MongoDB
             success = await update_form_field(
                 interaction.guild.id, 
                 embed_name, 
                 slot, 
-                label, 
-                placeholder, 
+                raw_label, 
+                raw_placeholder, 
                 required
             )
 
@@ -117,8 +122,8 @@ class FormsGroup(app_commands.Group):
                     title=f"{Emojis.BUOMA} cập nhật nội dung trường `{slot}` thành công",
                     description=(
                         f"• embed: `{embed_name}`\n"
-                        f"• nội dung: `{label}`\n"
-                        f"• chú thích: `{placeholder}`\n"
+                        f"• nội dung: `{raw_label}`\n"
+                        f"• chú thích: `{raw_placeholder}`\n"
                         f"• bắt buộc điền: `{'Có' if required else 'Không'}`"
                     ),
                     color=0xe6e2dd
@@ -127,11 +132,11 @@ class FormsGroup(app_commands.Group):
             else:
                 await interaction.followup.send(f"{Emojis.HOICHAM} lỗi: cậu cần setup đơn trước bằng `/p forms setup`.")
         except Exception as e:
-            print(f"[LỖI FORM FIELD] {e}")
+            print(f"[LỖI FORM FIELD] {traceback.format_exc()}")
             await interaction.followup.send(f"{Emojis.HOICHAM} Lỗi hệ thống khi cấu hình trường: `{e}`")
 
     # =========================
-    # LỆNH 3: APPLY (HỢP LÝ HÓA UI & ICON)
+    # LỆNH 3: APPLY (HỢP LÝ HÓA UI & ICON & VÁ LOGIC TÁCH ICON)
     # =========================
     @app_commands.command(name="apply", description="Liên kết Form vào Embed")
     @app_commands.describe(embed_name="Tên embed muốn liên kết nút gửi đơn")
@@ -144,15 +149,14 @@ class FormsGroup(app_commands.Group):
             final_label = label
             
             # Regex nhận diện Emoji Unicode hoặc Emoji Discord Custom (<:name:id> / <a:name:id>)
-            emoji_pattern = r'^(\s*<a?:\w+:\d+>|\s*[\U00010000-\U0010ffff]|\s*[\u2600-\u27bf])'
-            match = re.search(emoji_pattern, label)
+            emoji_pattern = r'^\s*(<a?:\w+:\d+>|[\U00010000-\U0010ffff]|[\u2600-\u27bf])\s*'
+            match = re.match(emoji_pattern, label)
 
             if match:
-                extracted_emoji = match.group(1).strip()
-                final_emoji = extracted_emoji
+                final_emoji = match.group(1).strip()
                 # Cắt emoji ra khỏi label để tránh hiện icon 2 lần trên nút
-                remaining_text = label.replace(extracted_emoji, "", 1).strip()
-                final_label = remaining_text if remaining_text else "Gửi đơn"
+                final_label = label.replace(match.group(0), "", 1).strip()
+                if not final_label: final_label = "Gửi đơn"
 
             btn_data = {
                 "type": "button",
@@ -186,7 +190,7 @@ class FormsGroup(app_commands.Group):
             # Fix: Truyền tham số 'embed' rõ ràng để tránh lỗi hiển thị xác object
             await interaction.followup.send(embed=embed_success)
         except Exception as e:
-            print(f"[LỖI FORM APPLY] {e}")
+            print(f"[LỖI FORM APPLY] {traceback.format_exc()}")
             await interaction.followup.send(f"{Emojis.HOICHAM} Lỗi liên kết nút: `{e}`")
 
     # =========================
@@ -236,7 +240,7 @@ class FormsGroup(app_commands.Group):
             embed_dashboard.set_footer(text="yiyi iu cậu • báo cáo hạ tầng form")
             await interaction.followup.send(embed=embed_dashboard)
         except Exception as e:
-            print(f"[LỖI FORM SETTING] {e}")
+            print(f"[LỖI FORM SETTING] {traceback.format_exc()}")
             await interaction.followup.send(f"{Emojis.HOICHAM} Không thể bốc dữ liệu Dashboard: `{e}`")
 
 async def setup(bot: commands.Bot):
