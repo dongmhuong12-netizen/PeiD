@@ -1,3 +1,4 @@
+# commands/dev/dev_emojis.py
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -5,6 +6,9 @@ import re
 import aiohttp
 import os
 from utils.emojis import Emojis
+
+# [TÍCH HỢP PREMIUM] Import mạch kiểm tra quyền từ hệ thống Premium của sếp tại đây
+# Ví dụ: from utils.premium_logic import check_premium
 
 # CẤU HÌNH SERVER KHO CHỨA TRUNG TÂM TOÀN CỤC NẠP TỪ BIẾN MÔI TRƯỜNG TRƯỚC
 VAULT_GUILD_ID = int(os.getenv("VAULT_GUILD_ID", 1439489572936613951))  # <--- Sếp cấu hình ID Server Kho Chứa của sếp tại đây nhe
@@ -21,15 +25,25 @@ class DevEmojis(commands.Cog):
     # =========================================================================
     dev = app_commands.Group(name="dev", description="[PREMIUM] Bộ điều khiển tối cao dành cho nhà phát triển hệ thống")
 
-    def is_owner(self, interaction: discord.Interaction) -> bool:
-        """Mạch bảo mật đối chiếu trực tiếp định danh Thực thể tối cao (Owner ID) thời gian thực"""
-        return interaction.user.id == interaction.client.boss_id
+    async def has_premium_access(self, interaction: discord.Interaction) -> bool:
+        """
+        Mạch bảo mật đã được nâng cấp: Tích hợp logic Premium + Owner
+        Gọi hàm check từ module Premium của sếp để xác thực quyền truy cập tại đây.
+        """
+        # Mặc định vẫn giữ quyền cho Thực thể tối cao (Owner)
+        if interaction.user.id == interaction.client.boss_id:
+            return True
+            
+        # [CHỖ NÀY CẬU GỌI LOGIC TỪ FILE PREMIUM]
+        # Ví dụ: return await check_premium(interaction.guild.id)
+        
+        return False # Tạm thời return False nếu không phải Owner và chưa cấy logic Premium
 
     def get_unauthorized_embed(self) -> discord.Embed:
         """Mạch kết xuất Giao diện từ chối truy cập chuẩn văn phong mềm mại của yiyi và mã màu sếp yêu cầu"""
         embed = discord.Embed(
             title=f"{Emojis.BUOMA} không được rồi, xin lỗi cậu nhe..",
-            description="lệnh này chỉ có owner của *yiyi* mới được sài thuii",
+            description="lệnh này yêu cầu quyền premium hoặc chỉ có owner của *yiyi* mới được sài thuii",
             color=0xe6e2dd
         )
         return embed
@@ -41,7 +55,7 @@ class DevEmojis(commands.Cog):
     )
     async def dev_register_cmd(self, interaction: discord.Interaction, variable_name: str, emoji_input: str):
         # Bộ lọc an toàn tối cao chặn đứng các thực thể không hợp lệ
-        if not self.is_owner(interaction):
+        if not await self.has_premium_access(interaction):
             return await interaction.response.send_message(embed=self.get_unauthorized_embed(), ephemeral=True)
 
         await interaction.response.defer(ephemeral=True)
@@ -133,7 +147,7 @@ class DevEmojis(commands.Cog):
     @dev.command(name="list", description="[PREMIUM] soi chiếu toàn bộ bảng biến mã nguồn tĩnh vật lý và động")
     async def dev_list_cmd(self, interaction: discord.Interaction):
         # Bộ lọc an toàn tối cao chặn đứng các thực thể không hợp lệ
-        if not self.is_owner(interaction):
+        if not await self.has_premium_access(interaction):
             return await interaction.response.send_message(embed=self.get_unauthorized_embed(), ephemeral=True)
 
         await interaction.response.defer(ephemeral=True)
@@ -184,7 +198,7 @@ class DevEmojis(commands.Cog):
     @app_commands.describe(variable_name="tên biến dynamic sếp muốn xóa sổ (vd: alert, peid_omg)")
     async def dev_delete_cmd(self, interaction: discord.Interaction, variable_name: str):
         # Bộ lọc an toàn tối cao chặn đứng các thực thể không hợp lệ
-        if not self.is_owner(interaction):
+        if not await self.has_premium_access(interaction):
             return await interaction.response.send_message(embed=self.get_unauthorized_embed(), ephemeral=True)
 
         await interaction.response.defer(ephemeral=True)
