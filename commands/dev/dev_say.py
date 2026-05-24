@@ -51,7 +51,7 @@ async def dev_say_cmd(interaction: discord.Interaction, text_content: str):
         await interaction.channel.send(content=processed_text)
 
         # Phản hồi báo cáo ngầm hoàn thành nhiệm vụ cho người gọi lệnh
-        await interaction.followup.send(f"{Emojis.BUOMA} đã truyền phát tin nhắn thành công.", ephemeral=True)
+        await interaction.followup.send(f"{Emojis.BUOMA} gửi tin nhắn thành công.", ephemeral=True)
 
     except Exception as e:
         embed_err = discord.Embed(
