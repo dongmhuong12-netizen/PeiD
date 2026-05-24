@@ -1,4 +1,4 @@
-# commands/dev/dev_emojis.py
+#commands/dev/dev_emojis.py
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -6,9 +6,6 @@ import re
 import aiohttp
 import os
 from utils.emojis import Emojis
-
-# [TÍCH HỢP PREMIUM] Import mạch kiểm tra quyền từ hệ thống Premium của sếp tại đây
-# Ví dụ: from utils.premium_logic import check_premium
 
 # CẤU HÌNH SERVER KHO CHỨA TRUNG TÂM TOÀN CỤC NẠP TỪ BIẾN MÔI TRƯỜNG TRƯỚC
 VAULT_GUILD_ID = int(os.getenv("VAULT_GUILD_ID", 1439489572936613951))  # <--- Sếp cấu hình ID Server Kho Chứa của sếp tại đây nhe
@@ -18,6 +15,8 @@ class DevEmojis(commands.Cog):
         self.bot = bot
         # Mạch bóc tách an toàn để tương thích với mọi cấu trúc Wrapper MongoDB Atlas của hệ thống peiD
         self.db_col = getattr(bot.db, "db", bot.db)["cloud_emojis_sys"]
+        # Đấu nối mạch song song đến kho lưu trữ định danh Premium đồng bộ với premium_group.py
+        self.premium_col = getattr(bot.db, "db", bot.db)["premium_users_sys"]
 
     # =========================================================================
     # [QUY HOẠCH CHIẾN LƯỢC] KHỞI TẠO GROUP LỆNH CHUẨN MULTI-IT
@@ -26,18 +25,13 @@ class DevEmojis(commands.Cog):
     dev = app_commands.Group(name="dev", description="[PREMIUM] Bộ điều khiển tối cao dành cho nhà phát triển hệ thống")
 
     async def has_premium_access(self, interaction: discord.Interaction) -> bool:
-        """
-        Mạch bảo mật đã được nâng cấp: Tích hợp logic Premium + Owner
-        Gọi hàm check từ module Premium của sếp để xác thực quyền truy cập tại đây.
-        """
-        # Mặc định vẫn giữ quyền cho Thực thể tối cao (Owner)
+        """Mạch bảo mật đối chiếu trực tiếp định danh Thực thể tối cao và sách trắng Premium thời gian thực"""
         if interaction.user.id == interaction.client.boss_id:
             return True
             
-        # [CHỖ NÀY CẬU GỌI LOGIC TỪ FILE PREMIUM]
-        # Ví dụ: return await check_premium(interaction.guild.id)
-        
-        return False # Tạm thời return False nếu không phải Owner và chưa cấy logic Premium
+        # Mạch truy quét định danh trong sách trắng Premium Atlas DB dựa trên ID người dùng
+        premium_user = await self.premium_col.find_one({"user_id": str(interaction.user.id)})
+        return premium_user is not None
 
     def get_unauthorized_embed(self) -> discord.Embed:
         """Mạch kết xuất Giao diện từ chối truy cập chuẩn văn phong mềm mại của yiyi và mã màu sếp yêu cầu"""
