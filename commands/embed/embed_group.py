@@ -61,7 +61,7 @@ def _cleanup_views(key: str):
         view.stop()
     ACTIVE_EMBED_VIEWS[key] = []
 
-# [BỔ SUNG PHASE 3] Hàm tạo View nút bấm từ dữ liệu lưu trữ
+# [BỔ SUNG PHASE 3 - VÁ LỖI RENDERING] Hàm tạo View nút bấm từ dữ liệu lưu trữ
 def create_embed_view(data):
     buttons_data = data.get("buttons", [])
     if not buttons_data: return None
@@ -78,14 +78,36 @@ def create_embed_view(data):
     }
 
     for btn in buttons_data:
+        # [VÁ LỖI LOGIC RENDER EMOJI]
+        emoji_input = btn.get("emoji")
+        emoji_obj = None
+        
+        if emoji_input:
+            # 1. Nếu là biến {KEY} -> tra cứu trong class Emojis
+            if emoji_input.startswith("{") and emoji_input.endswith("}"):
+                key = emoji_input[1:-1].upper()
+                emoji_input = getattr(Emojis, key, emoji_input)
+            
+            # 2. Chuyển string thành PartialEmoji object chuẩn Discord
+            try:
+                emoji_obj = discord.PartialEmoji.from_str(emoji_input)
+            except:
+                emoji_obj = None
+
+        # [VÁ LỖI LABEL] Lọc bỏ biến emoji ra khỏi label nếu lỡ tay lưu nhầm
+        label = btn.get("label", " ").strip()
+        # Nếu label chứa biến {..}, ta loại bỏ nó để tránh hiển thị lỗi chữ
+        label = re.sub(r'\{[A-Za-z0-9_]+\}', '', label).strip()
+        if not label: label = "\u2800" # Ký tự trắng để discord không báo lỗi label trống
+
         b_type = btn.get("type")
         
         # 1. MẠCH NÚT LINK (Chuyển hướng)
         if b_type == "link":
             view.add_item(discord.ui.Button(
-                label=btn.get("label"), 
+                label=label, 
                 url=btn.get("url"), 
-                emoji=btn.get("emoji")
+                emoji=emoji_obj
             ))
             
         # 2. MẠCH NÚT HỆ THỐNG (Multi-IT: Chấp nhận mọi loại Button tương tác)
@@ -93,9 +115,9 @@ def create_embed_view(data):
             # Tự động nhận diện Style, Label và CustomID để kích hoạt hệ thống tương ứng
             view.add_item(discord.ui.Button(
                 style=style_map.get(btn.get("style", "secondary").lower(), discord.ButtonStyle.secondary),
-                label=btn.get("label"),
+                label=label,
                 custom_id=btn.get("custom_id"),
-                emoji=btn.get("emoji")
+                emoji=emoji_obj
             ))
             
     return view
@@ -328,7 +350,7 @@ class EmbedGroup(app_commands.Group):
                 continue
 
             # Load data từ Cloud Atlas
-            data = await load_embed(guild.id, emb_name)
+            data = await load_embed(interaction.guild.id, emb_name)
             if not data:
                 await interaction.followup.send(f"{Emojis.HOICHAM} **yiyi** không tìm thấy embed có tên `{emb_name}`.", ephemeral=True)
                 continue
