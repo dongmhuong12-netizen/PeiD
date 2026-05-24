@@ -1,3 +1,4 @@
+commands/premium/premium_group.py 
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -19,7 +20,7 @@ class PremiumGroup(app_commands.Group):
         """Giao diện chặn truy cập chuẩn văn phong yiyi dành riêng cho Owner"""
         embed = discord.Embed(
             title=f"{Emojis.BUOMA} quyền hạn không đủ rồi nhe..",
-            description="chỉ có sếp lớn chính chủ của *yiyi* mới cấu hình được mạch này thui nhe cậu.",
+            description="chỉ có sếp Owner của *yiyi* mới cấu hình được mạch này thui",
             color=0xe6e2dd
         )
         return embed
@@ -38,7 +39,7 @@ class PremiumGroup(app_commands.Group):
         if existing:
             embed_dup = discord.Embed(
                 title=f"{Emojis.YIYITIM} người này đã được cấp quyền rùi ạ",
-                description=f"định danh user <@{u_id_str}> (`{u_id_str}`) đã nằm trong sách trắng đám mây từ trước.",
+                description=f"định danh user <@{u_id_str}> (`{u_id_str}`) đã nằm trong phân khu đặc quyền từ trước.",
                 color=0xe6e2dd
             )
             return await interaction.followup.send(embed=embed_dup)
@@ -53,19 +54,28 @@ class PremiumGroup(app_commands.Group):
 
         embed_success = discord.Embed(
             title=f"{Emojis.BUOMA} cấp quyền Premium thành công!",
-            description=f"đã mở khóa mạch truyền tải dữ liệu đặc cách cho user {user.mention} (`{u_id_str}`) vĩnh viễn nhe sếp.",
+            description=f"đã mở khóa mạch truyền tải dữ liệu đặc cách cho user {user.mention} (`{u_id_str}`) thành công, từ giờ họ có thể dùng được các bộ lệnh thuộc phân quyền Premium.",
             color=0xe6e2dd
         )
         await interaction.followup.send(embed=embed_success)
 
     @app_commands.command(name="revoke", description="[OWNER ONLY] xóa bỏ đặc quyền Premium")
-    @app_commands.describe(user="chọn người dùng muốn hủy bỏ quyền đặc cách")
-    async def premium_revoke_cmd(self, interaction: discord.Interaction, user: discord.User):
+    @app_commands.describe(user="chọn người dùng sở hữu premium muốn hủy bỏ quyền đặc cách")
+    async def premium_revoke_cmd(self, interaction: discord.Interaction, user: str):
         if not self.is_absolute_owner(interaction):
             return await interaction.response.send_message(embed=self.get_owner_deny_embed(), ephemeral=True)
 
         await interaction.response.defer(ephemeral=True)
-        u_id_str = str(user.id)
+        u_id_str = user.strip()
+
+        # Kiểm toán đầu vào phòng trường hợp cố tình nhập chuỗi phá hoại mạch thay vì chọn autocomplete
+        if not u_id_str.isdigit():
+            embed_invalid = discord.Embed(
+                title=f"{Emojis.HOICHAM} định danh không hợp lệ",
+                description="cậu vui lòng chọn đúng người dùng có trong danh sách gợi ý nhe.",
+                color=0xe6e2dd
+            )
+            return await interaction.followup.send(embed=embed_invalid)
 
         # Truy quét xác minh sự tồn tại của thực thể trước khi thực hiện quy trình hủy
         existing = await self.db_col.find_one({"user_id": u_id_str})
@@ -83,11 +93,67 @@ class PremiumGroup(app_commands.Group):
 
         embed_revoke_success = discord.Embed(
             title=f"{Emojis.BUOMA} thu hồi đặc quyền PREMIUM thành công",
-            description=f"đã trục xuất triệt để user {user.mention} (`{u_id_str}`) ra khỏi sách trắng vĩnh viễn.",
+            description=f"đã trục xuất triệt để user <@{u_id_str}> (`{u_id_str}`) ra khỏi sách trắng vĩnh viễn.",
             color=0xe6e2dd
         )
-        # [VÁ LỖI CHÍ MẠNG] Đã sửa lại đúng tên biến embed
         await interaction.followup.send(embed=embed_revoke_success)
+
+    @premium_revoke_cmd.autocomplete('user')
+    async def premium_revoke_autocomplete(self, interaction: discord.Interaction, current: str):
+        """Mạch lọc thông minh: Chỉ bóc tách và đề xuất các ID đang thực sự tồn tại trong DB Premium"""
+        choices = []
+        async for item in self.db_col.find({}):
+            u_id = item["user_id"]
+            # Đồng bộ cache lấy tên hiển thị trực quan cho sếp dễ chọn
+            user_obj = self.bot.get_user(int(u_id))
+            display_name = f"{user_obj.name} ({u_id})" if user_obj else f"User ID: {u_id}"
+            
+            if current.lower() in display_name.lower():
+                choices.append(app_commands.Choice(name=display_name, value=u_id))
+            
+            if len(choices) >= 25:  # Giới hạn tối đa của Discord Autocomplete
+                break
+        return choices
+
+    @app_commands.command(name="list", description="[OWNER ONLY] mở danh sách tất cả thực thể được cấp đặc quyền Premium")
+    async def premium_list_cmd(self, interaction: discord.Interaction):
+        if not self.is_absolute_owner(interaction):
+            return await interaction.response.send_message(embed=self.get_owner_deny_embed(), ephemeral=True)
+
+        await interaction.response.defer(ephemeral=True)
+
+        premium_lines = []
+        async for item in self.db_col.find({}):
+            u_id = item["user_id"]
+            g_by = item.get("granted_by", "Unknown")
+            ts = item.get("timestamp", 0)
+
+            # Đồng bộ cache lấy thông tin thực thể
+            user_obj = self.bot.get_user(int(u_id))
+            grantor_obj = self.bot.get_user(int(g_by)) if g_by.isdigit() else None
+
+            user_fmt = f"<@{u_id}> (`{u_id}`)"
+            grantor_fmt = f"<@{g_by}>" if grantor_obj else f"`{g_by}`"
+            time_fmt = f"<t:{ts}:R>" if ts else "Không rõ"
+
+            premium_lines.append(f"• {user_fmt}\n  └── Người cấp: {grantor_fmt} | Lên sàn: {time_fmt}")
+
+        embed_list = discord.Embed(
+            title=f"{Emojis.BUOMA} danh sách thực thể Premium",
+            color=0xe6e2dd
+        )
+
+        if premium_lines:
+            text_content = "\n".join(premium_lines)
+            # Phòng vệ giới hạn ký tự 4096 của description embed tránh tràn bộ nhớ đệm
+            if len(text_content) > 4000:
+                text_content = text_content[:3900] + "\n...và một số thực thể Premium khác."
+            embed_list.description = text_content
+        else:
+            embed_list.description = "Hiện tại chưa có người dùng nào được cấy đặc quyền Premium hệ thống đâu a."
+
+        embed_list.set_footer(text="Hệ thống quản lý phân phối đặc quyền của **yiyi**")
+        await interaction.followup.send(embed=embed_list)
 
 async def setup(bot: commands.Bot):
     # Khởi tạo và đăng ký trực tiếp Group vào Command Tree toàn cục của Bot
