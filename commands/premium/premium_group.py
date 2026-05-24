@@ -86,7 +86,8 @@ class PremiumGroup(app_commands.Group):
             description=f"đã trục xuất triệt để user {user.mention} (`{u_id_str}`) ra khỏi sách trắng vĩnh viễn.",
             color=0xe6e2dd
         )
-        await interaction.followup.send(embed=revoke_success_success)
+        # [VÁ LỖI CHÍ MẠNG] Đã sửa lại đúng tên biến embed
+        await interaction.followup.send(embed=embed_revoke_success)
 
 async def setup(bot: commands.Bot):
     # Khởi tạo và đăng ký trực tiếp Group vào Command Tree toàn cục của Bot
