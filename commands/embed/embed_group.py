@@ -96,10 +96,8 @@ def create_embed_view(data):
             except:
                 emoji_obj = None
 
-        # [VÁ LỖI LABEL] Lọc bỏ biến emoji ra khỏi label nếu lỡ tay lưu nhầm
+        # [KHÔI PHỤC LABEL] Giữ nguyên label kể cả khi chứa biến {}, không xóa gì cả
         label = btn.get("label", " ").strip()
-        # Nếu label chứa biến {..}, ta loại bỏ nó để tránh hiển thị lỗi chữ
-        label = re.sub(r'\{[A-Za-z0-9_]+\}', '', label).strip()
         if not label: label = "\u2800" # Ký tự trắng để discord không báo lỗi label trống
 
         b_type = btn.get("type")
