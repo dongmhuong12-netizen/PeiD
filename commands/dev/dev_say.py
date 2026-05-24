@@ -65,19 +65,17 @@ async def setup(bot: commands.Bot):
     # Đăng ký Cog xử lý DB lên RAM trước
     await bot.add_cog(DevSay(bot))
 
-    # [THUẬT TOÁN QUY HOẠCH CHUNG GROUP - MULTI-IT PRO]
-    # Truy quét và lấy ra Group cha '/dev' từ cây lệnh toàn cục để cấy lệnh con vào, chống lệnh ma trùng lặp
+    # [MULTI-IT PRO] Thuật toán kế thừa nghiêm ngặt:
+    # Chỉ tìm và nhúng vào group /dev đã được file dev_emojis khởi tạo
     dev_group = None
     for cmd in bot.tree.get_commands():
         if cmd.name == "dev" and isinstance(cmd, app_commands.Group):
             dev_group = cmd
             break
 
-    # Hạ tầng dự phòng: Nếu file này load trước file emoji, tự khởi tạo Group cha để giữ chỗ
-    if not dev_group:
-        dev_group = app_commands.Group(name="dev", description="[PREMIUM] Bộ điều khiển tối cao dành cho nhà phát triển hệ thống")
-        bot.tree.add_command(dev_group)
-
-    # Đồng bộ cấy nóng lệnh say vào phân khu group /dev
-    dev_group.add_command(dev_say_cmd)
-    print("[LOAD] Success: commands.dev.dev_say (Premium Text Engine Injected)", flush=True)
+    if dev_group:
+        # Nhúng lệnh say vào chung nhà với dev_emojis
+        dev_group.add_command(dev_say_cmd)
+        print("[LOAD] Success: commands.dev.dev_say (Premium Text Engine Injected)", flush=True)
+    else:
+        print("[WARNING] Không tìm thấy group /dev từ dev_emojis. Lệnh say đang chờ nạp lại!", flush=True)
