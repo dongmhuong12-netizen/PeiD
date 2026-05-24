@@ -80,21 +80,22 @@ def create_embed_view(data):
     }
 
     for btn in buttons_data:
-        # [VÁ LỖI LOGIC RENDER EMOJI]
+        # [VÁ LỖI LOGIC RENDER EMOJI] - Tư duy Multi-IT
         emoji_input = btn.get("emoji")
         emoji_obj = None
         
         if emoji_input:
             # 1. Nếu là biến {KEY} -> tra cứu trong class Emojis
-            if emoji_input.startswith("{") and emoji_input.endswith("}"):
-                key = emoji_input[1:-1].upper()
+            if isinstance(emoji_input, str) and emoji_input.startswith("{") and emoji_input.endswith("}"):
+                key = emoji_input[1:-1].strip().upper()
                 emoji_input = getattr(Emojis, key, emoji_input)
             
             # 2. Chuyển string thành PartialEmoji object chuẩn Discord
-            try:
-                emoji_obj = discord.PartialEmoji.from_str(emoji_input)
-            except:
-                emoji_obj = None
+            if isinstance(emoji_input, str):
+                try:
+                    emoji_obj = discord.PartialEmoji.from_str(emoji_input)
+                except:
+                    emoji_obj = None
 
         # [KHÔI PHỤC LABEL] Giữ nguyên label kể cả khi chứa biến {}, không xóa gì cả
         label = btn.get("label", " ").strip()
