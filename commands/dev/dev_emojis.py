@@ -37,7 +37,7 @@ class DevEmojis(commands.Cog):
         """Mạch kết xuất Giao diện từ chối truy cập chuẩn văn phong mềm mại của yiyi và mã màu sếp yêu cầu"""
         embed = discord.Embed(
             title=f"{Emojis.BUOMA} không được rồi, xin lỗi cậu nhe..",
-            description="lệnh này yêu cầu quyền premium hoặc chỉ có owner của *yiyi* mới được sài thuii",
+            description="lệnh này thuộc phân khu Premium, chỉ có owner của **yiyi** hoặc các user được đặc cách mới được sử dụng",
             color=0xe6e2dd
         )
         return embed
@@ -67,7 +67,7 @@ class DevEmojis(commands.Cog):
 
         if not emoji_id:
             embed_err = discord.Embed(
-                title=f"{Emojis.BUOMA} đầu vào không hợp lệ rồi nhe sếp",
+                title=f"{Emojis.BUOMA} đầu vào không hợp lệ",
                 description="cậu hãy dán đúng thực thể emoji hoặc nhập đúng chuỗi id số nhe.",
                 color=0xe6e2dd
             )
@@ -78,7 +78,7 @@ class DevEmojis(commands.Cog):
         if existing:
             embed_dup = discord.Embed(
                 title=f"{Emojis.BUOMA} biến này đã tồn tại",
-                description=f"tên biến `{var_name_clean}` đã có trong bộ nhớ dynamic hệ thống rồi cậu.",
+                description=f"tên biến `{var_name_clean}` đã có trong bộ nhớ dynamic hệ thống, hãy nhập tên khác nhé.",
                 color=0xe6e2dd
             )
             return await interaction.followup.send(embed=embed_dup)
@@ -123,7 +123,7 @@ class DevEmojis(commands.Cog):
 
             embed_success = discord.Embed(
                 title=f"{Emojis.BUOMA} đăng ký biến động thành công!",
-                description=f"đã cấy thuộc tính `{var_name_clean}` vào hệ thống lõi vĩnh viễn nhe sếp.\n\n"
+                description=f"đã cấy thuộc tính `{var_name_clean}` vào hệ thống biến emojis.\n\n"
                             f"• **Hình ảnh hiển thị:** {emoji_string}\n"
                             f"• **Mã gọi trong mã nguồn:** `Emojis.{var_name_clean}`",
                 color=0xe6e2dd
@@ -203,7 +203,7 @@ class DevEmojis(commands.Cog):
         if not target_emoji:
             embed_not_found = discord.Embed(
                 title=f"{Emojis.BUOMA} không tìm thấy biến này",
-                description=f"biến `{var_name_clean}` không tồn tại trong danh mục biến động hệ thống cậu ơi.",
+                description=f"biến `{var_name_clean}` không tồn tại trong danh mục biến động hệ thống.",
                 color=0xe6e2dd
             )
             return await interaction.followup.send(embed=embed_not_found)
