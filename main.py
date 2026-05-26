@@ -68,7 +68,7 @@ intents.message_content = True
 intents.voice_states = True
 
 bot = commands.AutoShardedBot(
-    command_prefix=commands.when_mentioned,
+    command_prefix=commands.when_mentioned_or("!"), # [FIX CỐT LÕI] Nhận diện cả ping và prefix !
     intents=intents,
     help_command=None,
     status=discord.Status.idle,
