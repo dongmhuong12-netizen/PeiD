@@ -14,7 +14,7 @@ class AutoResponder(commands.Cog):
         # Không cần sửa file mongodb, proxy sẽ tự động tạo kết nối tới các kho này
         self.db_texts = bot.db.ar_texts
         self.db_triggers = bot.db.ar_triggers
-        self.db_embeds = getattr(bot.db, "embeds", bot.db["embeds"])
+        self.db_embeds = bot.db.embeds
 
         # [LÕI RAM CACHE] Lưu trữ từ khóa trên RAM để đối chiếu tin nhắn với tốc độ ánh sáng (O(1))
         # Cấu trúc: { guild_id: { "trigger_keyword": {"text_name": str, "embed_name": str} } }
