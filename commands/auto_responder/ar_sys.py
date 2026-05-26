@@ -7,6 +7,44 @@ from typing import Optional
 from utils.emojis import Emojis
 from core.variable_engine import apply_variables
 
+# ==========================================
+# GIAO DIỆN MODAL: CHỈNH SỬA VĂN BẢN
+# ==========================================
+class TextEditModal(discord.ui.Modal, title='꒰ა chỉnh sửa nội dung văn bản ໒꒱'):
+    content_input = discord.ui.TextInput(
+        label='Nội dung (Hỗ trợ biến số)',
+        style=discord.TextStyle.paragraph,
+        required=True,
+        max_length=4000
+    )
+
+    def __init__(self, cog, text_name: str, current_content: str):
+        super().__init__()
+        self.cog = cog
+        self.text_name = text_name
+        # Đổ sẵn nội dung cũ vào khung cho sếp sửa
+        self.content_input.default = current_content
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            # Cập nhật thẳng vào MongoDB
+            await self.cog.db_texts.update_one(
+                {"guild_id": interaction.guild_id, "name": self.text_name},
+                {"$set": {"content": self.content_input.value}}
+            )
+            embed = discord.Embed(
+                title=f"{Emojis.BUOMA} đã cập nhật văn bản",
+                description=f"văn bản `{self.text_name}` đã được chỉnh sửa và niêm phong thành công.",
+                color=0xe6e2dd
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"{Emojis.HOICHAM} lỗi ghi dữ liệu: `{str(e)}`", ephemeral=True)
+
+
+# ==========================================
+# MODULE CHÍNH: AUTO RESPONDER
+# ==========================================
 class AutoResponder(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -142,6 +180,62 @@ class AutoResponder(commands.Cog):
         except Exception as e:
             await interaction.followup.send(f"{Emojis.HOICHAM} lỗi ghi dữ liệu: `{str(e)}`", ephemeral=True)
 
+    @ar_group.command(name="edit", description="Chỉnh sửa nội dung văn bản qua bảng biểu mẫu (Modal)")
+    @app_commands.describe(name="Tên của văn bản cần chỉnh sửa")
+    async def ar_edit(self, interaction: discord.Interaction, name: str):
+        # Không defer ở đây vì Modal yêu cầu phản hồi lập tức
+        try:
+            doc = await self.db_texts.find_one({"guild_id": interaction.guild_id, "name": name})
+            if not doc:
+                embed_err = discord.Embed(
+                    title=f"{Emojis.HOICHAM} không tìm thấy dữ liệu",
+                    description=f"văn bản `{name}` không tồn tại trong kho.",
+                    color=0xe6e2dd
+                )
+                return await interaction.response.send_message(embed=embed_err, ephemeral=True)
+            
+            # Khởi tạo Modal và đẩy nội dung cũ vào
+            modal = TextEditModal(cog=self, text_name=name, current_content=doc.get("content", ""))
+            await interaction.response.send_modal(modal)
+        except Exception as e:
+            await interaction.response.send_message(f"{Emojis.HOICHAM} lỗi truy xuất dữ liệu: `{str(e)}`", ephemeral=True)
+
+    @ar_group.command(name="delete", description="Xóa vĩnh viễn văn bản và dọn dẹp các biến số liên kết")
+    @app_commands.describe(name="Tên của văn bản cần xóa")
+    async def ar_delete(self, interaction: discord.Interaction, name: str):
+        await interaction.response.defer(ephemeral=True)
+        try:
+            # 1. Tiêu diệt Văn Bản gốc
+            result = await self.db_texts.delete_one({"guild_id": interaction.guild_id, "name": name})
+            if result.deleted_count == 0:
+                return await interaction.followup.send(f"{Emojis.HOICHAM} không tìm thấy văn bản `{name}` để xóa.", ephemeral=True)
+
+            # 2. Thuật toán dọn dẹp: Cắt đứt và quét sạch toàn bộ Trigger đang bám vào văn bản này
+            deleted_triggers = []
+            cursor = self.db_triggers.find({"guild_id": interaction.guild_id, "text_name": name})
+            async for t_doc in cursor:
+                trigger = t_doc.get("trigger")
+                if trigger:
+                    deleted_triggers.append(trigger)
+                    # Xóa khỏi RAM ngay lập tức
+                    self.update_cache(interaction.guild_id, trigger, text_name=None, embed_name=None)
+            
+            # Xóa hàng loạt trên Database
+            if deleted_triggers:
+                await self.db_triggers.delete_many({"guild_id": interaction.guild_id, "text_name": name})
+
+            trigger_log = f"\n*(đã tự động dọn dẹp {len(deleted_triggers)} biến số liên kết)*" if deleted_triggers else ""
+            
+            embed = discord.Embed(
+                title=f"{Emojis.BUOMA} đã xóa văn bản",
+                description=f"văn bản `{name}` đã bị xóa vĩnh viễn khỏi kho dữ liệu.{trigger_log}",
+                color=0xe6e2dd
+            )
+            await interaction.followup.send(embed=embed, ephemeral=True)
+
+        except Exception as e:
+            await interaction.followup.send(f"{Emojis.HOICHAM} lỗi thao tác dữ liệu: `{str(e)}`", ephemeral=True)
+
     @ar_group.command(name="setup", description="Tạo liên kết từ khóa tới Văn bản hoặc Embed")
     @app_commands.describe(trigger="Từ khóa kích hoạt (VD: welcome)", text_name="Tên văn bản muốn gắn", embed_name="Tên embed muốn gắn")
     async def ar_setup(self, interaction: discord.Interaction, trigger: str, text_name: Optional[str] = None, embed_name: Optional[str] = None):
@@ -171,12 +265,12 @@ class AutoResponder(commands.Cog):
             if text_name:
                 check_text = await self.db_texts.find_one({"guild_id": interaction.guild_id, "name": text_name})
                 if not check_text:
-                    return await interaction.followup.send(f"{Emojis.NO} không tìm thấy văn bản `{text_name}` trong kho. cậu tạo lệnh `/ar create` trước nhé.", ephemeral=True)
+                    return await interaction.followup.send(f"{Emojis.HOICHAM} không tìm thấy văn bản `{text_name}` trong kho. cậu tạo lệnh `/ar create` trước nhé.", ephemeral=True)
             
             if embed_name:
                 check_embed = await self.db_embeds.find_one({"guild_id": interaction.guild_id, "name": embed_name})
                 if not check_embed:
-                    return await interaction.followup.send(f"{Emojis.NO} không tìm thấy embed `{embed_name}` trong kho của hệ thống cũ.", ephemeral=True)
+                    return await interaction.followup.send(f"{Emojis.HOICHAM} không tìm thấy embed `{embed_name}` trong kho của hệ thống cũ.", ephemeral=True)
 
             # Lưu vào Database Từ Khóa
             await self.db_triggers.update_one(
@@ -209,7 +303,7 @@ class AutoResponder(commands.Cog):
             result = await self.db_triggers.delete_one({"guild_id": interaction.guild_id, "trigger": trigger_lower})
             
             if result.deleted_count == 0:
-                return await interaction.followup.send(f"{Emojis.NO} không tìm thấy từ khóa `{trigger_lower}` nào đang hoạt động cả.", ephemeral=True)
+                return await interaction.followup.send(f"{Emojis.HOICHAM} không tìm thấy từ khóa `{trigger_lower}` nào đang hoạt động cả.", ephemeral=True)
 
             # Xóa khỏi Cache RAM
             self.update_cache(interaction.guild_id, trigger_lower, text_name=None, embed_name=None)
@@ -225,7 +319,8 @@ class AutoResponder(commands.Cog):
             await interaction.followup.send(f"{Emojis.HOICHAM} lỗi thao tác dữ liệu: `{str(e)}`", ephemeral=True)
 
     @ar_group.command(name="list", description="Bảng điều khiển kiểm soát toàn bộ biến số")
-    async def ar_list(self, interaction: discord.Interaction):
+    @app_commands.describe(trigger="Nhập tên biến số để xem chi tiết (Tùy chọn)")
+    async def ar_list(self, interaction: discord.Interaction, trigger: Optional[str] = None):
         await interaction.response.defer(ephemeral=True)
         
         try:
@@ -235,6 +330,41 @@ class AutoResponder(commands.Cog):
             if not guild_cache:
                 return await interaction.followup.send(f"{Emojis.HOICHAM} chưa có từ khóa nào được thiết lập ở server này.", ephemeral=True)
 
+            # NHÁNH 1: TÌM KIẾM CHI TIẾT TỪ KHÓA
+            if trigger:
+                trigger_lower = trigger.strip().lower()
+                if trigger_lower not in guild_cache:
+                    return await interaction.followup.send(f"{Emojis.HOICHAM} từ khóa `{trigger_lower}` không tồn tại trong hệ thống.", ephemeral=True)
+                
+                config = guild_cache[trigger_lower]
+                
+                if config.get("embed_name"):
+                    embed = discord.Embed(
+                        title=f"꒰ა chi tiết từ khóa: {trigger_lower} ໒꒱",
+                        description=f"đang móc nối với embed: `{config['embed_name']}`",
+                        color=0xe6e2dd
+                    )
+                    return await interaction.followup.send(embed=embed, ephemeral=True)
+                
+                if config.get("text_name"):
+                    text_name = config["text_name"]
+                    doc = await self.db_texts.find_one({"guild_id": interaction.guild_id, "name": text_name})
+                    
+                    if doc:
+                        embed = discord.Embed(
+                            title=f"꒰ა chi tiết từ khóa: {trigger_lower} ໒꒱",
+                            description=f"đang móc nối với văn bản: `{text_name}`\n\n**nội dung nguyên bản:**\n```text\n{doc['content']}\n```",
+                            color=0xe6e2dd
+                        )
+                    else:
+                        embed = discord.Embed(
+                            title=f"꒰ა chi tiết từ khóa: {trigger_lower} ໒꒱",
+                            description=f"đang móc nối với văn bản: `{text_name}`\n\n{Emojis.HOICHAM} *(lỗi: không thể trích xuất nội dung từ kho)*",
+                            color=0xe6e2dd
+                        )
+                    return await interaction.followup.send(embed=embed, ephemeral=True)
+
+            # NHÁNH 2: BẢNG DANH SÁCH TỔNG QUAN
             embed = discord.Embed(
                 title=f"꒰ა bảng điều khiển auto-responder ໒꒱",
                 description="danh sách các biến số nhận diện đang hoạt động:",
@@ -259,4 +389,4 @@ class AutoResponder(commands.Cog):
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(AutoResponder(bot))
-    print("[LOAD] Success: commands.auto_responder.ar_sys (Zero-Latency Radar Injected)", flush=True)
+    print("[LOAD] Success: commands.auto_responder.ar_sys (Full Engine: Modal Edit & Deep Clean Delete Injected)", flush=True)
