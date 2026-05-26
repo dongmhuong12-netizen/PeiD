@@ -20,8 +20,10 @@ class AutoResponder(commands.Cog):
         # Cấu trúc: { guild_id: { "trigger_keyword": {"text_name": str, "embed_name": str} } }
         self.cache = {}
         
-        # Khởi động nạp Cache khi Cog được Load
-        self.bot.loop.create_task(self.build_ram_cache())
+    async def cog_load(self):
+        """[DEF] Hook khởi tạo bất đồng bộ chuẩn kiến trúc discord.py v2.0+"""
+        # Khởi động nạp Cache an toàn khi event loop đã sẵn sàng
+        asyncio.create_task(self.build_ram_cache())
 
     async def build_ram_cache(self):
         """[DEF] Tải toàn bộ cấu trúc từ khóa từ MongoDB lên RAM để tối ưu tốc độ đọc"""
