@@ -134,7 +134,7 @@ class AutoResponder(commands.Cog):
             )
             
             embed = discord.Embed(
-                title=f"{Emojis.HTT} đã lưu văn bản thành công",
+                title=f"{Emojis.BUOMA} đã lưu văn bản thành công",
                 description=f"văn bản `{name}` đã được niêm phong vào kho dữ liệu.",
                 color=0xe6e2dd
             )
@@ -161,7 +161,7 @@ class AutoResponder(commands.Cog):
         if not text_name and not embed_name:
             embed = discord.Embed(
                 title=f"{Emojis.HOICHAM} thiếu mảnh ghép",
-                description="cậu phải cung cấp ít nhất một `text_name` hoặc một `embed_name` để tạo liên kết chứ.",
+                description="cậu phải cung cấp ít nhất một `text_name` hoặc một `embed_name` để tạo liên kết.",
                 color=0xe6e2dd
             )
             return await interaction.followup.send(embed=embed, ephemeral=True)
