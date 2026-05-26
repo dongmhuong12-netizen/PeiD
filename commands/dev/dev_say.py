@@ -1,4 +1,5 @@
 import discord
+import asyncio
 from discord.ext import commands
 from utils.emojis import Emojis
 from core.variable_engine import apply_variables
@@ -28,28 +29,32 @@ class DevSay(commands.Cog):
 
     # Đổi sang dạng text command với tên "sy"
     @commands.command(name="sy", description="[PREMIUM] gửi tin nhắn thuần văn bản dưới danh nghĩa của bot có áp dụng bộ biến động")
-    async def dev_say_cmd(self, ctx: commands.Context, *, text_content: str):
+    async def dev_say_cmd(self, ctx: commands.Context, *, text_content: str = None):
+        # Ẩn danh thần tốc Zero-Latency: Xóa tin nhắn gọi lệnh của sếp NGAY LẬP TỨC ở background
+        try:
+            if ctx.message:
+                asyncio.create_task(ctx.message.delete())
+        except Exception:
+            pass
+
         # Vòng kiểm duyệt bảo mật thời gian thực
         if not await self.has_premium_privilege(ctx.author.id):
             return await ctx.send(embed=self.get_unauthorized_embed(), delete_after=7)
 
-        # Ẩn danh thần tốc: Xóa tin nhắn gọi lệnh của sếp để giấu dấu vết
-        try:
-            await ctx.message.delete()
-        except discord.Forbidden:
-            pass
-        except discord.HTTPException:
-            pass
+        # Bắt lỗi khi sếp quên nhập nội dung
+        if not text_content:
+            return await ctx.send(
+                f"{Emojis.HOICHAM} aree? cậu muốn lệnh được thực hiện thì hãy viết kèm nội dung sau `!sy` nhé.", 
+                delete_after=7
+            )
 
         try:
             # Bơm chuỗi ký tự qua cỗ máy Variable Engine để dịch toàn bộ biến tĩnh/động và Emoji
             processed_text = apply_variables(text_content, ctx.guild, ctx.author)
 
-            # Thực thi nã đạn văn bản thẳng vào kênh hiện tại dưới danh nghĩa của Bot
-            await ctx.send(content=processed_text)
-
-            # Phản hồi báo cáo ngầm hoàn thành nhiệm vụ (Tự động bốc hơi sau 3s thay cho ephemeral)
-            await ctx.send(f"{Emojis.BUOMA} gửi tin nhắn thành công.", delete_after=3)
+            # Thực thi nã đạn văn bản thẳng vào kênh. 
+            # Logic kế thừa: Tự động reply nếu sếp có đính kèm reference, nếu không thì gửi bình thường.
+            await ctx.send(content=processed_text, reference=ctx.message.reference)
 
         except Exception as e:
             embed_err = discord.Embed(
