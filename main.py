@@ -148,6 +148,7 @@ EXTENSIONS = [
     "commands.dev.dev_emojis",
     "commands.dev.dev_say",
     "commands.emoji.emoji_sync",
+    "commands.auto_responder.ar_sys",
 ]
 
 async def load_extensions():
