@@ -43,8 +43,15 @@ class AnonCreateModal(discord.ui.Modal, title="tạo bài đăng ẩn danh"):
             max_length=4000,
             style=discord.TextStyle.paragraph
         )
+        self.post_image = discord.ui.TextInput(
+            label="link ảnh/video (tùy chọn)",
+            placeholder="dán link ảnh cdn từ cỗ máy /p image vào đây...",
+            required=False,
+            style=discord.TextStyle.short
+        )
         self.add_item(self.post_title)
         self.add_item(self.post_content)
+        self.add_item(self.post_image)
 
     async def on_submit(self, interaction: discord.Interaction):
         db_config = getattr(self.bot.db, "db", self.bot.db)["anon_config_sys"]
@@ -77,6 +84,7 @@ class AnonCreateModal(discord.ui.Modal, title="tạo bài đăng ẩn danh"):
         # 3. Đúc Embed công khai và nã đạn
         title_val = self.post_title.value.strip() or "Bài viết ẩn danh"
         content_val = self.post_content.value.strip()
+        image_val = self.post_image.value.strip()
         
         embed_post = discord.Embed(
             title=title_val,
@@ -85,6 +93,9 @@ class AnonCreateModal(discord.ui.Modal, title="tạo bài đăng ẩn danh"):
             timestamp=discord.utils.utcnow()
         )
         embed_post.set_footer(text=f"Bài viết ẩn danh #{stt}")
+
+        if image_val:
+            embed_post.set_image(url=image_val)
 
         try:
             msg = await post_channel.send(embed=embed_post)
@@ -99,11 +110,14 @@ class AnonCreateModal(discord.ui.Modal, title="tạo bài đăng ẩn danh"):
             "message_id": str(msg.id),
             "title": title_val,
             "content": content_val,
+            "image": image_val,
             "timestamp": int(time.time())
         })
 
         # 5. Đóng gói file Log và gửi đi
         txt_content = f"Tiêu đề: {title_val}\n\nNội dung:\n{content_val}"
+        if image_val:
+            txt_content += f"\n\nLink đính kèm: {image_val}"
         file_obj = discord.File(io.BytesIO(txt_content.encode("utf-8")), filename=f"post_{stt}.txt")
         log_msg = f"[TẠO MỚI] tác giả: {interaction.user.mention} (`{interaction.user.id}`) | stt bài viết: #{stt} | tổng số bài đã đăng: {stt}"
         
