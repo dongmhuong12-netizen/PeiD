@@ -21,7 +21,7 @@ class DevPrivateSpace(commands.Cog):
     def get_unauthorized_embed(self) -> discord.Embed:
         embed = discord.Embed(
             title=f"{Emojis.BUOMA} không được rồi, xin lỗi cậu nhe..",
-            description="lệnh đặc cách kiến tạo phân khu này chỉ có người sáng lập mới có thể sử dụng.",
+            description="lệnh kiến tạo phân khu này chỉ có người sáng lập và user đặc cách mới có thể sử dụng.",
             color=0xe6e2dd
         )
         return embed
@@ -102,7 +102,7 @@ async def space_create_cmd(interaction: discord.Interaction, user_or_id: str, ro
                 await target_member.add_roles(role_access)
                 role_log = f"\n• **Huy hiệu được cấp:** {role_access.mention}"
             except discord.Forbidden:
-                role_log = f"\n• **Huy hiệu:** ⚠️ Thất bại (Bot thiếu quyền cấp {role_access.mention})"
+                role_log = f"\n• **Huy hiệu:** ? Thất bại (Bot thiếu quyền cấp {role_access.mention})"
 
         # Xây dựng thực thể
         category_name = f"danh mục của {target_member.name}"
@@ -122,8 +122,8 @@ async def space_create_cmd(interaction: discord.Interaction, user_or_id: str, ro
 
         embed_success = discord.Embed(
             title=f"{Emojis.BUOMA} Kiến tạo phân khu thành công!",
-            description=f"Đã dựng xong phòng tự quản và cấy dữ liệu lên Sổ Nam Tào.\n\n"
-                        f"• **Chủ nhà:** {target_member.mention}\n"
+            description=f"Đã dựng xong phòng tự quản và lưu vào dữ liệu.\n\n"
+                        f"• **Owner:** {target_member.mention}\n"
                         f"• **Mã danh mục:** `{new_category.id}`" + role_log,
             color=0xe6e2dd
         )
@@ -138,8 +138,8 @@ async def space_create_cmd(interaction: discord.Interaction, user_or_id: str, ro
 # =========================================================================
 # 2. LỆNH DELETE: Xóa sổ kênh ngầm, lột Role và gỡ bỏ dữ liệu
 # =========================================================================
-@app_commands.command(name="space_delete", description="[PREMIUM] Trục xuất danh mục, dọn dẹp kênh và thu hồi chức danh Chủ nhà")
-@app_commands.describe(category_id="Nhập đúng mã ID của Danh mục sếp muốn xóa sổ")
+@app_commands.command(name="space_delete", description="[PREMIUM] Trục xuất danh mục, dọn dẹp kênh và thu hồi chức danh Owner")
+@app_commands.describe(category_id="Nhập đúng mã ID của Danh mục muốn xóa")
 async def space_delete_cmd(interaction: discord.Interaction, category_id: str):
     cog = interaction.client.get_cog("DevPrivateSpace")
     if not cog:
@@ -155,8 +155,8 @@ async def space_delete_cmd(interaction: discord.Interaction, category_id: str):
     target_space = await cog.db_spaces.find_one({"category_id": clean_cat_id})
     if not target_space:
         return await interaction.followup.send(embed=discord.Embed(
-            title=f"{Emojis.HOICHAM} Cảnh báo xâm nhập chéo",
-            description="ID Danh mục này không tồn tại trong Sổ Nam Tào của peiD. Hệ thống từ chối xóa để bảo vệ dữ liệu Server.",
+            title=f"{Emojis.HOICHAM} Cảnh báo xâm nhập",
+            description="ID Danh mục này không tồn tại trong dữ liệu của **yiyi**. Hệ thống từ chối xóa để bảo vệ dữ liệu Server.",
             color=0xe6e2dd
         ))
 
@@ -179,7 +179,7 @@ async def space_delete_cmd(interaction: discord.Interaction, category_id: str):
                 await target_member.remove_roles(target_role)
                 log_actions.append(f"Đã thu hồi chức danh {target_role.mention} từ <@{owner_id}>")
             except Exception as e:
-                log_actions.append(f"⚠️ Không thể thu hồi Role (Lỗi: {str(e)})")
+                log_actions.append(f"{Emojis.HOICHAM} Không thể thu hồi Role (Lỗi: {str(e)})")
 
     # 3. Trục xuất thực thể trên Server vật lý
     cat_obj = interaction.guild.get_channel(int(clean_cat_id))
@@ -197,11 +197,11 @@ async def space_delete_cmd(interaction: discord.Interaction, category_id: str):
         
         try:
             await cat_obj.delete()
-            log_actions.append(f"Đã dọn sạch 4 kênh và nổ tung Danh mục `{clean_cat_id}`")
+            log_actions.append(f"Đã dọn sạch 4 kênh và danh mục `{clean_cat_id}`")
         except Exception as e:
-            log_actions.append(f"⚠️ Lỗi xóa thực thể danh mục: {str(e)}")
+            log_actions.append(f"{Emojis.HOICHAM} Lỗi xóa danh mục: {str(e)}")
     else:
-        log_actions.append("Thực thể danh mục không tồn tại trên Server (Có thể đã bị xóa bằng tay từ trước).")
+        log_actions.append("Danh mục không tồn tại trên Server (Có thể đã bị xóa thủ công từ trước).")
 
     # 4. Gỡ bỏ khỏi Sổ Nam Tào
     await cog.db_spaces.delete_one({"category_id": clean_cat_id})
@@ -209,7 +209,7 @@ async def space_delete_cmd(interaction: discord.Interaction, category_id: str):
 
     embed_done = discord.Embed(
         title=f"{Emojis.BUOMA} Xóa sổ phân khu thành công!",
-        description="**Nhật ký chiến dịch dọn dẹp:**\n- " + "\n- ".join(log_actions),
+        description="**Nhật ký dọn dẹp:**\n- " + "\n- ".join(log_actions),
         color=0xe6e2dd
     )
     await interaction.followup.send(embed=embed_done)
@@ -217,7 +217,7 @@ async def space_delete_cmd(interaction: discord.Interaction, category_id: str):
 # =========================================================================
 # 3. LỆNH LIST: Soi chiếu bảng điều khiển hệ thống
 # =========================================================================
-@app_commands.command(name="space_list", description="[PREMIUM] Soi chiếu bảng Sổ Nam Tào chứa các danh mục phân khu tự quản")
+@app_commands.command(name="space_list", description="[PREMIUM] Danh sách chứa các danh mục phân khu tự quản")
 async def space_list_cmd(interaction: discord.Interaction):
     cog = interaction.client.get_cog("DevPrivateSpace")
     if not cog:
