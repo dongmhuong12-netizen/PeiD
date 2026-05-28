@@ -45,7 +45,7 @@ class AnonCreateModal(discord.ui.Modal, title="tạo bài đăng ẩn danh"):
         )
         self.post_image = discord.ui.TextInput(
             label="link ảnh/video (tùy chọn)",
-            placeholder="dán link ảnh cdn từ cỗ máy /p image vào đây...",
+            placeholder="dán link ảnh cdn vào đây...",
             required=False,
             style=discord.TextStyle.short
         )
