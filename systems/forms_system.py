@@ -67,8 +67,8 @@ class YiyiFormModal(discord.ui.Modal):
         return result
 
     async def on_submit(self, interaction: discord.Interaction):
-        # Mạch gửi đơn về kênh log khi user nhấn Submit
-        channel = interaction.guild.get_channel(int(self.log_channel_id))
+        # Mạch gửi đơn về kênh log khi user nhấn Submit (Bổ sung an toàn nếu log_channel_id bị None)
+        channel = interaction.guild.get_channel(int(self.log_channel_id)) if self.log_channel_id else None
         if not channel:
             return await interaction.response.send_message(f"{Emojis.HOICHAM} **yiyi** không tìm thấy kênh gửi log, xin hãy kiểm tra lại cấu hình setup.", ephemeral=True)
 
@@ -99,8 +99,9 @@ class YiyiFormModal(discord.ui.Modal):
             text_input = self.inputs[slot]
             
             # Khôi phục nhãn gốc mang đi dịch biến emoji, đồng thời dịch biến nội dung nhập của user
-            display_label = self._parse_emojis(self.original_labels[slot])
-            display_value = self._parse_emojis(text_input.value)
+            # Bổ sung or "\u200b" để chặn tuyệt đối lỗi 400 Bad Request từ Discord nếu giá trị rỗng (đối với field không bắt buộc)
+            display_label = self._parse_emojis(self.original_labels[slot]) or "\u200b"
+            display_value = self._parse_emojis(text_input.value) or "\u200b"
             
             embed_log.add_field(name=display_label, value=display_value, inline=False)
         
@@ -110,6 +111,7 @@ class YiyiFormModal(discord.ui.Modal):
 
         await channel.send(embed=embed_log)
         await interaction.response.send_message(f"{Emojis.BUOMA} đơn đã được gửi đi thành công.", ephemeral=True)
+
 
 async def handle_forms_interaction(interaction: discord.Interaction):
     """
