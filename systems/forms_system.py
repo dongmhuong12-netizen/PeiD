@@ -161,7 +161,10 @@ async def update_form_field(guild_id: int, embed_name: str, slot: int, label: st
 class YiyiFormModal(discord.ui.Modal):
     """Lớp giao diện bảng nhập liệu hiện lên khi người dùng bấm nút."""
     def __init__(self, title, fields_data, log_channel_id, show_thumbnail):
-        super().__init__(title=title)
+        # [ANTI-CRASH] Gọt tiêu đề xuống tối đa 45 ký tự theo luật Discord
+        safe_title = title[:45] if title else "Biểu mẫu Yiyi"
+        super().__init__(title=safe_title)
+        
         self.log_channel_id = log_channel_id
         self.show_thumbnail = show_thumbnail
         self.inputs = {}
@@ -171,11 +174,16 @@ class YiyiFormModal(discord.ui.Modal):
 
         for slot in sorted_slots:
             data = fields_data[slot]
+            
+            # [ANTI-CRASH] Gọt nhãn và placeholder để lách giới hạn API Discord
+            safe_label = data['label'][:45]
+            safe_placeholder = data['placeholder'][:100] if data.get('placeholder') else "Nhập nội dung..."
+            
             text_input = discord.ui.TextInput(
-                label=data['label'],
-                placeholder=data['placeholder'],
+                label=safe_label,
+                placeholder=safe_placeholder,
                 required=data['required'],
-                style=discord.TextStyle.paragraph if len(data['label']) > 15 else discord.TextStyle.short
+                style=discord.TextStyle.paragraph if len(safe_label) > 15 else discord.TextStyle.short
             )
             self.add_item(text_input)
             self.inputs[slot] = text_input
@@ -205,7 +213,7 @@ class YiyiFormModal(discord.ui.Modal):
             text_input = self.inputs[slot]
             embed_log.add_field(name=text_input.label, value=text_input.value, inline=False)
         
-        # Hiện Avatar nếu sếp bật show_thumbnail
+        # Hiện Avatar làm thumbnail ở góc trên bên phải theo chuẩn kiến trúc
         if self.show_thumbnail:
             embed_log.set_thumbnail(url=interaction.user.display_avatar.url)
 
