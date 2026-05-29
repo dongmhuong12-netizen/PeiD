@@ -108,13 +108,10 @@ async def update_form_base(guild_id: int, embed_name: str, title: str, log_id: s
             upsert=True
         )
         
-        # [ĐỒNG BỘ RAM NÓNG LẬP TỨC] Chống lệch mạch hiển thị
-        if gid not in FORMS_CACHE:
-            FORMS_CACHE[gid] = {}
-        if name not in FORMS_CACHE[gid]:
-            FORMS_CACHE[gid][name] = {"guild_id": gid, "embed_name": name, "fields": {}}
+        # [FIX BUG] HỦY CACHE CŨ: Ép hệ thống lặn xuống DB tải lại bản Full chứa Field!
+        if gid in FORMS_CACHE and name in FORMS_CACHE[gid]:
+            del FORMS_CACHE[gid][name]
             
-        FORMS_CACHE[gid][name].update(payload)
         return True
     return False
 
@@ -139,15 +136,31 @@ async def update_form_field(guild_id: int, embed_name: str, slot: int, label: st
             upsert=True
         )
         
-        # [ĐỒNG BỘ RAM NÓNG LẬP TỨC] Nạp đè chính xác ô nhập liệu vào bộ nhớ đệm
-        if gid not in FORMS_CACHE:
-            FORMS_CACHE[gid] = {}
-        if name not in FORMS_CACHE[gid]:
-            FORMS_CACHE[gid][name] = {"guild_id": gid, "embed_name": name, "fields": {}}
+        # [FIX BUG] HỦY CACHE CŨ: Ép hệ thống lặn xuống DB tải lại bản Full chứa Field!
+        if gid in FORMS_CACHE and name in FORMS_CACHE[gid]:
+            del FORMS_CACHE[gid][name]
             
-        if "fields" not in FORMS_CACHE[gid][name]:
-            FORMS_CACHE[gid][name]["fields"] = {}
+        return True
+    return False
+
+async def delete_form_config(guild_id: int, embed_name: str):
+    """
+    [CỖ MÁY THANH TRỪNG - AUTO PURGE]
+    Xóa vĩnh viễn cấu hình Form khỏi hệ thống khi Embed bị xóa hoặc setup sai.
+    """
+    if not embed_name: return False
+    
+    gid = str(guild_id)
+    name = embed_name.lower().strip()
+    col = _get_forms_col()
+    
+    if col is not None:
+        # Xóa không thương tiếc dưới đáy MongoDB
+        await col.delete_one({"guild_id": gid, "embed_name": name})
+        
+        # Hủy luôn tàn tích trên RAM Cache (Nếu có)
+        if gid in FORMS_CACHE and name in FORMS_CACHE[gid]:
+            del FORMS_CACHE[gid][name]
             
-        FORMS_CACHE[gid][name]["fields"][str(slot)] = field_data
         return True
     return False
