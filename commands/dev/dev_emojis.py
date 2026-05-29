@@ -1,4 +1,3 @@
-#commands/dev/dev_emojis.py
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -150,11 +149,15 @@ class DevEmojis(commands.Cog):
         dynamic_list = []
         dynamic_keys = set()  # [MẠCH NÂNG CẤP RANH GIỚI] Lưu cache tên để lọc loại trừ triệt để
         async for item in self.db_col.find({}):
-            v_id = item["vault_emoji_id"]
-            o_name = item["original_name"]
-            fmt = f"<a:{o_name}:{v_id}>" if item["is_animated"] else f"<:{o_name}:{v_id}>"
-            dynamic_list.append(f"• `{item['custom_name']}` ──> {fmt}")
-            dynamic_keys.add(item["custom_name"])
+            # [VÁ LỖI AN TOÀN] Dùng .get() để né đòn KeyError nếu DB có bản ghi bị lỗi
+            v_id = item.get("vault_emoji_id")
+            o_name = item.get("original_name")
+            if not v_id or not o_name: 
+                continue
+                
+            fmt = f"<a:{o_name}:{v_id}>" if item.get("is_animated") else f"<:{o_name}:{v_id}>"
+            dynamic_list.append(f"• `{item.get('custom_name')}` ──> {fmt}")
+            dynamic_keys.add(item.get("custom_name"))
 
         # 1. Thuật toán Phản Chiếu (Reflection): Quét sạch và bóc tách toàn bộ biến cứng trong file vật lý utils/emojis.py
         hardcoded_list = []
@@ -170,15 +173,20 @@ class DevEmojis(commands.Cog):
             color=0xe6e2dd
         )
         
-        # Phòng vệ giới hạn ký tự (Giới hạn 1024 của field Discord): Cắt chuỗi thông minh nếu số lượng biến quá lớn
-        h_text = "\n".join(hardcoded_list) if hardcoded_list else "Trống."
-        if len(h_text) > 1024: 
-            h_text = h_text[:1000] + "\n...và một số biến hệ thống khác"
-        embed_dashboard.add_field(name="[ CORE SYSTEM EMOJIS - HARDCODED IN FILE ]", value=h_text, inline=False)
+        # [THUẬT TOÁN ĐÓNG GÓI AN TOÀN] Cân đo đong đếm, tuyệt đối không chém đứt nửa chừng mã emoji
+        def build_safe_field(items, empty_msg, max_len=950):
+            res = ""
+            for idx, item in enumerate(items):
+                if len(res) + len(item) + 1 > max_len:
+                    res += f"\n*...và {len(items) - idx} biến khác đang ẩn*"
+                    break
+                res += item + "\n"
+            return res.strip() if res else empty_msg
 
-        d_text = "\n".join(dynamic_list) if dynamic_list else "Chưa có biến động nào được cấy vào database."
-        if len(d_text) > 1024: 
-            d_text = d_text[:1000] + "\n...và một số biến động khác"
+        h_text = build_safe_field(hardcoded_list, "Trống.")
+        d_text = build_safe_field(dynamic_list, "Chưa có biến động nào được cấy vào database.")
+
+        embed_dashboard.add_field(name="[ CORE SYSTEM EMOJIS - HARDCODED IN FILE ]", value=h_text, inline=False)
         embed_dashboard.add_field(name="[ EXTENDED DEV EMOJIS - DYNAMIC REGISTRY ]", value=d_text, inline=False)
 
         embed_dashboard.set_footer(text="Hệ thống quản lý tài nguyên tối cao của yiyi")
@@ -257,13 +265,21 @@ async def load_dynamic_emojis(bot):
     """Hàm lõi đồng bộ hóa: Hút toàn bộ biến động từ MongoDB và nạp đè vào RAM khi khởi động bot"""
     db_col = getattr(bot.db, "db", bot.db)["cloud_emojis_sys"]
     async for item in db_col.find({}):
-        var_name = item["custom_name"]
-        v_id = item["vault_emoji_id"]
-        o_name = item["original_name"]
-        emoji_string = f"<a:{o_name}:{v_id}>" if item["is_animated"] else f"<:{o_name}:{v_id}>"
+        # [VÁ LỖI AN TOÀN] Dùng .get() để cỗ máy không sập nếu rỗng data
+        var_name = item.get("custom_name")
+        v_id = item.get("vault_emoji_id")
+        o_name = item.get("original_name")
+        
+        if not var_name or not v_id or not o_name: 
+            continue
+            
+        emoji_string = f"<a:{o_name}:{v_id}>" if item.get("is_animated") else f"<:{o_name}:{v_id}>"
         setattr(Emojis, var_name, emoji_string)
     print(f"[LOADED] Success: Đã đồng bộ toàn bộ biến emoji động hệ Premium vào RAM bộ nhớ!", flush=True)
 
 async def setup(bot: commands.Bot):
+    # [VÁ LỖI CẤP CAO] Bơm đạn lên RAM trước khi nạp Cog để hệ thống không bị "quên" biến
+    await load_dynamic_emojis(bot)
+    
     await bot.add_cog(DevEmojis(bot))
     print("[LOAD] Success: commands.dev.dev_emojis (Premium Dev Edition Loaded)", flush=True)
