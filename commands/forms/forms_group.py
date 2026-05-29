@@ -1,4 +1,3 @@
-#Commands/forms/forms_group.py
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -7,7 +6,7 @@ import traceback
 
 # Nạp công cụ cập nhật nút bấm và trí nhớ Form mới
 from core.embed_storage import atomic_update_button, load_embed, get_all_embed_names
-from core.forms_storage import update_form_base, update_form_field, get_all_forms # [GIA CỐ]
+from core.forms_storage import update_form_base, update_form_field, get_all_forms, delete_form_config # [GIA CỐ + AUTO PURGE]
 from utils.emojis import Emojis 
 
 # =============================
@@ -194,13 +193,13 @@ class FormsGroup(app_commands.Group):
             await interaction.followup.send(f"{Emojis.HOICHAM} Lỗi liên kết nút: `{e}`")
 
     # =========================
-    # LỆNH 4: SETTING (REAL-TIME MONITORING)
+    # LỆNH 4: SETTING (REAL-TIME MONITORING + AUTO PURGE)
     # =========================
     @app_commands.command(name="setting", description="Xem danh sách cấu hình các Form thực tế")
     async def forms_setting(self, interaction: discord.Interaction):
         """
-        [REAL-TIME MONITORING] 
-        Quét thực tế trạng thái cấu hình của toàn bộ Form.
+        [REAL-TIME MONITORING & GARBAGE COLLECTION]
+        Quét thực tế trạng thái cấu hình của toàn bộ Form, tự dọn dẹp form mồ côi và in chi tiết.
         """
         await interaction.response.defer(ephemeral=True)
         try:
@@ -216,29 +215,56 @@ class FormsGroup(app_commands.Group):
                 color=0xe6e2dd
             )
 
+            valid_forms_count = 0
+
             for form in all_forms:
                 emb_name = form.get("embed_name")
-                # Mạch Verify thực trạng thời gian thực - Không báo lỗi ảo
+                
+                # [MẠCH KIỂM DUYỆT & THANH TRỪNG]
                 embed_exists = await load_embed(interaction.guild.id, emb_name) if emb_name else False
-                display_embed = f"`{emb_name}`" if embed_exists else "`none`"
+                
+                if not embed_exists:
+                    if emb_name:
+                        await delete_form_config(interaction.guild.id, emb_name)
+                    continue # Bỏ qua, không in form rác lên Dashboard
+                
+                valid_forms_count += 1
                 
                 log_id = form.get("log_channel_id")
                 display_log = f"<#{log_id}>" if log_id and str(log_id) != "none" else "`none`"
                 
-                fields_count = len(form.get("fields", {}))
+                fields_data = form.get("fields", {})
+                fields_count = len(fields_data)
+                
+                # Tạo nội dung cơ sở
+                info_text = (
+                    f"  └ embed: `{emb_name}`\n"
+                    f"  └ kênh trả đơn: {display_log}\n"
+                    f"  └ số ô nhập liệu: `{fields_count}/5`"
+                )
+                
+                # [DEEP SCAN] Bung lụa thông tin chi tiết từng Field
+                if fields_count > 0:
+                    info_text += "\n  └ **chi tiết các ô:**"
+                    for slot in sorted(fields_data.keys(), key=lambda x: int(x)):
+                        f_data = fields_data[slot]
+                        req_text = "bắt buộc" if f_data.get('required') else "tuỳ chọn"
+                        info_text += f"\n       *{slot}. {f_data.get('label')}* ({req_text})"
+                        info_text += f"\n       > {f_data.get('placeholder')}"
                 
                 embed_dashboard.add_field(
-                    name=f"• form: **{form.get('form_title') or 'none'}**",
-                    value=(
-                        f"  └ embed: {display_embed}\n"
-                        f"  └ kênh trả đơn: {display_log}\n"
-                        f"  └ số ô nhập liệu: `{fields_count}/5`"
-                    ),
+                    name=f"• form: **{form.get('form_title') or 'đơn đăng ký'}**",
+                    value=info_text,
                     inline=False
                 )
 
+            # Nếu toàn bộ form trong DB đều là rác và đã bị dọn sạch
+            if valid_forms_count == 0:
+                return await interaction.followup.send(f"{Emojis.HOICHAM} các form cũ đã mất liên kết với embed và được dọn dẹp tự động. Hiện tại chưa có form nào hợp lệ.")
+
             embed_dashboard.set_footer(text="yiyi iu cậu • báo cáo hạ tầng form")
             await interaction.followup.send(embed=embed_dashboard)
+            
         except Exception as e:
             print(f"[LỖI FORM SETTING] {traceback.format_exc()}")
             await interaction.followup.send(f"{Emojis.HOICHAM} Không thể bốc dữ liệu Dashboard: `{e}`")
