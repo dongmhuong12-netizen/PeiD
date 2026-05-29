@@ -13,8 +13,8 @@ class ButtonListener(commands.Cog):
         [PURE OMNI-ROUTER] Trạm trung chuyển tín hiệu thuần túy.
         Nhiệm vụ: Nhận tín hiệu 'yiyi:' và điều hướng đến các hệ thống chuyên biệt.
         """
-        # 1. Lọc tương tác: Cho phép xử lý cả Nút bấm/Menu VÀ Submit Form (Modal)
-        if interaction.type not in (discord.InteractionType.component, discord.InteractionType.modal_submit):
+        # 1. Lọc tương tác: Chỉ xử lý Nút bấm/Menu có tiền tố yiyi:
+        if interaction.type != discord.InteractionType.component:
             return
             
         custom_id = interaction.data.get("custom_id", "")
