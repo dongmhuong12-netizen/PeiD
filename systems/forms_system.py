@@ -4,8 +4,6 @@ from utils.emojis import Emojis
 
 # [TÁCH BẠCH KIẾN TRÚC] Import thẳng hàm lấy dữ liệu từ kho Storage
 from core.forms_storage import get_form_config
-# [GỌI LÕI BIẾN SỐ] Import cỗ máy dịch mã trung tâm của hệ thống
-from core.variable_engine import apply_variables
 
 # ==========================================
 # INTERACTION LOGIC (GIA CỐ BỘ LỌC EMOJI)
@@ -59,35 +57,22 @@ class YiyiFormModal(discord.ui.Modal):
             self.add_item(text_input)
             self.inputs[slot] = text_input
 
-    def _parse_emojis(self, text: str, interaction: discord.Interaction) -> str:
+    def _parse_emojis(self, text: str) -> str:
         """Cỗ máy dịch mã và biến số sang dạng emoji hiển thị thực tế của peiD"""
         if not text: return ""
-        
-        # 1. Đẩy qua lõi engine để dịch toàn bộ biến ({user}, {server}...) (Truyền đúng chuẩn guild, user để chống Crash)
-        result = apply_variables(text, interaction.guild, interaction.user)
-        
-        # 2. Xử lý bộ lọc Emoji thông minh (Giữ nguyên 100% logic của sếp)
+        result = text
         for var_name, var_value in Emojis.__dict__.items():
             if not var_name.startswith("__") and isinstance(var_value, str):
                 # [BỘ LỌC THÔNG MINH] Không phân biệt chữ hoa chữ thường
                 pattern = re.compile(re.escape(f"{{{var_name}}}"), re.IGNORECASE)
                 result = pattern.sub(var_value, result)
-                
         return result
 
     async def on_submit(self, interaction: discord.Interaction):
-        # [CHỐNG TIMEOUT 3 GIÂY] Cắn thuốc defer() ngay lập tức để Discord không báo Interaction Failed
-        await interaction.response.defer(ephemeral=True)
-
-        # Mạch gửi đơn về kênh log khi user nhấn Submit (Bọc Try-Except chặn lỗi ID kênh)
-        try:
-            channel_id = int(self.log_channel_id) if self.log_channel_id else 0
-            channel = interaction.guild.get_channel(channel_id)
-        except (ValueError, TypeError):
-            channel = None
-            
+        # Mạch gửi đơn về kênh log khi user nhấn Submit
+        channel = interaction.guild.get_channel(int(self.log_channel_id))
         if not channel:
-            return await interaction.followup.send(f"{Emojis.HOICHAM} **yiyi** không tìm thấy kênh gửi log, xin hãy kiểm tra lại cấu hình setup.", ephemeral=True)
+            return await interaction.response.send_message(f"{Emojis.HOICHAM} **yiyi** không tìm thấy kênh gửi log, xin hãy kiểm tra lại cấu hình setup.", ephemeral=True)
 
         # 3. PHÂN LUỒNG QUYẾT ĐỊNH TIÊU ĐỀ EMBED TRẢ VỀ LOG
         if not self.original_title:
@@ -95,8 +80,7 @@ class YiyiFormModal(discord.ui.Modal):
             display_title = f"{Emojis.BUOMA} đơn đăng ký mới"
         else:
             # Nếu sếp ĐÃ cấu hình tiêu đề -> Dùng 100% chữ sếp thiết lập & dịch biến (bỏ hoàn toàn chữ mặc định)
-            raw_title = self._parse_emojis(self.original_title, interaction)
-            display_title = raw_title.strip()[:256] or f"{Emojis.BUOMA} đơn đăng ký mới"
+            display_title = self._parse_emojis(self.original_title)
 
         embed_log = discord.Embed(
             title=display_title,
@@ -117,9 +101,40 @@ class YiyiFormModal(discord.ui.Modal):
             text_input = self.inputs[slot]
             
             # Khôi phục nhãn gốc mang đi dịch biến emoji, đồng thời dịch biến nội dung nhập của user
-            raw_label = self._parse_emojis(self.original_labels[slot], interaction)
-            raw_value = self._parse_emojis(text_input.value, interaction)
+            display_label = self._parse_emojis(self.original_labels[slot])
+            display_value = self._parse_emojis(text_input.value)
             
-            # Ép limit phần cứng Discord và chống bypass khoảng trắng
-            display_label = raw_label.strip()[:256] or "\u200b"
-            display_value = raw_value
+            embed_log.add_field(name=display_label, value=display_value, inline=False)
+        
+        # Hiện Avatar làm thumbnail ở góc trên bên phải theo chuẩn kiến trúc đồ họa
+        if self.show_thumbnail:
+            embed_log.set_thumbnail(url=interaction.user.display_avatar.url)
+
+        await channel.send(embed=embed_log)
+        await interaction.response.send_message(f"{Emojis.BUOMA} đơn đã được gửi đi thành công.", ephemeral=True)
+
+async def handle_forms_interaction(interaction: discord.Interaction):
+    """
+    [ENTRY POINT] 
+    Hàm điều phối tiếp nhận tương tác từ button_listener.py để hiển thị Modal Form.
+    """
+    custom_id = interaction.data.get("custom_id", "")
+    parts = custom_id.split(":")
+    if len(parts) < 4: return
+
+    embed_name = parts[3]
+    
+    # Hút cấu hình Form siêu tốc từ core/forms_storage
+    config = await get_form_config(interaction.guild.id, embed_name)
+
+    if not config or not config.get("fields"):
+        return await interaction.response.send_message(f"{Emojis.HOICHAM} form này chưa được thiết lập nội dung field.", ephemeral=True)
+
+    # Hiện Modal truyền giá trị title rỗng nếu dữ liệu trống để kích hoạt mạch mặc định
+    modal = YiyiFormModal(
+        title=config.get("form_title", ""),
+        fields_data=config.get("fields", {}),
+        log_channel_id=config.get("log_channel_id"),
+        show_thumbnail=config.get("show_thumbnail", True)
+    )
+    await interaction.response.send_modal(modal)
