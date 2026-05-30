@@ -57,7 +57,7 @@ async def ar_trigger_autocomplete(interaction: discord.Interaction, current: str
         return []
 
 # ==========================================
-# GIAO DIỆN MODAL: CHỈNH SỬA VĂN BẢN
+# GIAO DIỆN MODAL: CHỈNH SỬA VĂN BẢN & TỪ KHÓA
 # ==========================================
 class TextEditModal(discord.ui.Modal, title='꒰ა chỉnh sửa nội dung văn bản ໒꒱'):
     content_input = discord.ui.TextInput(
@@ -84,6 +84,59 @@ class TextEditModal(discord.ui.Modal, title='꒰ა chỉnh sửa nội dung vă
             embed = discord.Embed(
                 title=f"{Emojis.BUOMA} đã cập nhật văn bản",
                 description=f"văn bản `{self.text_name}` đã được chỉnh sửa và niêm phong thành công.",
+                color=0xe6e2dd
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"{Emojis.HOICHAM} lỗi ghi dữ liệu: `{str(e)}`", ephemeral=True)
+
+
+class TriggerEditModal(discord.ui.Modal, title='꒰ა chỉnh sửa từ khóa ໒꒱'):
+    trigger_input = discord.ui.TextInput(
+        label='Từ khóa mới',
+        style=discord.TextStyle.short,
+        required=True,
+        max_length=100
+    )
+
+    def __init__(self, cog, old_trigger: str):
+        super().__init__()
+        self.cog = cog
+        self.old_trigger = old_trigger
+        self.trigger_input.default = old_trigger
+
+    async def on_submit(self, interaction: discord.Interaction):
+        new_trigger = self.trigger_input.value.strip().lower()
+        
+        if new_trigger == self.old_trigger:
+            return await interaction.response.send_message(f"{Emojis.BUOMA} cậu chưa thay đổi gì cả, từ khóa vẫn được giữ nguyên nhe.", ephemeral=True)
+
+        try:
+            # Kiểm tra trùng lặp để bảo vệ mạch liên kết
+            existing = await self.cog.db_triggers.find_one({"guild_id": interaction.guild_id, "trigger": new_trigger})
+            if existing:
+                embed_err = discord.Embed(
+                    title=f"{Emojis.HOICHAM} từ khóa đã tồn tại",
+                    description=f"từ khóa `{new_trigger}` đã có trong kho rồi, cậu hãy chọn tên khác hoặc dùng lệnh setup để nối thêm nhé.",
+                    color=0xe6e2dd
+                )
+                return await interaction.response.send_message(embed=embed_err, ephemeral=True)
+
+            # Cập nhật Database
+            await self.cog.db_triggers.update_one(
+                {"guild_id": interaction.guild_id, "trigger": self.old_trigger},
+                {"$set": {"trigger": new_trigger}}
+            )
+
+            # Cập nhật nóng vào RAM Cache
+            guild_cache = self.cog.cache.get(interaction.guild_id, {})
+            if self.old_trigger in guild_cache:
+                responses = guild_cache.pop(self.old_trigger)
+                guild_cache[new_trigger] = responses
+
+            embed = discord.Embed(
+                title=f"{Emojis.BUOMA} đã cập nhật từ khóa",
+                description=f"từ khóa `{self.old_trigger}` đã được đổi tên thành `{new_trigger}` thành công.",
                 color=0xe6e2dd
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
@@ -221,22 +274,57 @@ class AutoResponder(commands.Cog):
         except Exception as e:
             await interaction.followup.send(f"{Emojis.HOICHAM} lỗi ghi dữ liệu: `{str(e)}`", ephemeral=True)
 
-    @ar_group.command(name="edit", description="Chỉnh sửa nội dung văn bản qua bảng biểu mẫu (Modal)")
-    @app_commands.describe(name="Tên của văn bản cần chỉnh sửa")
-    @app_commands.autocomplete(name=ar_text_autocomplete)
-    async def ar_edit(self, interaction: discord.Interaction, name: str):
+    @ar_group.command(name="edit", description="Chỉnh sửa nội dung văn bản hoặc đổi tên từ khóa (Mở Modal)")
+    @app_commands.describe(text_name="Tên của văn bản cần chỉnh sửa", trigger_name="Từ khóa nhận diện cần đổi tên")
+    @app_commands.autocomplete(text_name=ar_text_autocomplete, trigger_name=ar_trigger_autocomplete)
+    async def ar_edit(self, interaction: discord.Interaction, text_name: Optional[str] = None, trigger_name: Optional[str] = None):
+        # Bộ lọc chống xung đột thao tác
+        if text_name and trigger_name:
+            embed = discord.Embed(
+                title=f"{Emojis.HOICHAM} quá nhiều lựa chọn",
+                description="cậu chỉ được phép chọn sửa **Văn bản** HOẶC sửa **Từ khóa** trong cùng 1 lần thôi nhe.",
+                color=0xe6e2dd
+            )
+            return await interaction.response.send_message(embed=embed, ephemeral=True)
+        
+        if not text_name and not trigger_name:
+            embed = discord.Embed(
+                title=f"{Emojis.HOICHAM} thiếu mảnh ghép",
+                description="cậu phải chọn một `text_name` hoặc một `trigger_name` để chỉnh sửa chứ.",
+                color=0xe6e2dd
+            )
+            return await interaction.response.send_message(embed=embed, ephemeral=True)
+
         try:
-            doc = await self.db_texts.find_one({"guild_id": interaction.guild_id, "name": name})
-            if not doc:
-                embed_err = discord.Embed(
-                    title=f"{Emojis.HOICHAM} không tìm thấy dữ liệu",
-                    description=f"văn bản `{name}` không tồn tại trong kho.",
-                    color=0xe6e2dd
-                )
-                return await interaction.response.send_message(embed=embed_err, ephemeral=True)
-            
-            modal = TextEditModal(cog=self, text_name=name, current_content=doc.get("content", ""))
-            await interaction.response.send_modal(modal)
+            # NHÁNH 1: MỞ FORM SỬA VĂN BẢN
+            if text_name:
+                doc = await self.db_texts.find_one({"guild_id": interaction.guild_id, "name": text_name})
+                if not doc:
+                    embed_err = discord.Embed(
+                        title=f"{Emojis.HOICHAM} không tìm thấy dữ liệu",
+                        description=f"văn bản `{text_name}` không tồn tại trong kho.",
+                        color=0xe6e2dd
+                    )
+                    return await interaction.response.send_message(embed=embed_err, ephemeral=True)
+                
+                modal = TextEditModal(cog=self, text_name=text_name, current_content=doc.get("content", ""))
+                return await interaction.response.send_modal(modal)
+
+            # NHÁNH 2: MỞ FORM SỬA TỪ KHÓA
+            if trigger_name:
+                trig_clean = trigger_name.strip().lower()
+                doc = await self.db_triggers.find_one({"guild_id": interaction.guild_id, "trigger": trig_clean})
+                if not doc:
+                    embed_err = discord.Embed(
+                        title=f"{Emojis.HOICHAM} không tìm thấy dữ liệu",
+                        description=f"từ khóa `{trig_clean}` không tồn tại trong hệ thống.",
+                        color=0xe6e2dd
+                    )
+                    return await interaction.response.send_message(embed=embed_err, ephemeral=True)
+
+                modal = TriggerEditModal(cog=self, old_trigger=trig_clean)
+                return await interaction.response.send_modal(modal)
+
         except Exception as e:
             await interaction.response.send_message(f"{Emojis.HOICHAM} lỗi truy xuất dữ liệu: `{str(e)}`", ephemeral=True)
 
