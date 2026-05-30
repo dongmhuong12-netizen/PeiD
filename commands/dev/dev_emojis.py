@@ -12,8 +12,38 @@ VAULT_GUILD_ID = int(os.getenv("VAULT_GUILD_ID", 1439489572936613951))  # <--- S
 
 # =========================================================================
 # [NÂNG CẤP INDUSTRIAL] CỖ MÁY PHÂN TRANG (PAGINATION) QUẢN TRỊ
-# Giải quyết triệt để rào cản 1024 ký tự và cho phép duyệt toàn bộ tài nguyên
+# Kèm mạch Modal tìm trang thông minh và bộ lọc dữ liệu an toàn
 # =========================================================================
+class PageJumpModal(discord.ui.Modal, title="Tìm kiếm trang tài nguyên"):
+    def __init__(self, view):
+        super().__init__()
+        self.view_ref = view
+        self.page_input = discord.ui.TextInput(
+            label="Nhập số trang cậu muốn đến",
+            placeholder=f"Kho chứa đang có từ 1 đến {self.view_ref.total_pages} trang",
+            required=True,
+            max_length=4,
+            style=discord.TextStyle.short
+        )
+        self.add_item(self.page_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        val = self.page_input.value.strip()
+        
+        # Màng lọc 1: Chặn chữ cái, ký tự đặc biệt
+        if not val.isdigit():
+            return await interaction.response.send_message(f"{Emojis.BUOMA} hông được rồi, cậu phải nhập số nguyên cơ, thử lại nhé.", ephemeral=True)
+        
+        target = int(val)
+        # Màng lọc 2: Chặn số trang ảo (nhỏ hơn 1 hoặc lớn hơn tổng số trang)
+        if target < 1 or target > self.view_ref.total_pages:
+            return await interaction.response.send_message(f"{Emojis.BUOMA} không có trang {target} đâu, kho chứa hiện chỉ có từ 1 đến {self.view_ref.total_pages} trang thôi cậu.", ephemeral=True)
+        
+        # Vượt qua màng lọc -> Kích hoạt mạch nhảy trang
+        self.view_ref.current_page = target - 1
+        self.view_ref.update_buttons()
+        await interaction.response.edit_message(embed=self.view_ref.build_embed(), view=self.view_ref)
+
 class DevEmojiPagination(discord.ui.View):
     def __init__(self, hardcoded_chunks, dynamic_chunks, total_pages):
         super().__init__(timeout=120)
@@ -53,6 +83,12 @@ class DevEmojiPagination(discord.ui.View):
         self.current_page -= 1
         self.update_buttons()
         await interaction.response.edit_message(embed=self.build_embed(), view=self)
+
+    @discord.ui.button(label="Chọn trang", style=discord.ButtonStyle.secondary, custom_id="search_page", emoji="🔍")
+    async def btn_search(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Gọi cỗ máy Modal lên cho sếp nhập liệu
+        modal = PageJumpModal(self)
+        await interaction.response.send_modal(modal)
 
     @discord.ui.button(label="Trang sau", style=discord.ButtonStyle.secondary, custom_id="next_page", emoji="▶️")
     async def btn_next(self, interaction: discord.Interaction, button: discord.ui.Button):
