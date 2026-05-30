@@ -141,7 +141,7 @@ class DevEmojis(commands.Cog):
     @dev.command(name="register", description="[PREMIUM] đúc emoji vào kho chứa thực thể và cấy nóng thành biến hệ thống")
     @app_commands.describe(
         variable_name="tên biến muốn gọi trong code (vd: alert, peid_omg)",
-        emoji_input="dán emoji trực tiếp hoặc nhập chuỗi id số của emoji gốc"
+        emoji_input="dán emoji, nhập id số, HOẶC dán link ảnh/gif (http...)"
     )
     async def dev_register_cmd(self, interaction: discord.Interaction, variable_name: str, emoji_input: str):
         # Bộ lọc an toàn tối cao chặn đứng các thực thể không hợp lệ
@@ -150,26 +150,9 @@ class DevEmojis(commands.Cog):
 
         await interaction.response.defer(ephemeral=True)
         var_name_clean = variable_name.strip().upper()
+        input_clean = emoji_input.strip()
 
-        # Bộ lọc Regex phân tách cấu trúc đồ họa thô (ID và Trạng thái hoạt ảnh) của Emoji đầu vào
-        emoji_match = re.search(r'<(a)?:[A-Za-z0-9_]+:(\d+)>', emoji_input)
-        if emoji_match:
-            is_animated = bool(emoji_match.group(1))
-            emoji_id = emoji_match.group(2)
-        else:
-            # Thuật toán dự phòng lọc chuỗi số nguyên nếu sếp chỉ nhập ID thô
-            emoji_id = "".join(filter(str.isdigit, emoji_input))
-            is_animated = False
-
-        if not emoji_id:
-            embed_err = discord.Embed(
-                title=f"{Emojis.BUOMA} đầu vào không hợp lệ",
-                description="cậu hãy dán đúng thực thể emoji hoặc nhập đúng chuỗi id số nhe.",
-                color=0xe6e2dd
-            )
-            return await interaction.followup.send(embed=embed_err)
-
-        # Mạch kiểm toán chống ghi đè: Truy quét sự tồn tại của tên biến trong Database đám mây
+        # Mạch kiểm toán chống ghi đè
         existing = await self.db_col.find_one({"custom_name": var_name_clean})
         if existing:
             embed_dup = discord.Embed(
@@ -179,28 +162,139 @@ class DevEmojis(commands.Cog):
             )
             return await interaction.followup.send(embed=embed_dup)
 
-        # Thiết lập đường truyền và kết nối CDN Discord toàn cầu để hút asset thô về RAM tạm thời
-        ext = "gif" if is_animated else "png"
-        cdn_url = f"https://cdn.discordapp.com/emojis/{emoji_id}.{ext}"
+        # =========================================================================
+        # 1. LÕI HẤP THỤ ĐA DẢI (OMNI-INPUT PARSER)
+        # =========================================================================
+        is_direct_url = input_clean.startswith("http://") or input_clean.startswith("https://")
+        is_animated = None
+        emoji_id = None
+        fetch_urls = []
+
+        if is_direct_url:
+            # Nhánh 1: Nuốt trọn mọi loại link (Trực tiếp hoặc Proxy qua lệnh)
+            fetch_urls.append(input_clean)
+        else:
+            # Nhánh 2: Bóc tách cấu trúc Emoji hoặc ID thô
+            emoji_match = re.search(r'<(a)?:[A-Za-z0-9_]+:(\d+)>', input_clean)
+            if emoji_match:
+                is_animated = bool(emoji_match.group(1))
+                emoji_id = emoji_match.group(2)
+                ext = "gif" if is_animated else "png"
+                fetch_urls.append(f"https://cdn.discordapp.com/emojis/{emoji_id}.{ext}")
+            else:
+                emoji_id = "".join(filter(str.isdigit, input_clean))
+                if emoji_id:
+                    # Kích hoạt Thử Nghiệm Kép cho ID mù
+                    fetch_urls.append(f"https://cdn.discordapp.com/emojis/{emoji_id}.gif")
+                    fetch_urls.append(f"https://cdn.discordapp.com/emojis/{emoji_id}.png")
+                else:
+                    return await interaction.followup.send(embed=discord.Embed(
+                        title=f"{Emojis.HOICHAM} đầu vào không hợp lệ",
+                        description="cậu hãy dán đúng thực thể emoji, chuỗi id số, hoặc link url hợp lệ nhe.",
+                        color=0xe6e2dd
+                    ))
+
+        # =========================================================================
+        # 2. KHỞI CHẠY RADAR HÚT DỮ LIỆU & KIỂM ĐỊNH (ATK/DEF ENGINE)
+        # =========================================================================
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
         
+        img_bytes = None
+        content_type = ""
+        diagnostic_msg = "Không thể kết nối đến máy chủ mạng hoặc bị hạ tầng bảo mật chặn."
+
+        async with aiohttp.ClientSession(headers=headers) as session:
+            for url in fetch_urls:
+                try:
+                    async with session.get(url, timeout=15) as response:
+                        if response.status == 200:
+                            img_bytes = await response.read()
+                            content_type = response.headers.get("Content-Type", "").lower()
+                            break
+                        elif response.status in [403, 404]:
+                            diagnostic_msg = f"Đường dẫn bị từ chối truy cập hoặc file gốc đã bị xóa (Mã lỗi: {response.status})."
+                except Exception as e:
+                    diagnostic_msg = f"Ngắt kết nối đột ngột: `{str(e)}`"
+                    continue
+
+        # Màng lọc 1: Trượt dữ liệu
+        if not img_bytes:
+            return await interaction.followup.send(embed=discord.Embed(
+                title=f"{Emojis.HOICHAM} không thể thu thập asset",
+                description=f"quá trình tải gói dữ liệu ảnh thô thất bại.\n↳ **Nguyên nhân:** {diagnostic_msg}",
+                color=0xe6e2dd
+            ))
+
+        # Màng lọc 2: Định dạng rác (HTML/Text)
+        if "html" in content_type or "text" in content_type:
+            return await interaction.followup.send(embed=discord.Embed(
+                title=f"{Emojis.HOICHAM} định dạng gói tin sai lệch",
+                description="link cậu cung cấp trỏ đến một trang web chứ không phải dữ liệu ảnh/gif thô. Cậu hãy copy đúng *'địa chỉ hình ảnh (image url)'* nhe.",
+                color=0xe6e2dd
+            ))
+
+        # Màng lọc 3: Cân điện tử giới hạn dung lượng
+        file_size_kb = len(img_bytes) / 1024
+        if file_size_kb > 256:
+            return await interaction.followup.send(embed=discord.Embed(
+                title=f"{Emojis.HOICHAM} gói dữ liệu bị quá tải",
+                description=f"kích thước tài nguyên lên tới `{file_size_kb:.1f} KB`, vượt quá giới hạn cho phép là `256 KB` của lõi Discord. Cậu nén lại chút nha.",
+                color=0xe6e2dd
+            ))
+
+        # Phân giải trạng thái hoạt họa cho nhóm URL và Fallback
+        if is_direct_url:
+            if "gif" in content_type or ".gif" in input_clean.lower():
+                is_animated = True
+            else:
+                is_animated = False
+        elif emoji_id and is_animated is None:
+            if "gif" in content_type:
+                is_animated = True
+            else:
+                is_animated = False
+
+        # =========================================================================
+        # 3. GIAO TIẾP VỚI KHO CHỨA & ĐÚC THỰC THỂ BẤT TỬ
+        # =========================================================================
+        vault_guild = self.bot.get_guild(VAULT_GUILD_ID)
+        if not vault_guild:
+            return await interaction.followup.send(embed=discord.Embed(
+                title=f"{Emojis.HOICHAM} mất liên lạc với kho chứa",
+                description="hệ thống không tìm thấy server Kho Chứa Trung Tâm, cậu hãy kiểm tra lại cấu hình ID nhé.",
+                color=0xe6e2dd
+            ))
+
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(cdn_url) as response:
-                    if response.status != 200:
-                        raise Exception("Mạng lưới hạ tầng CDN Discord từ chối phản hồi gói dữ liệu ảnh thô")
-                    img_bytes = await response.read()
-
-            # Tiếp cận Server Kho Chứa Trung Tâm để đúc thực thể emoji bất tử
-            vault_guild = self.bot.get_guild(VAULT_GUILD_ID)
-            if not vault_guild:
-                raise Exception("Bot không có mặt trong Server Kho Chứa Trung Tâm hoặc cấu hình sai ID Guild")
-
             new_emoji = await vault_guild.create_custom_emoji(
                 name=f"sys_{var_name_clean.lower()}",
-                image=img_bytes
+                image=img_bytes,
+                reason=f"Kích hoạt đúc biến hệ thống bởi {interaction.user.name}"
             )
+        except discord.Forbidden:
+            return await interaction.followup.send(embed=discord.Embed(
+                title=f"{Emojis.HOICHAM} thiếu quyền hạn tại kho",
+                description="yiyi hiện không có quyền `Quản lý Emoji` trong Server Kho Chứa, cậu cấp quyền lại cho tớ nhe.",
+                color=0xe6e2dd
+            ))
+        except discord.HTTPException as e:
+            # Mã định danh lỗi 30008: Bị đầy slot emoji
+            if e.code == 30008:
+                return await interaction.followup.send(embed=discord.Embed(
+                    title=f"{Emojis.HOICHAM} kho chứa đã bão hòa",
+                    description="server Kho Chứa hiện tại không còn slot trống để đúc thêm emoji. Cậu cần xóa bớt hoặc quy hoạch kho mới.",
+                    color=0xe6e2dd
+                ))
+            return await interaction.followup.send(embed=discord.Embed(
+                title=f"{Emojis.HOICHAM} discord từ chối vận hành",
+                description=f"nghẽn mạch nội bộ tại khâu đúc API: `{e.text}`",
+                color=0xe6e2dd
+            ))
 
-            # Đồng bộ hóa cấu trúc dữ liệu bản đồ định danh xuống MongoDB Atlas
+        # 4. Lưu trữ Database và Nạp RAM nóng
+        try:
             data_document = {
                 "custom_name": var_name_clean,
                 "vault_emoji_id": str(new_emoji.id),
@@ -209,11 +303,7 @@ class DevEmojis(commands.Cog):
             }
             await self.db_col.insert_one(data_document)
 
-            # =========================================================================
-            # [CẤY NÓNG BIẾN THỜI GIAN THỰC ĐỘC QUYỀN PREMIUM]
-            # Nạp thẳng thuộc tính vào class Emojis trong bộ nhớ RAM ngay tại runtime.
-            # Giúp sếp viết code gọi biến dùng được luôn ở các file khác mà không cần reboot bot.
-            # =========================================================================
+            # Cấy nóng biến thời gian thực
             emoji_string = f"<a:{new_emoji.name}:{new_emoji.id}>" if is_animated else f"<:{new_emoji.name}:{new_emoji.id}>"
             setattr(Emojis, var_name_clean, emoji_string)
 
@@ -225,14 +315,14 @@ class DevEmojis(commands.Cog):
                 color=0xe6e2dd
             )
             await interaction.followup.send(embed=embed_success)
-
         except Exception as e:
-            embed_fail = discord.Embed(
-                title=f"{Emojis.BUOMA} nghẽn mạch khi xử lý đúc asset",
-                description=f"lỗi phát sinh trong quá trình vận hành ngầm của cỗ máy: `{str(e)}`",
+            # Mạch hoàn tác (Rollback): Nếu DB đám mây sập, xóa ngay emoji vừa đúc để tránh rác slot kho chứa
+            await new_emoji.delete(reason="Lõi DB sập, hoàn tác quy trình đúc rác")
+            return await interaction.followup.send(embed=discord.Embed(
+                title=f"{Emojis.HOICHAM} đứt gãy kết nối đám mây",
+                description=f"đã đúc thành công nhưng máy chủ cơ sở dữ liệu từ chối lưu. Lỗi phát sinh: `{str(e)}`\n*(Hệ thống đã tự động hoàn tác để giải phóng slot kho)*",
                 color=0xe6e2dd
-            )
-            await interaction.followup.send(embed=embed_fail)
+            ))
 
     @dev.command(name="list", description="[PREMIUM] soi chiếu toàn bộ bảng biến mã nguồn tĩnh vật lý và động")
     async def dev_list_cmd(self, interaction: discord.Interaction):
@@ -314,7 +404,7 @@ class DevEmojis(commands.Cog):
         target_emoji = await self.db_col.find_one({"custom_name": var_name_clean})
         if not target_emoji:
             embed_not_found = discord.Embed(
-                title=f"{Emojis.BUOMA} không tìm thấy biến này",
+                title=f"{Emojis.HOICHAM} không tìm thấy biến này",
                 description=f"biến `{var_name_clean}` không tồn tại trong danh mục biến động hệ thống.",
                 color=0xe6e2dd
             )
@@ -386,4 +476,4 @@ async def setup(bot: commands.Bot):
     await load_dynamic_emojis(bot)
     
     await bot.add_cog(DevEmojis(bot))
-    print("[LOAD] Success: commands.dev.dev_emojis (Premium Dev Edition Loaded)", flush=True)
+    print("[LOAD] Success: commands.dev.dev_emojis (Premium Dev Edition Loaded - Multi-URL Engine & Diagnostic Injected)", flush=True)
