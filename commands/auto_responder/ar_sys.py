@@ -296,7 +296,7 @@ class AutoResponder(commands.Cog):
         # [MÀNG LỌC BẢO VỆ KHÔNG GIAN QA]
         # Xóa mù cỗ máy AR nếu tin nhắn rơi vào Lãnh địa của QA
         # ====================================================
-        qa_cog = message.client.get_cog("QASystem")
+        qa_cog = self.bot.get_cog("QASystem")
         if qa_cog:
             qa_cfg = qa_cog.config_cache.get(message.guild.id, {})
             if message.channel.id in qa_cfg.get("channels", []):
