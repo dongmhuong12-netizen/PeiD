@@ -292,6 +292,17 @@ class AutoResponder(commands.Cog):
         if message.author.bot or not message.guild:
             return
 
+        # ====================================================
+        # [MÀNG LỌC BẢO VỆ KHÔNG GIAN QA]
+        # Xóa mù cỗ máy AR nếu tin nhắn rơi vào Lãnh địa của QA
+        # ====================================================
+        qa_cog = message.client.get_cog("QASystem")
+        if qa_cog:
+            qa_cfg = qa_cog.config_cache.get(message.guild.id, {})
+            if message.channel.id in qa_cfg.get("channels", []):
+                return
+        # ====================================================
+
         content = message.content.strip().lower()
         if not content:
             return
