@@ -1,3 +1,4 @@
+#commands/dev/dev_emojis.py
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -8,6 +9,66 @@ from utils.emojis import Emojis
 
 # CẤU HÌNH SERVER KHO CHỨA TRUNG TÂM TOÀN CỤC NẠP TỪ BIẾN MÔI TRƯỜNG TRƯỚC
 VAULT_GUILD_ID = int(os.getenv("VAULT_GUILD_ID", 1439489572936613951))  # <--- Sếp cấu hình ID Server Kho Chứa của sếp tại đây nhe
+
+# =========================================================================
+# [NÂNG CẤP INDUSTRIAL] CỖ MÁY PHÂN TRANG (PAGINATION) QUẢN TRỊ
+# Giải quyết triệt để rào cản 1024 ký tự và cho phép duyệt toàn bộ tài nguyên
+# =========================================================================
+class DevEmojiPagination(discord.ui.View):
+    def __init__(self, hardcoded_chunks, dynamic_chunks, total_pages):
+        super().__init__(timeout=120)
+        self.hardcoded_chunks = hardcoded_chunks
+        self.dynamic_chunks = dynamic_chunks
+        self.total_pages = total_pages
+        self.current_page = 0
+        self.update_buttons()
+        self.message = None
+
+    def update_buttons(self):
+        # Tự động khóa nút nếu đang ở đầu hoặc cuối trang
+        self.btn_prev.disabled = self.current_page == 0
+        self.btn_next.disabled = self.current_page == self.total_pages - 1
+
+    def build_embed(self):
+        embed = discord.Embed(
+            title=f"{Emojis.BUOMA} bảng điều khiển quản lý biến tối cao",
+            color=0xe6e2dd
+        )
+        
+        # Hút dữ liệu tương ứng với trang hiện tại
+        h_items = self.hardcoded_chunks[self.current_page] if self.current_page < len(self.hardcoded_chunks) else []
+        d_items = self.dynamic_chunks[self.current_page] if self.current_page < len(self.dynamic_chunks) else []
+        
+        h_text = "\n".join(h_items) if h_items else "Trống."
+        d_text = "\n".join(d_items) if d_items else "Trống."
+        
+        embed.add_field(name="[ CORE SYSTEM EMOJIS - HARDCODED IN FILE ]", value=h_text, inline=False)
+        embed.add_field(name="[ EXTENDED DEV EMOJIS - DYNAMIC REGISTRY ]", value=d_text, inline=False)
+        
+        embed.set_footer(text=f"Hệ thống quản lý tài nguyên tối cao của yiyi • Trang {self.current_page + 1}/{self.total_pages}")
+        return embed
+
+    @discord.ui.button(label="Trang trước", style=discord.ButtonStyle.secondary, custom_id="prev_page", emoji="◀️")
+    async def btn_prev(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_page -= 1
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.build_embed(), view=self)
+
+    @discord.ui.button(label="Trang sau", style=discord.ButtonStyle.secondary, custom_id="next_page", emoji="▶️")
+    async def btn_next(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_page += 1
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.build_embed(), view=self)
+        
+    async def on_timeout(self):
+        # Tự động hủy nút bấm khi hết thời gian chờ để tiết kiệm RAM
+        for child in self.children:
+            child.disabled = True
+        if self.message:
+            try:
+                await self.message.edit(view=self)
+            except:
+                pass
 
 class DevEmojis(commands.Cog):
     def __init__(self, bot):
@@ -167,30 +228,37 @@ class DevEmojis(commands.Cog):
                 if attr.upper() not in dynamic_keys:
                     hardcoded_list.append(f"• `{attr}` ──> {val}")
 
-        # 3. Dựng Dashboard điều khiển phân khu hiển thị đồ họa trực quan chi tiết
-        embed_dashboard = discord.Embed(
-            title=f"{Emojis.BUOMA} bảng điều khiển quản lý biến tối cao",
-            color=0xe6e2dd
-        )
-        
-        # [THUẬT TOÁN ĐÓNG GÓI AN TOÀN] Cân đo đong đếm, tuyệt đối không chém đứt nửa chừng mã emoji
-        def build_safe_field(items, empty_msg, max_len=950):
-            res = ""
-            for idx, item in enumerate(items):
-                if len(res) + len(item) + 1 > max_len:
-                    res += f"\n*...và {len(items) - idx} biến khác đang ẩn*"
-                    break
-                res += item + "\n"
-            return res.strip() if res else empty_msg
+        # ==========================================================
+        # [KÍCH HOẠT CỖ MÁY PAGINATION] Đóng gói và Phân trang 
+        # ==========================================================
+        def chunk_list(lst, n):
+            return [lst[i:i + n] for i in range(0, len(lst), n)]
+            
+        # Mỗi trang chỉ chứa 15 biến, đảm bảo dung lượng Field luôn nhỏ hơn 600 ký tự (Chấp 1024)
+        hard_chunks = chunk_list(hardcoded_list, 15) or [[]]
+        dyn_chunks = chunk_list(dynamic_list, 15) or [[]]
+        total_pages = max(len(hard_chunks), len(dyn_chunks))
 
-        h_text = build_safe_field(hardcoded_list, "Trống.")
-        d_text = build_safe_field(dynamic_list, "Chưa có biến động nào được cấy vào database.")
-
-        embed_dashboard.add_field(name="[ CORE SYSTEM EMOJIS - HARDCODED IN FILE ]", value=h_text, inline=False)
-        embed_dashboard.add_field(name="[ EXTENDED DEV EMOJIS - DYNAMIC REGISTRY ]", value=d_text, inline=False)
-
-        embed_dashboard.set_footer(text="Hệ thống quản lý tài nguyên tối cao của yiyi")
-        await interaction.followup.send(embed=embed_dashboard)
+        if total_pages <= 1:
+            # Dựng Dashboard một trang duy nhất không cần nút bấm
+            embed_dashboard = discord.Embed(
+                title=f"{Emojis.BUOMA} bảng điều khiển quản lý biến tối cao",
+                color=0xe6e2dd
+            )
+            
+            h_text = "\n".join(hard_chunks[0]) if hard_chunks[0] else "Trống."
+            d_text = "\n".join(dyn_chunks[0]) if dyn_chunks[0] else "Chưa có biến động nào được cấy vào database."
+            
+            embed_dashboard.add_field(name="[ CORE SYSTEM EMOJIS - HARDCODED IN FILE ]", value=h_text, inline=False)
+            embed_dashboard.add_field(name="[ EXTENDED DEV EMOJIS - DYNAMIC REGISTRY ]", value=d_text, inline=False)
+            embed_dashboard.set_footer(text="Hệ thống quản lý tài nguyên tối cao của yiyi")
+            
+            await interaction.followup.send(embed=embed_dashboard)
+        else:
+            # Kích hoạt Cỗ máy UI Phân trang
+            view = DevEmojiPagination(hard_chunks, dyn_chunks, total_pages)
+            msg = await interaction.followup.send(embed=view.build_embed(), view=view)
+            view.message = msg
 
     # =========================================================================
     # [CẤY MỚI HOÀN TOÀN] MẠCH HỦY TÀI NGUYÊN VÀ GIẢI PHÓNG BỘ NHỚ RAM TỐI CAO
