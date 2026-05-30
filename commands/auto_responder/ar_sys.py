@@ -1,3 +1,4 @@
+#commands/auto_responder/ar_sys.py
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -142,6 +143,87 @@ class TriggerEditModal(discord.ui.Modal, title='꒰ა chỉnh sửa từ khóa 
             await interaction.response.send_message(embed=embed, ephemeral=True)
         except Exception as e:
             await interaction.response.send_message(f"{Emojis.HOICHAM} lỗi ghi dữ liệu: `{str(e)}`", ephemeral=True)
+
+# ==========================================
+# [NÂNG CẤP INDUSTRIAL] CỖ MÁY PHÂN TRANG AR
+# ==========================================
+class ArPageJumpModal(discord.ui.Modal, title="Tìm kiếm trang danh sách"):
+    def __init__(self, view):
+        super().__init__()
+        self.view_ref = view
+        self.page_input = discord.ui.TextInput(
+            label="Nhập số trang cậu muốn đến",
+            placeholder=f"Danh sách hiện có từ 1 đến {self.view_ref.total_pages} trang",
+            required=True,
+            max_length=4,
+            style=discord.TextStyle.short
+        )
+        self.add_item(self.page_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        val = self.page_input.value.strip()
+        if not val.isdigit():
+            return await interaction.response.send_message(f"{Emojis.BUOMA} hông được rồi, cậu phải nhập số nguyên cơ, thử lại nhé.", ephemeral=True)
+        
+        target = int(val)
+        if target < 1 or target > self.view_ref.total_pages:
+            return await interaction.response.send_message(f"{Emojis.BUOMA} không có trang {target} đâu, danh sách hiện chỉ có từ 1 đến {self.view_ref.total_pages} trang thôi cậu.", ephemeral=True)
+        
+        self.view_ref.current_page = target - 1
+        self.view_ref.update_buttons()
+        await interaction.response.edit_message(embed=self.view_ref.build_embed(), view=self.view_ref)
+
+class ArListPagination(discord.ui.View):
+    def __init__(self, chunks, total_pages):
+        super().__init__(timeout=120)
+        self.chunks = chunks
+        self.total_pages = total_pages
+        self.current_page = 0
+        self.update_buttons()
+        self.message = None
+
+    def update_buttons(self):
+        self.btn_prev.disabled = self.current_page == 0
+        self.btn_next.disabled = self.current_page == self.total_pages - 1
+
+    def build_embed(self):
+        embed = discord.Embed(
+            title="꒰ა bảng điều khiển auto-responder ໒꒱",
+            description="danh sách các biến số nhận diện đang hoạt động:",
+            color=0xe6e2dd
+        )
+        page_items = self.chunks[self.current_page] if self.current_page < len(self.chunks) else []
+        for item in page_items:
+            embed.add_field(name=item["name"], value=item["value"], inline=False)
+        
+        embed.set_footer(text=f"Hệ thống quản lý Auto-Responder của yiyi • Trang {self.current_page + 1}/{self.total_pages}")
+        return embed
+
+    @discord.ui.button(label="Trang trước", style=discord.ButtonStyle.secondary, custom_id="ar_prev_page", emoji="◀️")
+    async def btn_prev(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_page -= 1
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.build_embed(), view=self)
+
+    @discord.ui.button(label="Chọn trang", style=discord.ButtonStyle.secondary, custom_id="ar_search_page", emoji="🔍")
+    async def btn_search(self, interaction: discord.Interaction, button: discord.ui.Button):
+        modal = ArPageJumpModal(self)
+        await interaction.response.send_modal(modal)
+
+    @discord.ui.button(label="Trang sau", style=discord.ButtonStyle.secondary, custom_id="ar_next_page", emoji="▶️")
+    async def btn_next(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_page += 1
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.build_embed(), view=self)
+
+    async def on_timeout(self):
+        for child in self.children:
+            child.disabled = True
+        if self.message:
+            try:
+                await self.message.edit(view=self)
+            except:
+                pass
 
 
 # ==========================================
@@ -517,27 +599,36 @@ class AutoResponder(commands.Cog):
                 )
                 return await interaction.followup.send(embed=embed, ephemeral=True)
 
-            embed = discord.Embed(
-                title=f"꒰ა bảng điều khiển auto-responder ໒꒱",
-                description="danh sách các biến số nhận diện đang hoạt động:",
-                color=0xe6e2dd
-            )
-
-            count = 0
+            # Quy đổi danh sách cache thành mảng cấu trúc field
+            all_fields = []
             for trig, responses in guild_cache.items():
                 if len(responses) == 1:
                     target = f"Văn bản: `{responses[0]['name']}`" if responses[0]["type"] == "text" else f"Embed: `{responses[0]['name']}`"
                 else:
                     target = f"Liên kết với {len(responses)} giá trị (Random)"
-                
-                if count < 25:
-                    embed.add_field(name=f"Từ khóa: {trig}", value=f"↳ {target}", inline=False)
-                    count += 1
-                else:
-                    embed.set_footer(text=f"và {len(guild_cache) - 25} từ khóa khác... (đang ẩn)")
-                    break
+                all_fields.append({"name": f"Từ khóa: {trig}", "value": f"↳ {target}"})
 
-            await interaction.followup.send(embed=embed, ephemeral=True)
+            def chunk_list(lst, n):
+                return [lst[i:i + n] for i in range(0, len(lst), n)]
+
+            # Gom 10 từ khóa vào một trang cho thoáng và đẹp mắt
+            chunks = chunk_list(all_fields, 10) or [[]]
+            total_pages = len(chunks)
+
+            if total_pages <= 1:
+                embed = discord.Embed(
+                    title=f"꒰ა bảng điều khiển auto-responder ໒꒱",
+                    description="danh sách các biến số nhận diện đang hoạt động:",
+                    color=0xe6e2dd
+                )
+                for item in chunks[0]:
+                    embed.add_field(name=item["name"], value=item["value"], inline=False)
+                await interaction.followup.send(embed=embed, ephemeral=True)
+            else:
+                # Kích hoạt Cỗ máy UI Phân trang nâng cao
+                view = ArListPagination(chunks, total_pages)
+                msg = await interaction.followup.send(embed=view.build_embed(), view=view, ephemeral=True)
+                view.message = msg
 
         except Exception as e:
             await interaction.followup.send(f"{Emojis.HOICHAM} lỗi truy xuất danh sách: `{str(e)}`", ephemeral=True)
