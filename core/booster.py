@@ -35,7 +35,6 @@ class BoostGroup(app_commands.Group):
         # [GIA CỐ] DAL an toàn
         config = await get_guild_config(interaction.guild.id)
         config["booster_role"] = role.id
-        config["role_id"] = role.id # Bơm đủ biến cho Dashboard
         await save_guild_config(interaction.guild.id, config)
         
         embed = discord.Embed(
@@ -117,7 +116,7 @@ class BoostGroup(app_commands.Group):
         await interaction.response.defer(ephemeral=False)
         
         config = await get_guild_config(interaction.guild.id)
-        role_id = config.get("booster_role") or config.get("role_id")
+        role_id = config.get("booster_role")
         role_obj = interaction.guild.get_role(int(role_id)) if role_id else None
         rolesetup = role_obj.mention if role_obj else "`none`"
 
@@ -126,13 +125,10 @@ class BoostGroup(app_commands.Group):
         bypass_key = f"boost_test_{interaction.guild.id}_{interaction.user.id}"
         await State.set_ui(bypass_key, {"expiry": time.time() + 300})
         
-        # [BẢO VỆ] Đâm thẳng API nghiệm thu role thực tế
         if role_obj:
             try:
                 await interaction.user.add_roles(role_obj, reason="Virtual Boost Test (5m Bypass)")
-            except discord.Forbidden:
-                print(f"[TEST BOOST] Yiyi không đủ quyền gắn Role test cho {interaction.user.name}", flush=True)
-            except Exception as e:
+            except:
                 pass
         
         # [GIA CỐ] Gọi send_config_message đảm bảo đồng bộ biến
@@ -141,7 +137,7 @@ class BoostGroup(app_commands.Group):
         if success:
             embed = discord.Embed(
                 title=f"{Emojis.BUOMA} test hệ thống `boost` thành công",
-                description=f"yiyi sẽ cho phép cậu giữ role {rolesetup} trong 5 phút tới để kiểm tra cấu hình. sau 5 phút, yiyi sẽ tự gỡ role nếu cậu không có boost thật nhé",
+                description=f"yiyi sẽ cho phép cậu giữ role {rolesetup} trong 5 phút tới để kiểm tra cấu hình. sau 5 phút, yiyi sẽ gỡ role nếu cậu không có boost nhé",
                 color=0xe6e2dd
             )
         else:
@@ -160,7 +156,7 @@ class BoosterListener(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self._tasks = set()
-        self.welcome_cooldown = {}
+        self.welcome_cooldown = {} # Khởi tạo bộ đệm chống spam do API lag
         self.reconciliation_loop.start()
 
     def cog_unload(self):
@@ -176,10 +172,8 @@ class BoosterListener(commands.Cog):
             try:
                 # [INDUSTRIAL] Gọi sync_all_boosters để quét sạch member no-boost/test-expired
                 await sync_all_boosters(guild)
-            except Exception as e:
-                # [VÁ LỖI] Bắt ngoại lệ để tránh vòng lặp chết ngầm
-                print(f"[BOOSTER LOOP ERROR] Lỗi quét Server {guild.id}: {e}", flush=True)
-            # Luôn sleep để chống rate limit, không bị lệnh continue bỏ qua
+            except:
+                continue
             await asyncio.sleep(0.5) 
 
     @reconciliation_loop.before_loop
@@ -188,23 +182,23 @@ class BoosterListener(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member):
-        """Xử lý biến động boost thời gian thực (chỉ lo việc gán/gỡ role)"""
+        """Xử lý biến động boost thời gian thực (Chỉ đảm nhiệm gán/gỡ Role)"""
         if after.bot: return
         
         boost_changed = before.premium_since != after.premium_since
         if boost_changed:
-            # Chỉ gọi Engine để đồng bộ role, gỡ bỏ mạch gửi tin nhắn sai lệch ở đây
+            # Gán role/Level mới thông qua Engine
             task = asyncio.create_task(assign_correct_level(after))
             self._tasks.add(task)
             task.add_done_callback(self._tasks.discard)
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        """Radar quét tin nhắn hệ thống - Đếm chuẩn xác từng cú Boost"""
+        """Radar quét tin nhắn hệ thống - Bắt trực tiếp thông báo đập Boost"""
         if message.author.bot or not message.guild:
             return
 
-        # [ĐÃ VÁ LỖI CÚ PHÁP] Sửa từ premium_guild thành premium_guild_subscription chuẩn API
+        # Cập nhật cú pháp API chuẩn để không bị vấp lỗi AttributeError
         boost_types = (
             discord.MessageType.premium_guild_subscription,
             discord.MessageType.premium_guild_tier_1,
@@ -213,7 +207,7 @@ class BoosterListener(commands.Cog):
         )
 
         if message.type in boost_types:
-            # Ngăn ngừa gửi đúp thông báo trong cùng 1 giây nếu Discord lag API
+            # Chống lag nhả đúp tin nhắn trong cùng 1 giây
             cooldown_key = f"{message.guild.id}_{message.author.id}"
             now = time.time()
             if cooldown_key in self.welcome_cooldown and now - self.welcome_cooldown[cooldown_key] < 5:
@@ -221,13 +215,13 @@ class BoosterListener(commands.Cog):
             
             self.welcome_cooldown[cooldown_key] = now
             
-            # Kích hoạt gửi tin nhắn chúc mừng
+            # Gửi tin nhắn chúc mừng
             task_welcome = asyncio.create_task(send_config_message(message.guild, message.author, "booster"))
             self._tasks.add(task_welcome)
             task_welcome.add_done_callback(self._tasks.discard)
             
-            # Đồng bộ lại role tức thời cho chắc chắn
-            task_sync = asyncio.create_task(sync_all_boosters(message.guild))
+            # Khởi động Engine để gán role tức thời bảo chứng
+            task_sync = asyncio.create_task(assign_correct_level(message.author))
             self._tasks.add(task_sync)
             task_sync.add_done_callback(self._tasks.discard)
 
