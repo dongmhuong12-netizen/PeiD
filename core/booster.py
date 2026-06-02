@@ -157,6 +157,10 @@ class BoosterListener(commands.Cog):
         self.bot = bot
         self._tasks = set()
         self.welcome_cooldown = {} # Khởi tạo bộ đệm chống spam do API lag
+        # [VÁ LỖI KIẾN TRÚC]: Gỡ bỏ việc khởi động loop tại đây để tránh kẹt loop cũ khi bot.run() tạo loop mới
+
+    async def cog_load(self):
+        """[SỬA LỖI KHỞI ĐỘNG]: Chờ Cog nạp hẳn vào Event Loop chính thức của Bot rồi mới kích hoạt Loop"""
         self.reconciliation_loop.start()
 
     def cog_unload(self):
@@ -191,6 +195,12 @@ class BoosterListener(commands.Cog):
             task = asyncio.create_task(assign_correct_level(after))
             self._tasks.add(task)
             task.add_done_callback(self._tasks.discard)
+
+            # Gửi tin nhắn mừng nếu bắt đầu boost
+            if before.premium_since is None and after.premium_since is not None:
+                task_welcome = asyncio.create_task(send_config_message(after.guild, after, "booster"))
+                self._tasks.add(task_welcome)
+                task_welcome.add_done_callback(self._tasks.discard)
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
