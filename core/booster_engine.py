@@ -58,30 +58,42 @@ async def _execute_assign_logic(member: discord.Member, base_role: discord.Role 
 
         # thực thi logic gán/gỡ atomic
         if should_have_role and not has_role:
-            # [GỠ CHỐT CHẶN]: Đâm thẳng vào lệnh gán role, nếu lỗi thì xả log
-            try:
-                await member.add_roles(base_role, reason="Booster Sync: Active/Test")
-            except discord.Forbidden:
-                print(f"[ENGINE 403] Yiyi bị chặn gán role {base_role.name} cho {member.name}. Cần kéo role Yiyi lên cao hơn!", flush=True)
+            # [RESTORE & FIX]: Khôi phục check phân cấp gốc + bọc Try/Except bảo vệ API
+            if base_role < bot_member.top_role:
+                try:
+                    await member.add_roles(base_role, reason="Booster Sync: Active/Test")
+                except discord.Forbidden:
+                    print(f"[ENGINE 403] Không có thẩm quyền API để gán vai trò {base_role.name} cho {member.name}", flush=True)
+                except Exception as e:
+                    print(f"[ENGINE ERROR] Thao tác add_roles thất bại cho {member.name}: {e}", flush=True)
+            else:
+                print(f"[ENGINE WARNING] Chặn thực thi: Vai trò {base_role.name} nằm bằng hoặc cao hơn vị trí của Bot!", flush=True)
                 
         elif not should_have_role and has_role:
             # [BẢO VỆ]: Tuyệt đối không gỡ nếu đang trong trạng thái testing
             if not is_testing:
-                # [GỠ CHỐT CHẶN]: Đâm thẳng vào lệnh gỡ role, nếu lỗi thì xả log
-                try:
-                    await member.remove_roles(base_role, reason="Booster Sync: Ended/Expired")
-                except discord.Forbidden:
-                    print(f"[ENGINE 403] Yiyi bị chặn gỡ role {base_role.name} của {member.name}. Cần kéo role Yiyi lên cao hơn!", flush=True)
+                # [RESTORE]: Khôi phục check phân cấp gốc
+                if base_role < bot_member.top_role:
+                    try:
+                        await member.remove_roles(base_role, reason="Booster Sync: Ended/Expired")
+                    except discord.Forbidden:
+                        print(f"[ENGINE 403] Không có thẩm quyền API để gỡ vai trò {base_role.name} của {member.name}", flush=True)
+                    except Exception as e:
+                        print(f"[ENGINE ERROR] Thao tác remove_roles thất bại cho {member.name}: {e}", flush=True)
+                else:
+                    print(f"[ENGINE WARNING] Chặn thực thi: Vai trò {base_role.name} nằm bằng hoặc cao hơn vị trí của Bot!", flush=True)
                 
                 # [DỌN RÁC] Giải phóng RAM khi tài khoản hết hạn test
                 if state_data:
                     try:
                         await State.delete_ui(bypass_key)
-                    except:
-                        pass
+                    except Exception as e:
+                        print(f"[ENGINE ERROR] Không thể giải phóng bộ nhớ State UI: {e}", flush=True)
 
     except Exception as e:
-        print(f"[ENGINE CRASH] Lỗi xử lý _execute_assign_logic cho {member.name}: {e}", flush=True)
+        # Chỉ in lỗi nếu thực sự nghiêm trọng để tránh spam log server 100k
+        if not isinstance(e, discord.Forbidden):
+            print(f"[engine error] fail to sync role for {member.id}: {e}", flush=True)
 
 # ==============================
 # PROACTIVE FULL SYNC (Industrial Scan)
@@ -112,8 +124,8 @@ async def sync_all_boosters(guild: discord.Guild):
         if not guild.chunked:
             try:
                 await guild.chunk()
-            except:
-                pass
+            except Exception as e:
+                print(f"[SYNC CACHE WARNING] Lỗi ép nạp gói thành viên cho Guild {guild.id}: {e}", flush=True)
 
         # [CƠ CHẾ TÌM BOOSTER TỐI ƯU 100K+]: Chỉ gom những người liên quan
         actual_boosters = set(guild.premium_subscribers)
@@ -132,9 +144,11 @@ async def sync_all_boosters(guild: discord.Guild):
         if tasks:
             # return_exceptions=True để 1 task lỗi không làm dừng toàn bộ tiến trình quét
             results = await asyncio.gather(*tasks, return_exceptions=True)
-            # Ép lộ diện các lỗi bị asyncio.gather nuốt mất
+            
+            # [ÉP LỘ DIỆN LỖI NGẦM] Duyệt mảng kết quả thu về để xả toàn bộ lỗi bị nuốt ra console
             for r in results:
                 if isinstance(r, Exception):
-                    print(f"[SYNC GATHER ERROR] Lỗi đồng bộ ngầm: {r}", flush=True)
+                    print(f"[SYNC GATHER CRITICAL] Phát hiện lỗi logic bị nuốt trong tiến trình chạy ngầm: {r}", flush=True)
+                    
     except Exception as e:
         print(f"[SYNC CRASH] Vòng quét sụp đổ tại server {guild.id}: {e}", flush=True)
