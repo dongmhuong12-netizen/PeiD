@@ -1,3 +1,4 @@
+#Core/booster_engine.py
 import discord
 import asyncio
 import time # [QUAN TRỌNG] để check thời gian hết hạn test
@@ -7,9 +8,6 @@ from collections import defaultdict
 from core.state import State
 # Import từ storage
 from core.booster_storage import get_guild_config # [SỬA LỖI ĐƯỜNG DẪN]
-
-# [VÁ LỖI] Khóa Guild để bảo toàn tính nhất quán trong môi trường Multi-server
-_engine_locks = defaultdict(asyncio.Lock)
 
 # ==============================
 # ASSIGN CORRECT ROLE (Atomic Sync)
@@ -26,7 +24,7 @@ async def assign_correct_level(member: discord.Member, semaphore: asyncio.Semaph
     return await _execute_assign_logic(member, base_role)
 
 async def _execute_assign_logic(member: discord.Member, base_role: discord.Role = None):
-    """Logic thực thi gán/gỡ tách biệt để đảm bảo atomic"""
+    """Logic thực thi gán/gỡ tách biệt để đảm bảo atomic và tối ưu concurrency"""
     guild = member.guild
     
     # [FIX] Đã đồng bộ key với booster.py: thêm guild.id để tránh lệch pha bypass
@@ -35,59 +33,59 @@ async def _execute_assign_logic(member: discord.Member, base_role: discord.Role 
     # [GIA CỐ]: is_testing chỉ đúng khi còn state_data và chưa quá expiry
     is_testing = state_data is not None and time.time() < state_data.get("expiry", 0)
 
-    # [VÁ LỖI] Khóa Guild để bảo vệ tiến trình thực thi duy nhất
-    lock = _engine_locks[guild.id]
-    async with lock:
-        try:
-            bot_member = guild.me
-            if not bot_member or not bot_member.guild_permissions.manage_roles:
+    try:
+        bot_member = guild.me
+        if not bot_member or not bot_member.guild_permissions.manage_roles:
+            return
+
+        # [TỐI ƯU]: Chỉ nạp Config nếu base_role chưa được truyền vào
+        if base_role is None:
+            config = await get_guild_config(guild.id)
+            if not config: return
+            # [SỬA LỖI BIẾN]: Hỗ trợ cả key cũ và mới để Dashboard ko bị hụt data
+            base_role_id = config.get("booster_role") or config.get("role_id")
+            if not base_role_id: return
+            try:
+                base_role = guild.get_role(int(base_role_id))
+            except (ValueError, TypeError):
                 return
+            if not base_role: return
 
-            # [TỐI ƯU]: Chỉ nạp Config nếu base_role chưa được truyền vào
-            if base_role is None:
-                config = await get_guild_config(guild.id)
-                if not config: return
-                # [SỬA LỖI BIẾN]: Hỗ trợ cả key cũ và mới để Dashboard ko bị hụt data
-                base_role_id = config.get("booster_role") or config.get("role_id")
-                if not base_role_id: return
+        # [LOGIC HỘI TỤ]: Phải có role nếu (boost thật) HOẶC (đang test)
+        is_boosting_real = member.premium_since is not None
+        should_have_role = is_boosting_real or is_testing
+        has_role = base_role in member.roles
+
+        # thực thi logic gán/gỡ atomic
+        if should_have_role and not has_role:
+            # [RESTORE & FIX]: Khôi phục check phân cấp gốc + bọc Try/Except bảo vệ API
+            if base_role < bot_member.top_role:
                 try:
-                    base_role = guild.get_role(int(base_role_id))
-                except (ValueError, TypeError):
-                    return
-                if not base_role: return
-
-            # [LOGIC HỘI TỤ]: Phải có role nếu (boost thật) HOẶC (đang test)
-            is_boosting_real = member.premium_since is not None
-            should_have_role = is_boosting_real or is_testing
-            has_role = base_role in member.roles
-
-            # thực thi logic gán/gỡ atomic
-            if should_have_role and not has_role:
-                # [RESTORE & FIX]: Khôi phục check phân cấp gốc + bọc Try/Except bảo vệ API
+                    await member.add_roles(base_role, reason="Booster Sync: Active/Test")
+                except discord.Forbidden:
+                    pass
+                
+        elif not should_have_role and has_role:
+            # [BẢO VỆ]: Tuyệt đối không gỡ nếu đang trong trạng thái testing
+            if not is_testing:
+                # [RESTORE]: Khôi phục check phân cấp gốc
                 if base_role < bot_member.top_role:
                     try:
-                        await member.add_roles(base_role, reason="Booster Sync: Active/Test")
+                        await member.remove_roles(base_role, reason="Booster Sync: Ended/Expired")
                     except discord.Forbidden:
                         pass
-                    
-            elif not should_have_role and has_role:
-                # [BẢO VỆ]: Tuyệt đối không gỡ nếu đang trong trạng thái testing
-                if not is_testing:
-                    # [RESTORE]: Khôi phục check phân cấp gốc
-                    if base_role < bot_member.top_role:
-                        try:
-                            await member.remove_roles(base_role, reason="Booster Sync: Ended/Expired")
-                        except discord.Forbidden:
-                            pass
+                
+                # [DỌN RÁC] Giải phóng RAM khi tài khoản hết hạn test
+                if state_data:
+                    try:
+                        await State.delete_ui(bypass_key)
+                    except:
+                        pass
 
-        except Exception as e:
-            # Chỉ in lỗi nếu thực sự nghiêm trọng để tránh spam log server 100k
-            if not isinstance(e, discord.Forbidden):
-                print(f"[engine error] fail to sync role for {member.id}: {e}", flush=True)
-        finally:
-            # [VÁ LỖI] Giải phóng RAM Lock
-            if guild.id in _engine_locks and not lock.locked():
-                _engine_locks.pop(guild.id, None)
+    except Exception as e:
+        # Chỉ in lỗi nếu thực sự nghiêm trọng để tránh spam log server 100k
+        if not isinstance(e, discord.Forbidden):
+            print(f"[engine error] fail to sync role for {member.id}: {e}", flush=True)
 
 # ==============================
 # PROACTIVE FULL SYNC (Industrial Scan)
@@ -100,7 +98,7 @@ async def sync_all_boosters(guild: discord.Guild):
     # [FIX CHÍ MẠNG]: Đọc Config 1 lần duy nhất cho toàn server
     config = await get_guild_config(guild.id)
     if not config: return
-    # [SỬA LỖI BIẾN]: Đồng bộ key với Dashboard
+    # [SỬA LỖI BIẾN]: Đóng bộ key với Dashboard
     role_id = config.get("booster_role") or config.get("role_id")
     if not role_id: return
     
@@ -113,6 +111,13 @@ async def sync_all_boosters(guild: discord.Guild):
     if not guild.me.guild_permissions.manage_roles:
         return
 
+    # [VÁ LỖI PHÂN PHỐI CACHE]: Cưỡng bức nạp dữ liệu để tránh bỏ sót người dùng ẩn danh/offline
+    if not guild.chunked:
+        try:
+            await guild.chunk()
+        except:
+            pass
+
     # [CƠ CHẾ TÌM BOOSTER TỐI ƯU 100K+]: Chỉ gom những người liên quan
     actual_boosters = set(guild.premium_subscribers)
     role_holders = set(base_role.members)
@@ -121,7 +126,7 @@ async def sync_all_boosters(guild: discord.Guild):
     if not target_members:
         return
 
-    # [VÁ LỖI] Semaphore: Phân luồng 50 task/lần để bảo vệ RAM
+    # [VÁ LỖI] Semaphore: Phân luồng 50 task/lần chạy song song thực sự không block chéo
     sem = asyncio.Semaphore(50)
     
     # Truyền thẳng base_role xuống để Engine không phải đọc lại JSON
