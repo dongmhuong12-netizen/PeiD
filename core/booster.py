@@ -202,9 +202,9 @@ class BoosterListener(commands.Cog):
         if message.author.bot or not message.guild:
             return
 
-        # Bắt các loại tin nhắn hệ thống sinh ra khi có user Boost server
+        # [ĐÃ VÁ LỖI CÚ PHÁP] Sửa từ premium_guild thành premium_guild_subscription chuẩn API
         boost_types = (
-            discord.MessageType.premium_guild,
+            discord.MessageType.premium_guild_subscription,
             discord.MessageType.premium_guild_tier_1,
             discord.MessageType.premium_guild_tier_2,
             discord.MessageType.premium_guild_tier_3
@@ -235,4 +235,4 @@ async def setup(bot: commands.Bot):
         if not any(c.name == "boost" for c in p_cmd.commands):
             p_cmd.add_command(BoostGroup())
     await bot.add_cog(BoosterListener(bot))
-    print("[load] success: core.booster (Multi-IT Radar & Loop Active)", flush=True)
+    print("[load] success: core.booster (Standardized & Expire Fix)", flush=True)
