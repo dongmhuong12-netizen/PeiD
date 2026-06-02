@@ -126,11 +126,13 @@ class BoostGroup(app_commands.Group):
         bypass_key = f"boost_test_{interaction.guild.id}_{interaction.user.id}"
         await State.set_ui(bypass_key, {"expiry": time.time() + 300})
         
-        # [BẢO VỆ] Check phân cấp role trước khi gán để tránh lỗi 403
-        if role_obj and role_obj < interaction.guild.me.top_role:
+        # [BẢO VỆ] Đâm thẳng API nghiệm thu role thực tế
+        if role_obj:
             try:
                 await interaction.user.add_roles(role_obj, reason="Virtual Boost Test (5m Bypass)")
-            except:
+            except discord.Forbidden:
+                print(f"[TEST BOOST] Yiyi không đủ quyền gắn Role test cho {interaction.user.name}", flush=True)
+            except Exception as e:
                 pass
         
         # [GIA CỐ] Gọi send_config_message đảm bảo đồng bộ biến
