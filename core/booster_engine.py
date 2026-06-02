@@ -42,6 +42,7 @@ async def _execute_assign_logic(member: discord.Member, base_role: discord.Role 
         try:
             bot_member = guild.me
             if not bot_member or not bot_member.guild_permissions.manage_roles:
+                print(f"[ENGINE FAIL] Yiyi bị tước quyền Manage Roles tại server {guild.name}!", flush=True)
                 return
 
             # [TỐI ƯU]: Chỉ nạp Config nếu base_role chưa được truyền vào
@@ -68,8 +69,12 @@ async def _execute_assign_logic(member: discord.Member, base_role: discord.Role 
                 if base_role < bot_member.top_role:
                     try:
                         await member.add_roles(base_role, reason="Booster Sync: Active/Test")
+                        print(f"[ENGINE SUCCESS] Đã gán role {base_role.name} cho {member.name}", flush=True)
                     except discord.Forbidden:
                         print(f"[ENGINE 403] Không đủ quyền API để gán vai trò {base_role.name} cho {member.name}", flush=True)
+                else:
+                    # [X-RAY]: Ép vạch mặt lỗi phân cấp im lặng
+                    print(f"[ENGINE ERROR] LỖI PHÂN CẤP: Role {base_role.name} nằm CAO HƠN role của Yiyi! Yiyi không thể gán.", flush=True)
                     
             elif not should_have_role and has_role:
                 # [BẢO VỆ]: Tuyệt đối không gỡ nếu đang trong trạng thái testing
@@ -78,8 +83,12 @@ async def _execute_assign_logic(member: discord.Member, base_role: discord.Role 
                     if base_role < bot_member.top_role:
                         try:
                             await member.remove_roles(base_role, reason="Booster Sync: Ended/Expired")
+                            print(f"[ENGINE SUCCESS] Đã gỡ role của {member.name}", flush=True)
                         except discord.Forbidden:
                             print(f"[ENGINE 403] Không đủ quyền API để gỡ vai trò {base_role.name} của {member.name}", flush=True)
+                    else:
+                        # [X-RAY]: Ép vạch mặt lỗi phân cấp im lặng
+                        print(f"[ENGINE ERROR] LỖI PHÂN CẤP: Role {base_role.name} nằm CAO HƠN role của Yiyi! Yiyi không thể gỡ.", flush=True)
 
         except Exception as e:
             # Chỉ in lỗi nếu thực sự nghiêm trọng để tránh spam log server 100k
@@ -97,35 +106,48 @@ async def sync_all_boosters(guild: discord.Guild):
     """
     hàm truy quét: tự động tìm toàn bộ booster trong server để đồng bộ role `booster`.
     """
+    print(f"--- [SYNC START] Bắt đầu quét Guild: {guild.name} ---", flush=True)
+    
     # [FIX CHÍ MẠNG]: Đọc Config 1 lần duy nhất cho toàn server
     config = await get_guild_config(guild.id)
-    if not config: return
+    if not config: 
+        print("[SYNC SKIP] Bỏ qua: Không tìm thấy Config Booster trong DB.", flush=True)
+        return
+        
     # [SỬA LỖI BIẾN]: Đồng bộ key với Dashboard
     role_id = config.get("booster_role") or config.get("role_id")
-    if not role_id: return
+    if not role_id: 
+        print("[SYNC SKIP] Bỏ qua: Config có lấy được nhưng thiếu ID Role.", flush=True)
+        return
     
     try:
         base_role = guild.get_role(int(role_id))
     except (ValueError, TypeError):
         return
-    if not base_role: return
+    if not base_role: 
+        print(f"[SYNC SKIP] Bỏ qua: Role ID {role_id} không tồn tại trên Server.", flush=True)
+        return
 
     if not guild.me.guild_permissions.manage_roles:
+        print("[SYNC SKIP] Bỏ qua: Yiyi không có quyền Manage Roles trên Server.", flush=True)
         return
 
     # [VÁ LỖI PHÂN PHỐI CACHE]: Cưỡng bức nạp gói dữ liệu thành viên để tránh bỏ sót danh sách khi Bot vừa reboot/mất bộ nhớ RAM tạm thời
     if not guild.chunked:
         try:
             await guild.chunk()
-        except:
-            pass
+        except Exception as e:
+            print(f"[SYNC CACHE WARNING] Lỗi ép nạp gói chunk: {e}", flush=True)
 
-    # [CƠ CHẾ TÌM BOOSTER TỐI ƯU 100K+]: Chỉ gom những người liên quan
-    actual_boosters = set(guild.premium_subscribers)
-    role_holders = set(base_role.members)
+    # [CƠ CHẾ TÌM BOOSTER TỐI ƯU 100K+]: Trích xuất thủ công trên toàn bộ member, bỏ qua biến premium_subscribers để chống mù cache
+    actual_boosters = {m for m in guild.members if m.premium_since is not None}
+    role_holders = {m for m in guild.members if base_role in m.roles}
     target_members = actual_boosters.union(role_holders)
 
+    print(f"[SYNC DEBUG] Radar quét thấy: {len(actual_boosters)} người boost thật, {len(role_holders)} người đang cầm role.", flush=True)
+
     if not target_members:
+        print("[SYNC SKIP] Dữ liệu rỗng: Không có ai đang boost và cũng không có ai đang cầm role.", flush=True)
         return
 
     # [VÁ LỖI] Semaphore: Phân luồng 50 task/lần để bảo vệ RAM
@@ -136,4 +158,11 @@ async def sync_all_boosters(guild: discord.Guild):
     
     if tasks:
         # return_exceptions=True để 1 task lỗi không làm dừng toàn bộ tiến trình quét
-        await asyncio.gather(*tasks, return_exceptions=True)
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # X-RAY: Ép lộ diện các lỗi bị asyncio.gather nuốt ngầm
+        for r in results:
+            if isinstance(r, Exception):
+                print(f"[SYNC GATHER ERROR] Lỗi đồng bộ ngầm bị nuốt: {r}", flush=True)
+                
+    print(f"--- [SYNC DONE] Kết thúc quét Guild: {guild.name} ---", flush=True)
