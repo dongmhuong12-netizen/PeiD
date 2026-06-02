@@ -159,9 +159,12 @@ class BoosterListener(commands.Cog):
         self.welcome_cooldown = {} # Khởi tạo bộ đệm chống spam do API lag
         # [VÁ LỖI KIẾN TRÚC]: Gỡ bỏ việc khởi động loop tại đây để tránh kẹt loop cũ khi bot.run() tạo loop mới
 
-    async def cog_load(self):
-        """[SỬA LỖI KHỞI ĐỘNG]: Chờ Cog nạp hẳn vào Event Loop chính thức của Bot rồi mới kích hoạt Loop"""
-        self.reconciliation_loop.start()
+    @commands.Cog.listener()
+    async def on_ready(self):
+        """[ĐIỂM KÍCH HOẠT TỐI THƯỢNG]: Khởi động vòng lặp khi luồng bot.run() đã hoàn toàn online"""
+        if not self.reconciliation_loop.is_running():
+            self.reconciliation_loop.start()
+            print("[BOOST] Vòng lặp tuần tra đã được gắn thành công vào luồng chính thức!", flush=True)
 
     def cog_unload(self):
         self.reconciliation_loop.cancel()
@@ -172,17 +175,22 @@ class BoosterListener(commands.Cog):
     @tasks.loop(minutes=5)
     async def reconciliation_loop(self):
         """Vòng lặp đồng bộ: gán cho boost, gỡ cho không boost (Bypass 5p)"""
+        print(f"--- [LOOP HEARTBEAT] Vòng lặp quét kích hoạt. Phát hiện {len(self.bot.guilds)} Server ---", flush=True)
         for guild in self.bot.guilds:
             try:
                 # [INDUSTRIAL] Gọi sync_all_boosters để quét sạch member no-boost/test-expired
                 await sync_all_boosters(guild)
-            except:
+            except Exception as e:
+                print(f"[LOOP ERROR] Sập luồng quét tại server {guild.name}: {e}", flush=True)
                 continue
             await asyncio.sleep(0.5) 
 
     @reconciliation_loop.before_loop
     async def before_reconciliation(self):
-        await self.bot.wait_until_ready()
+        # Đã bóp cò ở on_ready nên không cần chờ wait_until_ready nữa, delay 5s để nạp Cache nốt là bắn
+        print("[LOOP INIT] Đang nạp Cache Discord... sẽ quét sau 5 giây!", flush=True)
+        await asyncio.sleep(5)
+        print("[LOOP INIT] Bắn phát quét đầu tiên!", flush=True)
 
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member):
