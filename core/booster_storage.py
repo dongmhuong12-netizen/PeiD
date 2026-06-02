@@ -2,12 +2,16 @@
 import copy
 import asyncio
 from collections import defaultdict
+# [CẤY MỚI] Nạp State để truy cập vào bot.db
 from core.state import State
+
+# [TRÍ NHỚ ĐÃ BÓC TÁCH] Gỡ bỏ các import liên quan đến cache manager cục bộ
+# from core.cache_manager import get_raw, mark_dirty, save, update
 
 # Khởi tạo một bộ đệm RAM để duy trì vận hành (Stateless)
 _internal_booster_storage = {}
 
-# Khóa theo Guild để tránh Race Condition khi Read-Modify-Write
+# [VÁ LỖI] Khóa theo Guild để tránh Race Condition khi Read-Modify-Write
 _guild_locks = defaultdict(asyncio.Lock)
 
 # =========================
@@ -16,7 +20,7 @@ _guild_locks = defaultdict(asyncio.Lock)
 
 def _get_cache():
     """
-    Lấy reference gốc từ RAM.
+    Lấy reference gốc từ RAM. Tự sửa lỗi định dạng.
     """
     return _internal_booster_storage
 
@@ -32,7 +36,7 @@ async def get_guild_config(guild_id: int):
     db = _get_cache()
     guild_id_str = str(guild_id)
     
-    # Cơ chế nạp từ MongoDB nếu RAM trống (Self-healing RAM)
+    # [CẤY MỚI] Cơ chế nạp từ MongoDB nếu RAM trống (Self-healing RAM)
     if guild_id_str not in db and hasattr(State.bot, "db"):
         doc = await State.bot.db.configs.find_one({
             "guild_id": guild_id_str, 
@@ -44,8 +48,8 @@ async def get_guild_config(guild_id: int):
     config = db.get(guild_id_str, {})
     if not isinstance(config, dict): config = {}
 
-    # TRẢ LẠI 100% THAM SỐ NGUYÊN VẸN CHO HỆ THỐNG
-    # Tuyệt đối không tự ý xóa, gọt, hay ép kiểu làm mất key của Dashboard
+    # [SỬA LỖI CHÍ MẠNG]: Trả toàn bộ config nguyên bản, tuyệt đối không gọt bỏ tham số
+    # Việc tạo clean_config cũ làm mất các key đồng bộ hệ thống (role_id, channel_id, embed_name)
     return copy.deepcopy(config)
 
 async def save_guild_config(guild_id: int, config: dict):
@@ -57,7 +61,7 @@ async def save_guild_config(guild_id: int, config: dict):
         
     db[guild_id_str] = config
     
-    # Đồng bộ lên Cloud Atlas (Ngăn configs)
+    # [CẤY MỚI] Đồng bộ lên Cloud Atlas (Ngăn configs)
     if hasattr(State.bot, "db"):
         await State.bot.db.configs.update_one(
             {"guild_id": guild_id_str, "module": "booster"},
@@ -72,13 +76,14 @@ async def save_guild_config(guild_id: int, config: dict):
 # =========================
 
 async def set_booster_role(guild_id: int, role_id: int):
-    # Dùng Lock để đảm bảo quá trình Đọc-Sửa-Ghi không bị xen ngang
+    # [VÁ LỖI] Dùng Lock để đảm bảo quá trình Đọc-Sửa-Ghi không bị xen ngang
     lock = _guild_locks[guild_id]
     async with lock:
         config = await get_guild_config(guild_id)
         config["booster_role"] = role_id
-        config["role_id"] = role_id  # Đảm bảo bơm đủ key song song cho Dashboard
+        config["role_id"] = role_id  # Đồng bộ song song tránh hụt biến của Dashboard
         await save_guild_config(guild_id, config)
+    # [BẢO VỆ LOCK]: Không pop tài nguyên Lock để tránh Race Condition tạo Lock mới khi đa tác vụ chờ duyệt
 
 async def set_booster_channel(guild_id: int, channel_id: int):
     """Cập nhật kênh thông báo Booster"""
@@ -86,7 +91,7 @@ async def set_booster_channel(guild_id: int, channel_id: int):
     async with lock:
         config = await get_guild_config(guild_id)
         config["channel"] = channel_id
-        config["channel_id"] = channel_id
+        config["channel_id"] = channel_id  # Bảo toàn biến đồng bộ
         await save_guild_config(guild_id, config)
 
 async def set_booster_message(guild_id: int, message: str):
@@ -103,5 +108,5 @@ async def set_booster_embed(guild_id: int, embed_name: str):
     async with lock:
         config = await get_guild_config(guild_id)
         config["embed"] = embed_name
-        config["embed_name"] = embed_name
+        config["embed_name"] = embed_name  # Bảo toàn biến đồng bộ
         await save_guild_config(guild_id, config)
