@@ -1,3 +1,4 @@
+#Core/booster_storage.py
 import copy
 import asyncio
 from collections import defaultdict
@@ -47,15 +48,8 @@ async def get_guild_config(guild_id: int):
     config = db.get(guild_id_str, {})
     if not isinstance(config, dict): config = {}
 
-    # [VÁ LỖI NỘI SOI]: Đảm bảo các ID luôn là string/int sạch để Engine không bị crash
-    clean_config = {
-        "booster_role": config.get("booster_role"),
-        "channel": config.get("channel"),
-        "message": config.get("message"),
-        "embed": config.get("embed")
-    }
-    
-    return copy.deepcopy(clean_config)
+    # [VÁ LỖI NỘI SOI]: Giữ nguyên toàn bộ Keys để đồng bộ 100% với Dashboard API và Engine
+    return copy.deepcopy(config)
 
 async def save_guild_config(guild_id: int, config: dict):
     """
@@ -87,9 +81,7 @@ async def set_booster_role(guild_id: int, role_id: int):
         config = await get_guild_config(guild_id)
         config["booster_role"] = role_id
         await save_guild_config(guild_id, config)
-    # Tự dọn dẹp lock để tiết kiệm tài nguyên (Industrial Standard)
-    if guild_id in _guild_locks and not lock.locked(): 
-        _guild_locks.pop(guild_id, None)
+    # [ĐÃ GỠ BOM NỔ CHẬM] Giữ nguyên lock trong RAM để bảo toàn cấu trúc Async
 
 async def set_booster_channel(guild_id: int, channel_id: int):
     """Cập nhật kênh thông báo Booster"""
@@ -98,8 +90,6 @@ async def set_booster_channel(guild_id: int, channel_id: int):
         config = await get_guild_config(guild_id)
         config["channel"] = channel_id
         await save_guild_config(guild_id, config)
-    if guild_id in _guild_locks and not lock.locked(): 
-        _guild_locks.pop(guild_id, None)
 
 async def set_booster_message(guild_id: int, message: str):
     """Cập nhật nội dung tin nhắn Booster"""
@@ -108,8 +98,6 @@ async def set_booster_message(guild_id: int, message: str):
         config = await get_guild_config(guild_id)
         config["message"] = message
         await save_guild_config(guild_id, config)
-    if guild_id in _guild_locks and not lock.locked(): 
-        _guild_locks.pop(guild_id, None)
 
 async def set_booster_embed(guild_id: int, embed_name: str):
     """Cập nhật mẫu Embed cho Booster"""
@@ -118,5 +106,3 @@ async def set_booster_embed(guild_id: int, embed_name: str):
         config = await get_guild_config(guild_id)
         config["embed"] = embed_name
         await save_guild_config(guild_id, config)
-    if guild_id in _guild_locks and not lock.locked(): 
-        _guild_locks.pop(guild_id, None)
