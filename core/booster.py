@@ -203,12 +203,8 @@ class BoosterListener(commands.Cog):
             task = asyncio.create_task(assign_correct_level(after))
             self._tasks.add(task)
             task.add_done_callback(self._tasks.discard)
-
-            # Gửi tin nhắn mừng nếu bắt đầu boost
-            if before.premium_since is None and after.premium_since is not None:
-                task_welcome = asyncio.create_task(send_config_message(after.guild, after, "booster"))
-                self._tasks.add(task_welcome)
-                task_welcome.add_done_callback(self._tasks.discard)
+            
+            # [ĐÃ CẮT BỎ NHÁNH GỬI THÔNG BÁO Ở ĐÂY ĐỂ NGĂN CHẶN SPAM DOUBLE MESSAGE]
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
