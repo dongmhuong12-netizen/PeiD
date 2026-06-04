@@ -1,3 +1,4 @@
+#commands/dev/dev_say.py
 import discord
 import asyncio
 from discord import app_commands
@@ -29,9 +30,9 @@ class DevSay(commands.Cog):
         return embed
 
     # ==========================================
-    # LOGIC 1: TEXT COMMAND (!sy) - ZERO LATENCY
+    # LOGIC 1: TEXT COMMAND (!sy) - ZERO LATENCY + MEDIA SUPPORT
     # ==========================================
-    @commands.command(name="sy", description="[PREMIUM] gửi tin nhắn thuần văn bản dưới danh nghĩa của bot có áp dụng bộ biến động")
+    @commands.command(name="sy", description="[PREMIUM] gửi tin nhắn và file dưới danh nghĩa của bot")
     async def dev_say_text_cmd(self, ctx: commands.Context, *, text_content: str = None):
         # Ẩn danh thần tốc Zero-Latency: Xóa tin nhắn gọi lệnh của sếp NGAY LẬP TỨC ở background
         try:
@@ -44,56 +45,86 @@ class DevSay(commands.Cog):
         if not await self.has_premium_privilege(ctx.author.id):
             return await ctx.send(embed=self.get_unauthorized_embed(), delete_after=7)
 
-        # Bắt lỗi khi sếp quên nhập nội dung
-        if not text_content:
+        # [NÂNG CẤP 1] Bắt lỗi khi sếp KHÔNG nhập chữ VÀ CŨNG KHÔNG gửi file
+        if not text_content and not ctx.message.attachments:
             return await ctx.send(
-                f"{Emojis.HOICHAM} aree? cậu muốn lệnh được thực hiện thì hãy viết kèm nội dung sau `!sy` nhé.", 
+                f"{Emojis.HOICHAM} aree? cậu muốn lệnh được thực hiện thì hãy viết nội dung hoặc gửi kèm ảnh/file nhé.", 
                 delete_after=7
             )
 
         try:
-            # Bơm chuỗi ký tự qua cỗ máy Variable Engine để dịch toàn bộ biến tĩnh/động và Emoji
-            processed_text = apply_variables(text_content, ctx.guild, ctx.author)
+            # [NÂNG CẤP 1] Chặn lỗi Variable Engine nếu sếp chỉ gửi ảnh (text_content = None)
+            processed_text = apply_variables(text_content, ctx.guild, ctx.author) if text_content else None
 
-            # Thực thi nã đạn văn bản thẳng vào kênh. 
-            # Logic kế thừa: Tự động reply nếu sếp có đính kèm reference, nếu không thì gửi bình thường.
-            await ctx.send(content=processed_text, reference=ctx.message.reference)
+            # [NÂNG CẤP 1] Trích xuất và đóng gói toàn bộ file đính kèm
+            files = []
+            for attachment in ctx.message.attachments:
+                files.append(await attachment.to_file())
+
+            # Thực thi nã đạn văn bản và Media thẳng vào kênh. 
+            # Logic kế thừa: Tự động reply nếu sếp có đính kèm reference.
+            await ctx.send(content=processed_text, files=files, reference=ctx.message.reference)
 
         except Exception as e:
             embed_err = discord.Embed(
                 title=f"{Emojis.HOICHAM} lỗi truyền tải mạch văn bản",
-                description=f"hệ thống gặp sự cố trong quá trình biên dịch biến số: `{str(e)}`",
+                description=f"hệ thống gặp sự cố trong quá trình xử lý: `{str(e)}`",
                 color=0xe6e2dd
             )
             await ctx.send(embed=embed_err, delete_after=10)
 
     # ==========================================
-    # LOGIC 2: SLASH COMMAND (/sy) - TÀNG HÌNH 100%
+    # LOGIC 2: SLASH COMMAND (/sy) - MULTI-FILE + TÀNG HÌNH 100% + CLEAN UI
     # ==========================================
-    @app_commands.command(name="sy", description="[PREMIUM] gửi tin nhắn thuần văn bản dưới danh nghĩa của bot có áp dụng bộ biến động")
-    @app_commands.describe(text_content="nhập nội dung lời nhắn (hỗ trợ đầy đủ biến văn bản và emoji hệ thống)")
-    async def dev_say_slash_cmd(self, interaction: discord.Interaction, text_content: str):
+    @app_commands.command(name="sy", description="[PREMIUM] gửi tin nhắn và file dưới danh nghĩa của bot")
+    @app_commands.describe(
+        text_content="nhập nội dung lời nhắn (hỗ trợ đầy đủ biến văn bản và emoji hệ thống)",
+        file1="đính kèm file, ảnh, video, gif (tùy chọn)",
+        file2="đính kèm file, ảnh, video, gif (tùy chọn)",
+        file3="đính kèm file, ảnh, video, gif (tùy chọn)"
+    )
+    async def dev_say_slash_cmd(
+        self, 
+        interaction: discord.Interaction, 
+        text_content: str = None,
+        file1: discord.Attachment = None,
+        file2: discord.Attachment = None,
+        file3: discord.Attachment = None
+    ):
         # Vòng kiểm duyệt bảo mật thời gian thực
         if not await self.has_premium_privilege(interaction.user.id):
             return await interaction.response.send_message(embed=self.get_unauthorized_embed(), ephemeral=True)
 
-        # Defer ẩn danh thần tốc để bảo vệ mạch kết nối với Discord
+        # [NÂNG CẤP 1] Bắt lỗi khi sếp để trống toàn bộ mặt trận
+        if not text_content and not file1 and not file2 and not file3:
+            return await interaction.response.send_message(
+                f"{Emojis.HOICHAM} aree? cậu cần nhập nội dung hoặc đính kèm ít nhất 1 file nhé.", 
+                ephemeral=True
+            )
+
+        # [NÂNG CẤP 2] Defer tàng hình: báo cho API biết đã nhận lệnh, "Yiyi đang suy nghĩ..." chỉ mình sếp thấy
         await interaction.response.defer(ephemeral=True)
 
         try:
-            # Bơm chuỗi ký tự qua cỗ máy Variable Engine để dịch toàn bộ biến tĩnh/động và Emoji
-            processed_text = apply_variables(text_content, interaction.guild, interaction.user)
+            # [NÂNG CẤP 1] Biên dịch biến số (bỏ qua nếu chỉ gửi file)
+            processed_text = apply_variables(text_content, interaction.guild, interaction.user) if text_content else None
 
-            # Thực thi nã đạn văn bản thẳng vào kênh hiện tại dưới danh nghĩa của Bot
-            await interaction.channel.send(content=processed_text)
+            # [NÂNG CẤP 1] Nạp đạn Media từ các khe cắm (Lọc các ô trống)
+            files = []
+            for f in [file1, file2, file3]:
+                if f is not None:
+                    files.append(await f.to_file())
 
-            # Phản hồi báo cáo ngầm hoàn thành nhiệm vụ cho người gọi lệnh
-            await interaction.followup.send(f"{Emojis.BUOMA} gửi tin nhắn thành công.", ephemeral=True)
+            # Thực thi nã đạn văn bản/ảnh thẳng vào kênh hiện tại dưới danh nghĩa của Bot
+            await interaction.channel.send(content=processed_text, files=files)
+
+            # [NÂNG CẤP 3] Tự hủy dấu vết: Xóa sạch dòng chữ "Yiyi đang suy nghĩ..." trên màn hình sếp
+            await interaction.delete_original_response()
 
         except Exception as e:
             embed_err = discord.Embed(
                 title=f"{Emojis.HOICHAM} lỗi truyền tải mạch văn bản",
-                description=f"hệ thống gặp sự cố trong quá trình biên dịch biến số: `{str(e)}`",
+                description=f"hệ thống gặp sự cố trong quá trình xử lý: `{str(e)}`",
                 color=0xe6e2dd
             )
             await interaction.followup.send(embed=embed_err, ephemeral=True)
