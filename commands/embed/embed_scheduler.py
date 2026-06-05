@@ -1,12 +1,13 @@
+# commands/embed/embed_scheduler.py
 import discord
-from discord import app_commands, tasks
-from discord.ext import commands
+from discord import app_commands
+from discord.ext import commands, tasks
 import datetime
 import asyncio
 
 from core.embed_storage import load_embed
 from core.embed_sender import send_embed
-from core.embed_group import create_embed_view # Reuse lại logic tạo nút
+from commands.embed.embed_group import create_embed_view # Đã fix chuẩn lại đường dẫn
 from utils.emojis import Emojis
 
 class EmbedScheduler(commands.Cog):
@@ -87,9 +88,5 @@ class EmbedScheduler(commands.Cog):
 
 # Hàm setup để nạp cog
 async def setup(bot: commands.Bot):
-    # Lấy lệnh /p embed để thêm lệnh con schedule vào nhóm đó
-    p_cmd = bot.tree.get_command("p")
-    # Tự động nạp vào nhóm embed của sếp (cần đảm bảo EmbedGroup đã tồn tại)
-    # Nếu muốn dùng lệnh /p embed schedule thì sếp cần add command này vào EmbedGroup
     await bot.add_cog(EmbedScheduler(bot))
     print("[LOAD] Success: commands.embed.embed_scheduler", flush=True)
