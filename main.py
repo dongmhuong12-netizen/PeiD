@@ -152,7 +152,7 @@ EXTENSIONS = [
     "commands.dev.dev_private_space",
     "commands.systems.anon_system",
     "commands.qa.qa_sys",
-
+    "commands.embed.embed_scheduler",
 ]
 
 async def load_extensions():
