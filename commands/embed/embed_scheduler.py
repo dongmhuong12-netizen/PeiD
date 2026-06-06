@@ -26,8 +26,11 @@ class EmbedScheduler(commands.Cog):
     # Vòng lặp "Trái tim" - Quét mỗi 60 giây
     @tasks.loop(seconds=60)
     async def scheduler_loop(self):
-        # Lấy mốc thời gian hiện tại theo chuẩn Quốc tế tuyệt đối (Epoch)
-        now = datetime.datetime.now().timestamp()
+        # [KHIÊN 1] Bắt buộc chờ Bot boot xong 100% vào Discord mới bắt đầu quét
+        await self.bot.wait_until_ready()
+        
+        # [KHIÊN 2] Dùng utcnow() chuẩn của Discord API để tránh bị nhiễu do OS của VPS
+        now = discord.utils.utcnow().timestamp()
         
         # Tìm các task đã đến giờ
         cursor = self.db_col.find({"scheduled_at": {"$lte": now}})
@@ -94,6 +97,55 @@ class EmbedScheduler(commands.Cog):
             f"{Emojis.BUOMA} đã lên lịch gửi embed `{name}` vào {time_str} tại kênh {channel.mention}.", 
             ephemeral=True
         )
+
+    # =========================================================================
+    # CẤY THÊM RADAR KIỂM SOÁT HÀNG CHỜ
+    # =========================================================================
+
+    @app_commands.command(name="schedule_list", description="kiểm tra danh sách các embed đang chờ gửi")
+    async def schedule_list(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        
+        # Kéo toàn bộ task của server hiện tại, sắp xếp theo thời gian gửi gần nhất
+        cursor = self.db_col.find({"guild_id": str(interaction.guild.id)}).sort("scheduled_at", 1)
+        tasks_list = await cursor.to_list(length=20) # Hiển thị tối đa 20 task
+        
+        if not tasks_list:
+            return await interaction.followup.send(f"{Emojis.BUOMA} hiện tại không có embed nào nằm trong hàng chờ nhe cậu.", ephemeral=True)
+            
+        desc = ""
+        for i, task in enumerate(tasks_list, 1):
+            channel_id = task.get("channel_id")
+            emb_name = task.get("embed_name")
+            timestamp = int(task.get("scheduled_at"))
+            
+            desc += f"**{i}.** Embed `{emb_name}` ➜ <#{channel_id}>\n"
+            # Sử dụng chính biến đếm ngược ma thuật của Discord để báo cáo chính xác
+            desc += f"└ ⏰ Khai hỏa: <t:{timestamp}:F> (<t:{timestamp}:R>)\n\n"
+            
+        embed_list = discord.Embed(
+            title=f"🕒 danh sách embed hẹn giờ ({len(tasks_list)})",
+            description=desc,
+            color=0xe6e2dd
+        )
+        await interaction.followup.send(embed=embed_list, ephemeral=True)
+
+    @app_commands.command(name="schedule_cancel", description="hủy bỏ lịch gửi của một embed")
+    @app_commands.describe(name="chọn tên embed muốn hủy lịch từ danh sách")
+    @app_commands.autocomplete(name=embed_name_autocomplete)
+    async def schedule_cancel(self, interaction: discord.Interaction, name: str):
+        await interaction.response.defer(ephemeral=True)
+        
+        # Xóa toàn bộ task chứa tên embed này của server hiện tại
+        result = await self.db_col.delete_many({
+            "guild_id": str(interaction.guild.id), 
+            "embed_name": name
+        })
+        
+        if result.deleted_count > 0:
+            await interaction.followup.send(f"{Emojis.BUOMA} đã hủy thành công `{result.deleted_count}` lịch chờ gửi của embed `{name}`.", ephemeral=True)
+        else:
+            await interaction.followup.send(f"{Emojis.HOICHAM} không tìm thấy lịch chờ nào của embed `{name}` nhe cậu.", ephemeral=True)
 
 # Hàm setup để nạp cog
 async def setup(bot: commands.Bot):
