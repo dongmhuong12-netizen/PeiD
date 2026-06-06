@@ -52,10 +52,15 @@ class EmbedScheduler(commands.Cog):
                 
                 await send_embed(channel, data, guild, user, embed_name=task["embed_name"], view=view)
                 
-                # Xóa task sau khi nã đạn thành công
-                await self.db_col.delete_one({"_id": task["_id"]})
             except Exception as e:
-                print(f"[Scheduler Error] {e}", flush=True)
+                # Nếu quá trình gửi phát sinh lỗi, nó sẽ in ra màn hình VPS thay vì làm sập bot
+                print(f"[Scheduler Error] Lỗi khi gửi embed {task.get('embed_name')}: {e}", flush=True)
+            finally:
+                # [CHỐT CHẶN TỐI THƯỢNG] 
+                # Nhờ lệnh "finally", dù đoạn trên chạy thành công, hay dính lỗi (Exception), hay bị (continue)...
+                # Hệ thống ĐỀU BẮT BUỘC thực thi lệnh XÓA TASK NÀY KHỎI DATABASE.
+                # Khai tử vĩnh viễn hiện tượng Zombie Task (Gửi lặp lại đồ cũ).
+                await self.db_col.delete_one({"_id": task["_id"]})
 
     @app_commands.command(name="schedule", description="lên lịch gửi embed vào thời gian chỉ định")
     @app_commands.describe(
