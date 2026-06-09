@@ -1,4 +1,3 @@
-#commands/auto_responder/ar_sys.py
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -346,7 +345,9 @@ class AutoResponder(commands.Cog):
     # ==========================================
     # HỆ THỐNG LỆNH QUẢN TRỊ SLASH COMMANDS (/ar)
     # ==========================================
-    ar_group = app_commands.Group(name="ar", description="Hệ thống Auto-Responder phản hồi tự động", default_permissions=discord.Permissions(manage_guild=True))
+    
+    # [THAY ĐỔI: Gỡ khóa quyền cứng để nhường chỗ cho khóa tổng của /p]
+    ar_group = app_commands.Group(name="ar", description="Hệ thống Auto-Responder phản hồi tự động")
 
     @ar_group.command(name="create", description="Tạo một văn bản gốc để lưu vào kho")
     @app_commands.describe(name="Tên của văn bản (dùng để liên kết sau này)", content="Nội dung văn bản (hỗ trợ đầy đủ bộ biến số)")
@@ -645,5 +646,21 @@ class AutoResponder(commands.Cog):
             await interaction.followup.send(f"{Emojis.HOICHAM} lỗi truy xuất danh sách: `{str(e)}`", ephemeral=True)
 
 async def setup(bot: commands.Bot):
-    await bot.add_cog(AutoResponder(bot))
-    print("[LOAD] Success: commands.auto_responder.ar_sys (Full Engine: Batch Processing & Autocomplete Injected)", flush=True)
+    # 1. Nạp Cog để giữ nguyên hệ mạch Database và cỗ máy Lắng nghe
+    cog = AutoResponder(bot)
+    await bot.add_cog(cog)
+    
+    # 2. Rút /ar cũ ra và ghim vào cổng tổng /p
+    p_cmd = bot.tree.get_command("p")
+    if p_cmd and isinstance(p_cmd, app_commands.Group):
+        # Dọn rác
+        bot.tree.remove_command("ar")
+        existing = next((cmd for cmd in p_cmd.commands if cmd.name == "ar"), None)
+        if existing: 
+            p_cmd.remove_command("ar")
+        
+        # Tiêm mạch
+        p_cmd.add_command(cog.ar_group)
+        print("[LOAD] Success: commands.auto_responder.ar_sys (Connected to /p Master Shield)", flush=True)
+    else:
+        print("[LOAD] Warning: Không tìm thấy /p. Cụm AR chạy độc lập.", flush=True)
