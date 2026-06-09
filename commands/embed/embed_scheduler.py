@@ -1,4 +1,3 @@
-# commands/embed/embed_scheduler.py
 import discord
 from discord import app_commands
 from discord.ext import commands, tasks
@@ -18,6 +17,10 @@ class EmbedScheduler(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.db_col = getattr(bot.db, "db", bot.db)["scheduled_embeds"]
+        
+        # [MẠCH NHÓM LỆNH CẦU NỐI VÀO /P]
+        self.embed_scheduler_group = app_commands.Group(name="scheduler", description="quản lý lịch gửi embed tự động")
+        
         self.scheduler_loop.start()
 
     def cog_unload(self):
@@ -103,10 +106,6 @@ class EmbedScheduler(commands.Cog):
             ephemeral=True
         )
 
-    # =========================================================================
-    # CẤY THÊM RADAR KIỂM SOÁT HÀNG CHỜ
-    # =========================================================================
-
     @app_commands.command(name="schedule_list", description="kiểm tra danh sách các embed đang chờ gửi")
     async def schedule_list(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
@@ -154,5 +153,21 @@ class EmbedScheduler(commands.Cog):
 
 # Hàm setup để nạp cog
 async def setup(bot: commands.Bot):
-    await bot.add_cog(EmbedScheduler(bot))
-    print("[LOAD] Success: commands.embed.embed_scheduler", flush=True)
+    cog = EmbedScheduler(bot)
+    await bot.add_cog(cog)
+    
+    # Rút lệnh cũ ra và ghim vào cổng tổng /p
+    p_cmd = bot.tree.get_command("p")
+    if p_cmd and isinstance(p_cmd, app_commands.Group):
+        # Dọn rác lệnh cũ
+        bot.tree.remove_command("schedule")
+        bot.tree.remove_command("schedule_list")
+        bot.tree.remove_command("schedule_cancel")
+        
+        # Tiêm nhánh lệnh vào tháp bảo vệ tổng
+        p_cmd.add_command(cog.schedule)
+        p_cmd.add_command(cog.schedule_list)
+        p_cmd.add_command(cog.schedule_cancel)
+        print("[LOAD] Success: commands.embed.embed_scheduler (Connected to /p Master Shield)", flush=True)
+    else:
+        print("[LOAD] Warning: Không tìm thấy Master Group /p.", flush=True)
