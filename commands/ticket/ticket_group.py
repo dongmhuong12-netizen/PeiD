@@ -67,21 +67,25 @@ class TicketGroup(app_commands.Group):
     # =========================
     # LỆNH 1: SETUP (Hạ tầng - Không làm mất dữ liệu nhân sự)
     # =========================
-    @app_commands.command(name="setup", description="Khởi tạo hạ tầng Ticket (Danh mục & Kênh log)")
+    @app_commands.command(name="setup", description="Khởi tạo hạ tầng Ticket (Danh mục, Kênh log, Kênh ping)")
     @app_commands.describe(
         category_id="1. ID danh mục hoặc Tag danh mục chứa Ticket",
-        log_channel_id="2. ID kênh hoặc Tag kênh gửi transcript"
+        log_channel_id="2. ID kênh hoặc Tag kênh gửi transcript",
+        ping_channel_id="3. (Tùy chọn) ID kênh radar để ping thông báo riêng cho Staff"
     )
-    async def setup_ticket(self, interaction: discord.Interaction, category_id: str, log_channel_id: str):
+    async def setup_ticket(self, interaction: discord.Interaction, category_id: str, log_channel_id: str, ping_channel_id: str = None):
         await interaction.response.defer(ephemeral=True)
         guild = interaction.guild
         
         clean_cat_id = self._sanitize(category_id)
         clean_log_id = self._sanitize(log_channel_id)
+        # Bổ sung lọc ID kênh Ping
+        clean_ping_id = self._sanitize(ping_channel_id) if ping_channel_id else ""
 
         try:
             cat = guild.get_channel(int(clean_cat_id)) if clean_cat_id else None
             log = guild.get_channel(int(clean_log_id)) if clean_log_id else None
+            ping_ch = guild.get_channel(int(clean_ping_id)) if clean_ping_id else None
             
             if not cat or not log:
                 embed_err = discord.Embed(
@@ -102,15 +106,18 @@ class TicketGroup(app_commands.Group):
         config = await get_ticket_config(guild.id) or {}
         config.update({
             "category_id": clean_cat_id,
-            "log_channel_id": clean_log_id
+            "log_channel_id": clean_log_id,
+            "ping_channel_id": clean_ping_id  # Lưu thêm cấu hình kênh Ping
         })
         
         if await update_ticket_config(guild.id, config):
+            ping_status = f"• radar ping: `{ping_ch.name}`\n" if ping_ch else "• radar ping: `không thiết lập`\n"
             embed_res = discord.Embed(
                 title=f"{Emojis.BUOMA} cập nhật hạ tầng Ticket thành công",
                 description=(
                     f"• danh mục: `{cat.name}`\n"
-                    f"• kênh logs: `{log.name}`\n\n"
+                    f"• kênh logs: `{log.name}`\n"
+                    f"{ping_status}\n"
                     f"*sử dụng `/p ticket staff-add` để thêm nhân sự hỗ trợ nhee.*"
                 ),
                 color=0xe6e2dd
@@ -256,8 +263,13 @@ class TicketGroup(app_commands.Group):
         cat = guild.get_channel(int(config.get("category_id", 0)))
         log = guild.get_channel(int(config.get("log_channel_id", 0)))
         
+        # Bổ sung hiển thị kênh Ping
+        ping_id = config.get("ping_channel_id")
+        ping_channel = guild.get_channel(int(ping_id)) if ping_id and str(ping_id).isdigit() else None
+        
         display_cat = cat.mention if cat else "`none`"
         display_log = log.mention if log else "`none`"
+        display_ping = ping_channel.mention if ping_channel else "`none`"
         
         staff_ids = config.get("staff_roles", [])
         staff_mentions = ", ".join([f"<@&{r}>" for r in staff_ids]) if staff_ids else "`none`"
@@ -267,6 +279,7 @@ class TicketGroup(app_commands.Group):
             description=(
                 f"• **danh mục:** {display_cat}\n"
                 f"• **kênh logs:** {display_log}\n"
+                f"• **radar ping:** {display_ping}\n"
                 f"• **staff roles:** {staff_mentions}\n"
                 f"• **embed liên kết:** {display_embed}"
             ),
@@ -281,4 +294,4 @@ async def setup(bot: commands.Bot):
         existing = next((c for c in p_cmd.commands if c.name == "ticket"), None)
         if existing: p_cmd.remove_command("ticket")
         p_cmd.add_command(TicketGroup())
-        print("[LOAD] Success: commands.ticket.ticket_group (Deep Clean Optimized)", flush=True)
+        print("[LOAD] Success: commands.ticket.ticket_group (Deep Clean & Radar Ping Optimized)", flush=True)
