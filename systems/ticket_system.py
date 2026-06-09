@@ -28,7 +28,7 @@ async def handle_ticket_interaction(interaction: discord.Interaction):
             return await interaction.followup.send(embed=embed_no_config, ephemeral=True)
 
     # =========================
-    # LOGIC 1: MỞ TICKET
+    # LOGIC 1: M mở TICKET
     # =========================
     if custom_id == "yiyi:ticket:open":
         # QUY TẮC 3S: Defer ngay lập tức để giữ mạch kết nối (Industrial Standard)
@@ -106,6 +106,29 @@ async def handle_ticket_interaction(interaction: discord.Interaction):
 
         await channel.send(embed=welcome_embed, view=view)
         
+        # =========================
+        # [MỤC 8.5] KÍCH HOẠT RADAR PING STAFF (BẢO MẬT)
+        # =========================
+        ping_channel_id = config.get("ping_channel_id")
+        if ping_channel_id and str(ping_channel_id).isdigit():
+            try:
+                ping_channel = guild.get_channel(int(ping_channel_id))
+                if not ping_channel:
+                    ping_channel = await guild.fetch_channel(int(ping_channel_id))
+                
+                if ping_channel:
+                    ping_text = f"ping ! {' '.join([f'<@&{r}>' for r in staff_ids])}" if staff_ids else "ping !"
+
+                    radar_embed = discord.Embed(
+                        title=f"{Emojis.NO} có ticket mới được tạo từ {user.name}",
+                        description=f"nhấn vào đây để tiếp quản: {channel.mention}",
+                        color=0xe6e2dd
+                    )
+                    
+                    await ping_channel.send(content=ping_text, embed=radar_embed)
+            except Exception as e:
+                print(f"[Ticket Radar Warning] Không thể gửi ping thông báo: {e}", flush=True)
+
         # [MỤC 8] Phản hồi tạo thành công
         embed_success = discord.Embed(
             description=f"{Emojis.BUOMA} tạo Ticket thành công. hãy tới kênh {channel.mention} để sử dụng nhé.",
