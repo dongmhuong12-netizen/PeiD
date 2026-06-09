@@ -301,5 +301,23 @@ class EmojiSync(commands.Cog):
         ))
 
 async def setup(bot: commands.Bot):
-    await bot.add_cog(EmojiSync(bot))
-    print("[LOAD] Success: commands.emoji.emoji_sync (User Sync Hub)", flush=True)
+    # 1. Nạp đại lý Cog để Discord tự động kết nối ngữ cảnh 'self' cho các hàm xử lý DB bên trên
+    cog = EmojiSync(bot)
+    await bot.add_cog(cog)
+    
+    # 2. Thực hiện mạch chuyển hướng hạ tầng: Rút khỏi cổng toàn cục và cấy vào cổng bảo mật tổng /p
+    p_cmd = bot.tree.get_command("p")
+    if p_cmd and isinstance(p_cmd, app_commands.Group):
+        # Triệt tiêu cụm lệnh độc lập /emoji ngoài rìa (giấu khỏi tầm mắt mem thường)
+        bot.tree.remove_command("emoji")
+        
+        # Khử trùng lặp nhánh con phòng hờ trường hợp hot-reload
+        existing = next((cmd for cmd in p_cmd.commands if cmd.name == "emoji"), None)
+        if existing:
+            p_cmd.remove_command("emoji")
+            
+        # Tiêm nhánh lệnh vào tháp bảo vệ tổng -> trở thành /p emoji [lệnh_con]
+        p_cmd.add_command(cog.emoji)
+        print("[LOAD] Success: commands.emoji.emoji_sync (Connected to /p Master Shield)", flush=True)
+    else:
+        print("[LOAD] Warning: Không tìm thấy Master Group /p, cụm emoji tạm thời chạy ở cổng global", flush=True)
