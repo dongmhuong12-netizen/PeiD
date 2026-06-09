@@ -6,6 +6,8 @@ from discord import app_commands
 # MAIN GROUP (CHỈ TẠO KHUNG /P)
 # =============================
 
+# [KHÓA BẢO MẬT TỔNG] Chỉ Manager có quyền Quản lý Máy chủ hoặc Admin mới thấy và dùng được toàn bộ cụm lệnh /p
+@app_commands.default_permissions(manage_guild=True)
 class PGroup(app_commands.Group):
     def __init__(self):
         super().__init__(name="p", description="hệ thống lệnh peiD core")
@@ -49,5 +51,3 @@ async def setup(bot: commands.Bot):
     # 2. nạp cog quản lý chung
     await bot.add_cog(Root(bot))
     print("[root] hệ thống root đã sẵn sàng.", flush=True)
-
-
