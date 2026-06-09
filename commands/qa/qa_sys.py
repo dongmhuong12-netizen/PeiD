@@ -1,4 +1,3 @@
-#commands/qa/qa_sys.py
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -357,7 +356,9 @@ class QASystem(commands.Cog):
     # ==========================================
     # QUẢN TRỊ HỆ THỐNG QA (/qa)
     # ==========================================
-    qa_group = app_commands.Group(name="qa", description="Hệ thống Hỏi Đáp Yiyi Cục bộ (Local Q&A)", default_permissions=discord.Permissions(manage_guild=True))
+    
+    # [THAY ĐỔI: Gỡ khóa quyền cứng để nhường chỗ cho khóa tổng của /p]
+    qa_group = app_commands.Group(name="qa", description="Hệ thống Hỏi Đáp Yiyi Cục bộ (Local Q&A)")
 
     @qa_group.command(name="bind", description="Gán cỗ máy Radar Hỏi Đáp vào một kênh cụ thể")
     @app_commands.describe(channel="Kênh văn bản muốn kích hoạt")
@@ -603,5 +604,20 @@ class QASystem(commands.Cog):
             await interaction.followup.send(f"lỗi: `{str(e)}`", ephemeral=True)
 
 async def setup(bot: commands.Bot):
-    await bot.add_cog(QASystem(bot))
-    print("[LOAD] Success: commands.qa.qa_sys (Multi-Bind Local Radar & Auto-Delete Injected)", flush=True)
+    # 1. Nạp Cog để giữ nguyên hệ mạch Database
+    cog = QASystem(bot)
+    await bot.add_cog(cog)
+    
+    # 2. Rút /qa cũ ra và ghim vào cổng tổng /p
+    p_cmd = bot.tree.get_command("p")
+    if p_cmd and isinstance(p_cmd, app_commands.Group):
+        # Dọn rác
+        bot.tree.remove_command("qa")
+        existing = next((cmd for cmd in p_cmd.commands if cmd.name == "qa"), None)
+        if existing: p_cmd.remove_command("qa")
+        
+        # Tiêm mạch
+        p_cmd.add_command(cog.qa_group)
+        print("[LOAD] Success: commands.qa.qa_sys (Connected to /p Master Shield)", flush=True)
+    else:
+        print("[LOAD] Warning: Không tìm thấy /p. Cụm QA chạy độc lập.", flush=True)
