@@ -91,8 +91,9 @@ async def send_wellcome(guild: discord.Guild, member: discord.Member, bot_client
         # 1.5 [CẤY GHÉP] Xử lý tham chiếu AR Ca Đêm (Time-Gated Reference)
         # Chỉ chạy nếu có thiết lập Night Shift VÀ có truyền bot_client vào
         if night_ar_text and night_start is not None and night_end is not None and bot_client:
-            # Lấy giờ VN hiện tại
-            now_vn = datetime.datetime.now(VN_TZ)
+            # VÁ LỖI MÚI GIỜ: Ép tính toán từ UTC gốc để triệt tiêu sai số cấu hình múi giờ trên các môi trường VPS khác nhau
+            now_utc = datetime.datetime.now(datetime.timezone.utc)
+            now_vn = now_utc + datetime.timedelta(hours=7)
             current_hour = now_vn.hour
             
             is_night_time = False
@@ -248,6 +249,26 @@ class WellcomeGroup(app_commands.Group):
         embed = discord.Embed(
             title=f"{Emojis.BUOMA} kích hoạt ca đêm thành công",
             description=f"từ `{start_hour}h` đến `{end_hour}h`, **yiyi** sẽ mượn văn bản `{ar_text_name}` để chào khách ca đêm nha.",
+            color=0xe6e2dd
+        )
+        await interaction.followup.send(embed=embed)
+
+    # [CẤY GHÉP] Lệnh gỡ bỏ liên kết văn bản AR ca đêm
+    @app_commands.command(name="night_shift_clear", description="gỡ bỏ hoàn toàn cấu hình tin nhắn ca đêm")
+    async def night_shift_clear(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=False)
+        gid = interaction.guild.id
+        lock = _config_locks[gid]
+        async with lock:
+            # Xóa các biến cấu hình về trạng thái trống
+            await update_guild_config(gid, "wellcome", "night_ar_text", None)
+            await update_guild_config(gid, "wellcome", "night_start", None)
+            await update_guild_config(gid, "wellcome", "night_end", None)
+        if gid in _config_locks and not lock.locked(): _config_locks.pop(gid, None)
+        
+        embed = discord.Embed(
+            title=f"{Emojis.BUOMA} gỡ bỏ cấu hình ca đêm thành công",
+            description="**yiyi** đã hủy liên kết văn bản AR ca đêm và khôi phục hệ thống về trạng thái bình thường.",
             color=0xe6e2dd
         )
         await interaction.followup.send(embed=embed)
