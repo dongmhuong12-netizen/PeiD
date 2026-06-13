@@ -10,6 +10,9 @@ class PremiumGroup(app_commands.Group):
         self.bot = bot
         # Mạch trích xuất cấu trúc DB chuẩn Industrial
         self.db_col = getattr(bot.db, "db", bot.db)["premium_users_sys"]
+        # Thêm phân khu cho lệnh mới
+        self.db_guilds = getattr(bot.db, "db", bot.db)["premium_server_configs"]
+        self.db_permits = getattr(bot.db, "db", bot.db)["premium_server_users"]
 
     def is_absolute_owner(self, interaction: discord.Interaction) -> bool:
         """Rào chắn bảo mật tối cao: Chỉ cho phép định danh Thực thể tối cao vượt qua"""
@@ -38,9 +41,8 @@ class PremiumGroup(app_commands.Group):
             return await interaction.response.send_message(embed=self.get_owner_deny_embed(), ephemeral=True)
 
         await interaction.response.defer(ephemeral=True)
-        db_guilds = getattr(self.bot.db, "db", self.bot.db)["premium_server_configs"]
         
-        await db_guilds.update_one(
+        await self.db_guilds.update_one(
             {"guild_id": str(interaction.guild.id)},
             {"$set": {"lock_status": trang_thai.value}},
             upsert=True
@@ -63,11 +65,10 @@ class PremiumGroup(app_commands.Group):
             return await interaction.response.send_message(embed=self.get_owner_deny_embed(), ephemeral=True)
 
         await interaction.response.defer(ephemeral=True)
-        db_server_users = getattr(self.bot.db, "db", self.bot.db)["premium_server_users"]
         u_id_str = str(user.id)
         g_id_str = str(interaction.guild.id)
 
-        await db_server_users.update_one(
+        await self.db_permits.update_one(
             {"guild_id": g_id_str, "user_id": u_id_str},
             {"$set": {
                 "allowed_to_use": True, 
@@ -184,36 +185,40 @@ class PremiumGroup(app_commands.Group):
 
         await interaction.response.defer(ephemeral=True)
 
+        # Trạng thái khóa
+        guild_cfg = await self.db_guilds.find_one({"guild_id": str(interaction.guild.id)})
+        lock_status = guild_cfg.get("lock_status", "mở") if guild_cfg else "mở"
+
+        # List Premium
         premium_lines = []
         async for item in self.db_col.find({}):
             u_id = item["user_id"]
             g_by = item.get("granted_by", "Unknown")
             ts = item.get("timestamp", 0)
-
-            # Đồng bộ cache lấy thông tin thực thể
             user_obj = self.bot.get_user(int(u_id))
             grantor_obj = self.bot.get_user(int(g_by)) if g_by.isdigit() else None
-
             user_fmt = f"<@{u_id}> (`{u_id}`)"
             grantor_fmt = f"<@{g_by}>" if grantor_obj else f"`{g_by}`"
             time_fmt = f"<t:{ts}:R>" if ts else "Không rõ"
-
             premium_lines.append(f"• {user_fmt}\n  └── Người cấp: {grantor_fmt} | update: {time_fmt}")
 
+        # List Permit
+        permit_lines = []
+        async for item in self.db_permits.find({"guild_id": str(interaction.guild.id)}):
+            u_id = item["user_id"]
+            permit_lines.append(f"<@{u_id}>")
+
         embed_list = discord.Embed(
-            title=f"{Emojis.BUOMA} danh sách thực thể Premium",
+            title=f"{Emojis.BUOMA} Báo cáo hệ thống Premium & Phân quyền",
             color=0xe6e2dd
         )
-
-        if premium_lines:
-            text_content = "\n".join(premium_lines)
-            # Phòng vệ giới hạn ký tự 4096 của description embed tránh tràn bộ nhớ đệm
-            if len(text_content) > 4000:
-                text_content = text_content[:3900] + "\n...và một số thực thể Premium khác."
-            embed_list.description = text_content
-        else:
-            embed_list.description = "Hiện tại chưa có người dùng nào được cấy đặc quyền Premium hệ thống đâu a."
-
+        
+        desc = f"**Trạng thái khóa server:** `{lock_status}`\n\n"
+        desc += "**Danh sách Permit (quyền dùng lệnh tại server):**\n" + (", ".join(permit_lines) if permit_lines else "Chưa có") + "\n\n"
+        desc += "**Danh sách Premium (VIP hệ thống):**\n" + ("\n".join(premium_lines) if premium_lines else "Chưa có")
+        
+        if len(desc) > 4000: desc = desc[:3900] + "\n...và một số thực thể khác."
+        embed_list.description = desc
         embed_list.set_footer(text="Hệ thống quản lý phân phối đặc quyền của yiyi")
         await interaction.followup.send(embed=embed_list)
 
