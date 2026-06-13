@@ -1,3 +1,4 @@
+#commands/premium/premium_group.py 
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -10,9 +11,6 @@ class PremiumGroup(app_commands.Group):
         self.bot = bot
         # Mạch trích xuất cấu trúc DB chuẩn Industrial
         self.db_col = getattr(bot.db, "db", bot.db)["premium_users_sys"]
-        # Thêm phân khu cho lệnh mới
-        self.db_guilds = getattr(bot.db, "db", bot.db)["premium_server_configs"]
-        self.db_permits = getattr(bot.db, "db", bot.db)["premium_server_users"]
 
     def is_absolute_owner(self, interaction: discord.Interaction) -> bool:
         """Rào chắn bảo mật tối cao: Chỉ cho phép định danh Thực thể tối cao vượt qua"""
@@ -27,67 +25,6 @@ class PremiumGroup(app_commands.Group):
         )
         return embed
 
-    # =========================================================================
-    # [THÊM MỚI] LỆNH 1: CẤU HÌNH TRẠNG THÁI KHÓA/MỞ MẠCH CÓ THAM SỐ BẬT/TẮT
-    # =========================================================================
-    @app_commands.command(name="config", description="[OWNER ONLY] Điều chỉnh bật/tắt trạng thái khóa mạch Premium tại máy chủ hiện tại")
-    @app_commands.describe(trang_thai="Chọn trạng thái hoạt động của bộ khóa")
-    @app_commands.choices(trang_thai=[
-        app_commands.Choice(name="Bật (Khóa mạch hệ thống)", value="đóng"),
-        app_commands.Choice(name="Tắt (Mở mạch hệ thống)", value="mở")
-    ])
-    async def premium_config_cmd(self, interaction: discord.Interaction, trang_thai: app_commands.Choice[str]):
-        if not self.is_absolute_owner(interaction):
-            return await interaction.response.send_message(embed=self.get_owner_deny_embed(), ephemeral=True)
-
-        await interaction.response.defer(ephemeral=True)
-        
-        await self.db_guilds.update_one(
-            {"guild_id": str(interaction.guild.id)},
-            {"$set": {"lock_status": trang_thai.value}},
-            upsert=True
-        )
-        
-        embed = discord.Embed(
-            title=f"{Emojis.BUOMA} cập nhật cấu hình thành công",
-            description=f"đã chuyển trạng thái hệ thống khóa tại máy chủ này thành: **{trang_thai.name}**.",
-            color=0xe6e2dd
-        )
-        await interaction.followup.send(embed=embed)
-
-    # =========================================================================
-    # [THÊM MỚI] LỆNH 2: GÁN QUYỀN THỰC THI LỆNH RIÊNG BIỆT CHO 1 CÁ NHÂN TRONG SERVER
-    # =========================================================================
-    @app_commands.command(name="permit", description="[OWNER ONLY] Gán phân quyền thực thi bộ lệnh Premium cho một cá nhân tại máy chủ")
-    @app_commands.describe(user="Chọn thành viên muốn cấp quyền sử dụng bộ lệnh")
-    async def premium_permit_cmd(self, interaction: discord.Interaction, user: discord.User):
-        if not self.is_absolute_owner(interaction):
-            return await interaction.response.send_message(embed=self.get_owner_deny_embed(), ephemeral=True)
-
-        await interaction.response.defer(ephemeral=True)
-        u_id_str = str(user.id)
-        g_id_str = str(interaction.guild.id)
-
-        await self.db_permits.update_one(
-            {"guild_id": g_id_str, "user_id": u_id_str},
-            {"$set": {
-                "allowed_to_use": True, 
-                "assigned_by": str(interaction.user.id), 
-                "timestamp": int(time.time())
-            }},
-            upsert=True
-        )
-
-        embed = discord.Embed(
-            title=f"{Emojis.BUOMA} gán quyền dùng lệnh thành công!",
-            description=f"đã mở phân quyền thực thi bộ lệnh cho thành viên {user.mention} (`{u_id_str}`) tại máy chủ này thành công.",
-            color=0xe6e2dd
-        )
-        await interaction.followup.send(embed=embed)
-
-    # =========================================================================
-    # GIỮ NGUYÊN BẢN 100% MÃ NGUỒN GỐC CỦA CẬU KHÔNG THAY ĐỔI LOGIC
-    # =========================================================================
     @app_commands.command(name="grant", description="[OWNER ONLY] cấp đặc quyền sử dụng bộ lệnh Premium cho một người dùng")
     @app_commands.describe(user="chọn người dùng muốn cấp quyền đặc cách")
     async def premium_grant_cmd(self, interaction: discord.Interaction, user: discord.User):
@@ -185,40 +122,36 @@ class PremiumGroup(app_commands.Group):
 
         await interaction.response.defer(ephemeral=True)
 
-        # Trạng thái khóa
-        guild_cfg = await self.db_guilds.find_one({"guild_id": str(interaction.guild.id)})
-        lock_status = guild_cfg.get("lock_status", "mở") if guild_cfg else "mở"
-
-        # List Premium
         premium_lines = []
         async for item in self.db_col.find({}):
             u_id = item["user_id"]
             g_by = item.get("granted_by", "Unknown")
             ts = item.get("timestamp", 0)
+
+            # Đồng bộ cache lấy thông tin thực thể
             user_obj = self.bot.get_user(int(u_id))
             grantor_obj = self.bot.get_user(int(g_by)) if g_by.isdigit() else None
+
             user_fmt = f"<@{u_id}> (`{u_id}`)"
             grantor_fmt = f"<@{g_by}>" if grantor_obj else f"`{g_by}`"
             time_fmt = f"<t:{ts}:R>" if ts else "Không rõ"
+
             premium_lines.append(f"• {user_fmt}\n  └── Người cấp: {grantor_fmt} | update: {time_fmt}")
 
-        # List Permit
-        permit_lines = []
-        async for item in self.db_permits.find({"guild_id": str(interaction.guild.id)}):
-            u_id = item["user_id"]
-            permit_lines.append(f"<@{u_id}>")
-
         embed_list = discord.Embed(
-            title=f"{Emojis.BUOMA} Báo cáo hệ thống Premium & Phân quyền",
+            title=f"{Emojis.BUOMA} danh sách thực thể Premium",
             color=0xe6e2dd
         )
-        
-        desc = f"**Trạng thái khóa server:** `{lock_status}`\n\n"
-        desc += "**Danh sách Permit (quyền dùng lệnh tại server):**\n" + (", ".join(permit_lines) if permit_lines else "Chưa có") + "\n\n"
-        desc += "**Danh sách Premium (VIP hệ thống):**\n" + ("\n".join(premium_lines) if premium_lines else "Chưa có")
-        
-        if len(desc) > 4000: desc = desc[:3900] + "\n...và một số thực thể khác."
-        embed_list.description = desc
+
+        if premium_lines:
+            text_content = "\n".join(premium_lines)
+            # Phòng vệ giới hạn ký tự 4096 của description embed tránh tràn bộ nhớ đệm
+            if len(text_content) > 4000:
+                text_content = text_content[:3900] + "\n...và một số thực thể Premium khác."
+            embed_list.description = text_content
+        else:
+            embed_list.description = "Hiện tại chưa có người dùng nào được cấy đặc quyền Premium hệ thống đâu a."
+
         embed_list.set_footer(text="Hệ thống quản lý phân phối đặc quyền của yiyi")
         await interaction.followup.send(embed=embed_list)
 
