@@ -1,4 +1,3 @@
-#commands/premium/premium_group.py 
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -25,6 +24,69 @@ class PremiumGroup(app_commands.Group):
         )
         return embed
 
+    # =========================================================================
+    # [THÊM MỚI] LỆNH 1: CẤU HÌNH TRẠNG THÁI KHÓA/MỞ MẠCH CÓ THAM SỐ BẬT/TẮT
+    # =========================================================================
+    @app_commands.command(name="config", description="[OWNER ONLY] Điều chỉnh bật/tắt trạng thái khóa mạch Premium tại máy chủ hiện tại")
+    @app_commands.describe(trang_thai="Chọn trạng thái hoạt động của bộ khóa")
+    @app_commands.choices(trang_thai=[
+        app_commands.Choice(name="Bật (Khóa mạch hệ thống)", value="đóng"),
+        app_commands.Choice(name="Tắt (Mở mạch hệ thống)", value="mở")
+    ])
+    async def premium_config_cmd(self, interaction: discord.Interaction, trang_thai: app_commands.Choice[str]):
+        if not self.is_absolute_owner(interaction):
+            return await interaction.response.send_message(embed=self.get_owner_deny_embed(), ephemeral=True)
+
+        await interaction.response.defer(ephemeral=True)
+        db_guilds = getattr(self.bot.db, "db", self.bot.db)["premium_server_configs"]
+        
+        await db_guilds.update_one(
+            {"guild_id": str(interaction.guild.id)},
+            {"$set": {"lock_status": trang_thai.value}},
+            upsert=True
+        )
+        
+        embed = discord.Embed(
+            title=f"{Emojis.BUOMA} cập nhật cấu hình thành công",
+            description=f"đã chuyển trạng thái hệ thống khóa tại máy chủ này thành: **{trang_thai.name}**.",
+            color=0xe6e2dd
+        )
+        await interaction.followup.send(embed=embed)
+
+    # =========================================================================
+    # [THÊM MỚI] LỆNH 2: GÁN QUYỀN THỰC THI LỆNH RIÊNG BIỆT CHO 1 CÁ NHÂN TRONG SERVER
+    # =========================================================================
+    @app_commands.command(name="permit", description="[OWNER ONLY] Gán phân quyền thực thi bộ lệnh Premium cho một cá nhân tại máy chủ")
+    @app_commands.describe(user="Chọn thành viên muốn cấp quyền sử dụng bộ lệnh")
+    async def premium_permit_cmd(self, interaction: discord.Interaction, user: discord.User):
+        if not self.is_absolute_owner(interaction):
+            return await interaction.response.send_message(embed=self.get_owner_deny_embed(), ephemeral=True)
+
+        await interaction.response.defer(ephemeral=True)
+        db_server_users = getattr(self.bot.db, "db", self.bot.db)["premium_server_users"]
+        u_id_str = str(user.id)
+        g_id_str = str(interaction.guild.id)
+
+        await db_server_users.update_one(
+            {"guild_id": g_id_str, "user_id": u_id_str},
+            {"$set": {
+                "allowed_to_use": True, 
+                "assigned_by": str(interaction.user.id), 
+                "timestamp": int(time.time())
+            }},
+            upsert=True
+        )
+
+        embed = discord.Embed(
+            title=f"{Emojis.BUOMA} gán quyền dùng lệnh thành công!",
+            description=f"đã mở phân quyền thực thi bộ lệnh cho thành viên {user.mention} (`{u_id_str}`) tại máy chủ này thành công.",
+            color=0xe6e2dd
+        )
+        await interaction.followup.send(embed=embed)
+
+    # =========================================================================
+    # GIỮ NGUYÊN BẢN 100% MÃ NGUỒN GỐC CỦA CẬU KHÔNG THAY ĐỔI LOGIC
+    # =========================================================================
     @app_commands.command(name="grant", description="[OWNER ONLY] cấp đặc quyền sử dụng bộ lệnh Premium cho một người dùng")
     @app_commands.describe(user="chọn người dùng muốn cấp quyền đặc cách")
     async def premium_grant_cmd(self, interaction: discord.Interaction, user: discord.User):
