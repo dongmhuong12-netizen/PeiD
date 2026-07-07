@@ -3,6 +3,7 @@ from discord.ext import commands
 from discord import app_commands
 import re
 import traceback
+import time # [ĐÃ THÊM] Thư viện thời gian để làm bộ đệm
 
 from core.variable_engine import apply_variables 
 from utils.emojis import Emojis
@@ -93,6 +94,7 @@ class VoiceTag(commands.GroupCog, group_name="voicetag", group_description="Hệ
     def __init__(self, bot):
         self.bot = bot
         self.db = bot.db.db['voice_tag_config'] 
+        self._cooldowns = {} # [ĐÃ THÊM] Bộ nhớ đệm lưu vết thời gian nhảy kênh
 
         # Khôi phục nguyên gốc text mặc định
         self.default_configs = {
@@ -221,6 +223,16 @@ class VoiceTag(commands.GroupCog, group_name="voicetag", group_description="Hệ
             
         if before.channel == after.channel:
             return
+
+        # [VẮC-XIN CHỐNG LẶP] Chốt chặn Debounce 3 giây
+        now = time.time()
+        last_time = self._cooldowns.get(member.id, 0)
+        
+        if now - last_time < 3:
+            return # Nếu nhảy kênh liên tục dưới 3 giây (hệ thống tự bế đi) -> Lờ đi ngay lập tức
+            
+        # Ghi lại mốc thời gian nhảy kênh hợp lệ
+        self._cooldowns[member.id] = now
 
         config = await self.get_config(member.guild.id)
         if not config["status"]:
