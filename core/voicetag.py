@@ -3,7 +3,7 @@ from discord.ext import commands
 from discord import app_commands
 import re
 import traceback
-import time # [ĐÃ THÊM] Thư viện thời gian để làm bộ đệm
+import asyncio
 
 from core.variable_engine import apply_variables 
 from utils.emojis import Emojis
@@ -94,7 +94,7 @@ class VoiceTag(commands.GroupCog, group_name="voicetag", group_description="Hệ
     def __init__(self, bot):
         self.bot = bot
         self.db = bot.db.db['voice_tag_config'] 
-        self._cooldowns = {} # [ĐÃ THÊM] Bộ nhớ đệm lưu vết thời gian nhảy kênh
+        self._pending_tasks = {} # [BỘ ĐỆM ĐA LUỒNG] Lưu trữ các luồng thông báo chờ xác thực
 
         # Khôi phục nguyên gốc text mặc định
         self.default_configs = {
@@ -214,39 +214,20 @@ class VoiceTag(commands.GroupCog, group_name="voicetag", group_description="Hệ
 
 
     # ==========================================
-    # ĐỘNG CƠ LÕI - XỬ LÝ SỰ KIỆN NỀN
+    # CỖ MÁY THỰC THI (ĐƯỢC GỌI SAU KHI QUA BỘ LỌC)
     # ==========================================
-    @commands.Cog.listener()
-    async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
-        if member.bot:
-            return
-            
-        if before.channel == after.channel:
-            return
-
-        # [VẮC-XIN CHỐNG LẶP] Chốt chặn Debounce 3 giây
-        now = time.time()
-        last_time = self._cooldowns.get(member.id, 0)
-        
-        if now - last_time < 3:
-            return # Nếu nhảy kênh liên tục dưới 3 giây (hệ thống tự bế đi) -> Lờ đi ngay lập tức
-            
-        # Ghi lại mốc thời gian nhảy kênh hợp lệ
-        self._cooldowns[member.id] = now
-
-        config = await self.get_config(member.guild.id)
-        if not config["status"]:
-            return
-
-        del_time = config["autodelete_delay"] if config["autodelete_status"] else None
-
-        # [NINJA MODE] Combo chặn thông báo nhưng vẫn giữ Tag màu xanh
-        ninja_mode = {
-            "silent": True, 
-            "allowed_mentions": discord.AllowedMentions(users=False)
-        }
-
+    async def execute_voice_notification(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
         try:
+            # Nghỉ nhịp 0.7s để hứng mọi tín hiệu API dồn dập (True Debounce Sweep)
+            await asyncio.sleep(0.7)
+
+            config = await self.get_config(member.guild.id)
+            if not config["status"]:
+                return
+
+            del_time = config["autodelete_delay"] if config["autodelete_status"] else None
+            ninja_mode = {"silent": True, "allowed_mentions": discord.AllowedMentions(users=False)}
+
             # === MẠCH 1: NHẢY VOICE (MOVE) ===
             if before.channel and after.channel and before.channel != after.channel:
                 if config["notify_move"]:
@@ -278,11 +259,39 @@ class VoiceTag(commands.GroupCog, group_name="voicetag", group_description="Hệ
                 leave_tx = apply_variables(config["leave_text"], member.guild, member, channel=before.channel)
                 await before.channel.send(leave_tx, delete_after=del_time, **ninja_mode)
 
+        except asyncio.CancelledError:
+            # Bot âm thầm hủy luồng nếu phát hiện sự kiện này đã lỗi thời (Khách bị bế đi phòng khác)
+            pass
         except discord.Forbidden:
             pass
         except Exception as e:
             print(f"[VOICE TAG ERROR] Lỗi tại server {member.guild.name}: {e}")
             traceback.print_exc()
+        finally:
+            # Dọn dẹp RAM sau khi chạy xong
+            if member.id in self._pending_tasks and self._pending_tasks[member.id] == asyncio.current_task():
+                del self._pending_tasks[member.id]
+
+
+    # ==========================================
+    # CẢM BIẾN BẮT LUỒNG VÀ PHÂN LUỒNG (TRUE DEBOUNCE)
+    # ==========================================
+    @commands.Cog.listener()
+    async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
+        if member.bot:
+            return
+            
+        if before.channel == after.channel:
+            return
+
+        # 1. Hủy bỏ ngay lập tức thông báo cũ nếu người dùng nhảy kênh liên tục
+        if member.id in self._pending_tasks:
+            self._pending_tasks[member.id].cancel()
+
+        # 2. Tạo một luồng chờ mới cho sự kiện hiện tại
+        task = asyncio.create_task(self.execute_voice_notification(member, before, after))
+        self._pending_tasks[member.id] = task
+
 
 async def setup(bot):
     await bot.add_cog(VoiceTag(bot))
