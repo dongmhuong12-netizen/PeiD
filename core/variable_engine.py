@@ -7,7 +7,11 @@ from utils.emojis import Emojis
 
 def build_variables(
     guild: discord.Guild,
-    member: Union[discord.Member, discord.User, None] = None
+    member: Union[discord.Member, discord.User, None] = None,
+    channel: Union[discord.abc.GuildChannel, discord.Thread, None] = None,
+    old_channel: Union[discord.VoiceChannel, None] = None,
+    new_channel: Union[discord.VoiceChannel, None] = None,
+    message: discord.Message = None
 ) -> dict:
     """
     Xây dựng từ điển biến số. 
@@ -104,6 +108,54 @@ def build_variables(
     })
 
     # =========================================================================
+    # [CẤY MỚI LOGIC] KHỐI VARIABLES MỞ RỘNG (BẢN VÉT CẠN API DISCORD)
+    # =========================================================================
+    if channel:
+        channel_created = getattr(channel, "created_at", None)
+        category = getattr(channel, "category", None)
+        
+        variables.update({
+            "{channel}": getattr(channel, "mention", ""),
+            "{channel_name}": getattr(channel, "name", ""),
+            "{channel_id}": str(getattr(channel, "id", "")),
+            "{channel_topic}": getattr(channel, "topic", "Không có chủ đề") or "Không có chủ đề",
+            "{channel_created}": channel_created.strftime("%d/%m/%Y") if channel_created else "Chưa rõ",
+            "{channel_category}": getattr(category, "name", "Không có"),
+            "{channel_nsfw}": "Có" if getattr(channel, "is_nsfw", lambda: False)() else "Không",
+        })
+
+    if old_channel:
+        variables.update({
+            "{voice_old}": getattr(old_channel, "mention", ""),
+            "{voice_old_name}": getattr(old_channel, "name", ""),
+            "{voice_old_id}": str(getattr(old_channel, "id", "")),
+            "{voice_old_limit}": str(getattr(old_channel, "user_limit", 0)),
+            "{voice_old_bitrate}": str(getattr(old_channel, "bitrate", 0)),
+        })
+
+    if new_channel:
+        variables.update({
+            "{voice_new}": getattr(new_channel, "mention", ""),
+            "{voice_new_name}": getattr(new_channel, "name", ""),
+            "{voice_new_id}": str(getattr(new_channel, "id", "")),
+            "{voice_new_limit}": str(getattr(new_channel, "user_limit", 0)),
+            "{voice_new_bitrate}": str(getattr(new_channel, "bitrate", 0)),
+        })
+
+    if message:
+        msg_created = getattr(message, "created_at", None)
+        author = getattr(message, "author", None)
+        
+        variables.update({
+            "{message_id}": str(getattr(message, "id", "")),
+            "{message_url}": getattr(message, "jump_url", ""),
+            "{message_content}": getattr(message, "content", ""),
+            "{message_author}": getattr(author, "mention", "") if author else "",
+            "{message_author_name}": getattr(author, "name", "") if author else "",
+            "{message_created}": msg_created.strftime("%d/%m/%Y %H:%M:%S") if msg_created else "Chưa rõ",
+        })
+
+    # =========================================================================
     # [CẤY MỚI] AUTOMATIC EMOJI INJECTION MODULE
     # Tự động quét lớp phản chiếu bóc toàn bộ Emoji từ Class
     # =========================================================================
@@ -121,7 +173,11 @@ def build_variables(
 def apply_variables(
     data: Union[str, dict, list],
     guild: discord.Guild,
-    member: Union[discord.Member, discord.User, None] = None
+    member: Union[discord.Member, discord.User, None] = None,
+    channel: Union[discord.abc.GuildChannel, discord.Thread, None] = None,
+    old_channel: Union[discord.VoiceChannel, None] = None,
+    new_channel: Union[discord.VoiceChannel, None] = None,
+    message: discord.Message = None
 ) -> Union[str, dict, list]:
     """
     Áp dụng biến số vào dữ liệu bằng Regex tối ưu.
@@ -129,7 +185,7 @@ def apply_variables(
     if not data:
         return data
 
-    variables = build_variables(guild, member)
+    variables = build_variables(guild, member, channel, old_channel, new_channel, message)
     
     # [PHÒNG THỦ] Tránh compile rỗng nếu variables gặp sự cố
     if not variables:
