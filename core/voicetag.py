@@ -1,0 +1,285 @@
+import discord
+from discord.ext import commands
+from discord import app_commands
+import re
+import traceback
+
+# [ĐIỀU CHỈNH] Sếp trỏ đúng đường dẫn import file variable_engine nhé
+from core.variable_engine import apply_variables 
+
+# Hàm phân giải thời gian s/m
+def parse_time_to_seconds(time_str: str) -> int:
+    match = re.match(r'^(\d+)(s|m)$', time_str.lower().strip())
+    if not match:
+        return -1
+    amount = int(match.group(1))
+    unit = match.group(2)
+    return amount * 60 if unit == 'm' else amount
+
+# ==========================================
+# KHỐI MODAL (MENU CHỈNH SỬA UI/UX PREMIUM)
+# ==========================================
+
+class VoiceTagBasicModal(discord.ui.Modal, title="Tùy chỉnh Thông báo Voice Basic"):
+    join_text = discord.ui.TextInput(
+        label="Văn bản khi Vào Voice (Join)",
+        style=discord.TextStyle.paragraph,
+        required=True,
+        max_length=1500
+    )
+    leave_text = discord.ui.TextInput(
+        label="Văn bản khi Rời Voice (Leave)",
+        style=discord.TextStyle.paragraph,
+        required=True,
+        max_length=1500
+    )
+
+    def __init__(self, cog, guild_id: int, current_join: str, current_leave: str):
+        super().__init__()
+        self.cog = cog
+        self.guild_id = guild_id
+        # Pre-fill dữ liệu cũ
+        self.join_text.default = current_join
+        self.leave_text.default = current_leave
+
+    async def on_submit(self, interaction: discord.Interaction):
+        # Lưu vào MongoDB
+        await self.cog.db.update_one(
+            {"guild_id": self.guild_id},
+            {"$set": {
+                "join_text": self.join_text.value,
+                "leave_text": self.leave_text.value
+            }},
+            upsert=True
+        )
+        await interaction.response.send_message("✅ Đã cập nhật văn bản Basic thành công!", ephemeral=True)
+
+
+class VoiceTagMoveModal(discord.ui.Modal, title="Tùy chỉnh Thông báo Nhảy Voice"):
+    move_old_text = discord.ui.TextInput(
+        label="Báo ở Kênh Cũ (Kênh bị rời đi)",
+        style=discord.TextStyle.paragraph,
+        required=True,
+        max_length=1500
+    )
+    move_new_text = discord.ui.TextInput(
+        label="Báo ở Kênh Mới (Kênh vừa đến)",
+        style=discord.TextStyle.paragraph,
+        required=True,
+        max_length=1500
+    )
+
+    def __init__(self, cog, guild_id: int, current_old: str, current_new: str):
+        super().__init__()
+        self.cog = cog
+        self.guild_id = guild_id
+        self.move_old_text.default = current_old
+        self.move_new_text.default = current_new
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await self.cog.db.update_one(
+            {"guild_id": self.guild_id},
+            {"$set": {
+                "move_old_text": self.move_old_text.value,
+                "move_new_text": self.move_new_text.value
+            }},
+            upsert=True
+        )
+        await interaction.response.send_message("✅ Đã cập nhật văn bản Nhảy Voice thành công!", ephemeral=True)
+
+
+# ==========================================
+# KHỐI MODULE CHÍNH (COG)
+# ==========================================
+
+class VoiceTag(commands.GroupCog, group_name="voicetag", group_description="Hệ thống Thông báo Voice Premium"):
+    def __init__(self, bot):
+        self.bot = bot
+        # [KẾT NỐI DB] Cấu trúc gọi Collection theo chuẩn chung, sếp chỉnh lại theo object MongoDB của main
+        self.db = bot.db['voice_tag_config'] 
+
+        # Default Configs
+        self.default_configs = {
+            "status": False,
+            "notify_move": False,
+            "autodelete_status": False,
+            "autodelete_delay": 0,
+            "join_text": "{user} đã tham gia kênh.",
+            "leave_text": "{user} đã rời khỏi kênh.",
+            "move_old_text": "{user} đã rời khỏi kênh và tham gia kênh {voice_new}.",
+            "move_new_text": "{user} vừa rời kênh {voice_old} và đã tham gia kênh này."
+        }
+
+    async def get_config(self, guild_id: int) -> dict:
+        """Lấy cấu hình an toàn, bù đắp trường dữ liệu thiếu bằng Default"""
+        data = await self.db.find_one({"guild_id": guild_id})
+        if not data:
+            return self.default_configs.copy()
+        
+        # Đồng bộ các field có thể bị khuyết (Bảo vệ DB cũ)
+        config = self.default_configs.copy()
+        config.update(data)
+        return config
+
+    # ------------------------------------------
+    # LỆNH 1: BẬT / TẮT HỆ THỐNG TRUNG TÂM
+    # ------------------------------------------
+    @app_commands.command(name="toggle", description="Bật hoặc tắt hệ thống thông báo Voice")
+    @app_commands.describe(status="Công tắc hệ thống chung", notify_move="Bật báo nhảy Voice (Rời phòng A sang phòng B)")
+    @app_commands.choices(
+        status=[
+            app_commands.Choice(name="Bật", value=1),
+            app_commands.Choice(name="Tắt", value=0)
+        ],
+        notify_move=[
+            app_commands.Choice(name="Bật", value=1),
+            app_commands.Choice(name="Tắt", value=0)
+        ]
+    )
+    @app_commands.default_permissions(manage_guild=True)
+    async def toggle_sys(self, interaction: discord.Interaction, status: int, notify_move: int = None):
+        update_data = {"status": bool(status)}
+        if notify_move is not None:
+            update_data["notify_move"] = bool(notify_move)
+
+        await self.db.update_one(
+            {"guild_id": interaction.guild.id},
+            {"$set": update_data},
+            upsert=True
+        )
+        
+        st_text = "BẬT" if status else "TẮT"
+        mv_text = f" | Nhảy Voice: {'BẬT' if notify_move else 'TẮT'}" if notify_move is not None else ""
+        await interaction.response.send_message(f"⚙️ Trạng thái Voice Tag: **{st_text}**{mv_text}", ephemeral=True)
+
+    # ------------------------------------------
+    # LỆNH 2: CẤU HÌNH AUTO-DELETE
+    # ------------------------------------------
+    @app_commands.command(name="autodelete", description="Cài đặt tự động xóa tin nhắn thông báo")
+    @app_commands.describe(status="Bật hoặc tắt", delay="Thời gian (VD: 10s, 5m)")
+    @app_commands.choices(
+        status=[
+            app_commands.Choice(name="Bật", value=1),
+            app_commands.Choice(name="Tắt", value=0)
+        ]
+    )
+    @app_commands.default_permissions(manage_guild=True)
+    async def auto_delete(self, interaction: discord.Interaction, status: int, delay: str = None):
+        update_data = {"autodelete_status": bool(status)}
+        
+        if status == 1:
+            if not delay:
+                return await interaction.response.send_message("❌ Bạn cần nhập thời gian `delay` (VD: 10s, 1m) khi bật!", ephemeral=True)
+            
+            seconds = parse_time_to_seconds(delay)
+            if seconds < 0:
+                return await interaction.response.send_message("❌ Sai định dạng thời gian. Hãy dùng số kèm theo `s` (giây) hoặc `m` (phút). VD: 30s, 2m.", ephemeral=True)
+            if seconds > 3600:
+                return await interaction.response.send_message("❌ Thời gian xóa tối đa là 60m (3600s).", ephemeral=True)
+                
+            update_data["autodelete_delay"] = seconds
+
+        await self.db.update_one({"guild_id": interaction.guild.id}, {"$set": update_data}, upsert=True)
+        
+        if status == 1:
+            await interaction.response.send_message(f"🧹 Đã BẬT dọn dẹp tin nhắn. Tin sẽ tự xóa sau **{delay}**.", ephemeral=True)
+        else:
+            await interaction.response.send_message("🧹 Đã TẮT dọn dẹp tin nhắn.", ephemeral=True)
+
+    # ------------------------------------------
+    # LỆNH 3: MENU TEXT BASIC
+    # ------------------------------------------
+    @app_commands.command(name="menu_basic", description="Tùy chỉnh nội dung khi vào/rời Voice")
+    @app_commands.default_permissions(manage_guild=True)
+    async def menu_basic(self, interaction: discord.Interaction):
+        config = await self.get_config(interaction.guild.id)
+        modal = VoiceTagBasicModal(
+            cog=self, 
+            guild_id=interaction.guild.id,
+            current_join=config["join_text"],
+            current_leave=config["leave_text"]
+        )
+        await interaction.response.send_modal(modal)
+
+    # ------------------------------------------
+    # LỆNH 4: MENU TEXT NHẢY VOICE
+    # ------------------------------------------
+    @app_commands.command(name="menu_move", description="Tùy chỉnh nội dung báo nhảy Voice")
+    @app_commands.default_permissions(manage_guild=True)
+    async def menu_move(self, interaction: discord.Interaction):
+        config = await self.get_config(interaction.guild.id)
+        modal = VoiceTagMoveModal(
+            cog=self, 
+            guild_id=interaction.guild.id,
+            current_old=config["move_old_text"],
+            current_new=config["move_new_text"]
+        )
+        await interaction.response.send_modal(modal)
+
+
+    # ==========================================
+    # ĐỘNG CƠ LÕI - XỬ LÝ SỰ KIỆN NỀN
+    # ==========================================
+    @commands.Cog.listener()
+    async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
+        # 1. Bộ lọc chặn cửa: Chỉ lọc Bot. Người dùng mute/deafen vẫn qua được nếu họ có di chuyển kênh.
+        if member.bot:
+            return
+            
+        # 2. Bỏ qua các thao tác không di chuyển vật lý (Tắt mic, mở cam, v.v...)
+        if before.channel == after.channel:
+            return
+
+        # 3. Kéo Database
+        config = await self.get_config(member.guild.id)
+        if not config["status"]:
+            return
+
+        # Cấu hình Auto-delete chung
+        del_time = config["autodelete_delay"] if config["autodelete_status"] else None
+
+        try:
+            # === MẠCH 1: NHẢY VOICE (MOVE) ===
+            if before.channel and after.channel and before.channel != after.channel:
+                if config["notify_move"]:
+                    # Báo ở phòng cũ
+                    text_old = apply_variables(
+                        config["move_old_text"], member.guild, member, 
+                        old_channel=before.channel, new_channel=after.channel
+                    )
+                    await before.channel.send(text_old, delete_after=del_time)
+
+                    # Đón ở phòng mới
+                    text_new = apply_variables(
+                        config["move_new_text"], member.guild, member, 
+                        old_channel=before.channel, new_channel=after.channel
+                    )
+                    await after.channel.send(text_new, delete_after=del_time)
+                else:
+                    # Nếu tắt thông báo nhảy, tự chuyển về gửi Basic Leave ở phòng A và Basic Join ở phòng B
+                    leave_tx = apply_variables(config["leave_text"], member.guild, member, channel=before.channel)
+                    await before.channel.send(leave_tx, delete_after=del_time)
+                    
+                    join_tx = apply_variables(config["join_text"], member.guild, member, channel=after.channel)
+                    await after.channel.send(join_tx, delete_after=del_time)
+
+            # === MẠCH 2: BASIC JOIN ===
+            elif not before.channel and after.channel:
+                join_tx = apply_variables(config["join_text"], member.guild, member, channel=after.channel)
+                await after.channel.send(join_tx, delete_after=del_time)
+
+            # === MẠCH 3: BASIC LEAVE ===
+            elif before.channel and not after.channel:
+                leave_tx = apply_variables(config["leave_text"], member.guild, member, channel=before.channel)
+                await before.channel.send(leave_tx, delete_after=del_time)
+
+        except discord.Forbidden:
+            # Bọc thép chống Crash khi Yiyi không có quyền gửi tin nhắn vào Text-in-Voice
+            pass
+        except Exception as e:
+            print(f"[VOICE TAG ERROR] Lỗi tại server {member.guild.name}: {e}")
+            traceback.print_exc()
+
+
+async def setup(bot):
+    await bot.add_cog(VoiceTag(bot))
