@@ -66,6 +66,7 @@ intents.guilds = True
 intents.reactions = True
 intents.message_content = True
 intents.voice_states = True
+intents.presences = True # [CẤY MỚI] BẮT BUỘC ĐỂ ĐỌC ĐƯỢC CUSTOM STATUS (PRESENCE_UPDATE)
 
 bot = commands.AutoShardedBot(
     command_prefix=commands.when_mentioned_or("!"), # [FIX CỐT LÕI] Nhận diện cả ping và prefix !
@@ -125,25 +126,26 @@ async def before_rotate_status():
     await bot.wait_until_ready()
 
 # =========================
-# EXTENSIONS (QUY HOẠCH CHIẾN LƯỢC)
+# EXTENSIONS (QUY HOẠCH CHIẾN LƯỢC DỰA TRÊN ẢNH SẾP CUNG CẤP)
 # =========================
 
 EXTENSIONS = [
-    "core.root",                  
-    "systems.button_listener",     
-    "commands.embed.embed_group",  
-    "core.greet_leave",          
-    "core.wellcome",             
-    "core.booster",        
+    "core.root",
+    "systems.button_listener",
+    "commands.embed.embed_group",
+    "core.greet_leave",
+    "core.wellcome",
+    "core.booster",
     "core.voicetag",
-    "systems.reaction_role",     
-    "commands.fun.yiyi_core",     
-    "commands.embed.embed_advanced", 
-    "commands.embed.embed_webhook",  
-    "commands.embed.embed_link",     
+    "core.servertag",
+    "systems.reaction_role",
+    "commands.fun.yiyi_core",
+    "commands.embed.embed_advanced",
+    "commands.embed.embed_webhook",
+    "commands.embed.embed_link",
     "commands.identity.identity_group",
-    "commands.ticket.ticket_group",  
-    "commands.forms.forms_group",    
+    "commands.ticket.ticket_group",
+    "commands.forms.forms_group",
     "commands.fun.yiyi_resources",
     "commands.premium.premium_group",
     "commands.dev.dev_emojis",
@@ -154,6 +156,8 @@ EXTENSIONS = [
     "commands.systems.anon_system",
     "commands.qa.qa_sys",
     "commands.embed.embed_scheduler",
+    "core.dev_sync",
+    "core.radar"
 ]
 
 async def load_extensions():
