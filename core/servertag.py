@@ -153,7 +153,7 @@ class ServerTagGroup(app_commands.Group):
 
 
 # ======================
-# LISTENER & GATEWAY SCANNER
+# LISTENER: HYBRID ARCHITECTURE (CHIA ĐỂ TRỊ)
 # ======================
 
 class ServerTagListener(commands.Cog):
@@ -166,116 +166,109 @@ class ServerTagListener(commands.Cog):
             task.cancel()
         self._tasks.clear()
 
-    @commands.Cog.listener()
-    async def on_socket_response(self, payload: dict):
-        event_name = payload.get("t")
-        if event_name not in ["PRESENCE_UPDATE", "GUILD_MEMBER_UPDATE"]:
-            return
-
-        data = payload.get("d", {})
-        if not data: return
-        
-        try:
-            guild_id = int(data.get("guild_id", 0))
-            user_data = data.get("user", {})
-            user_id = int(user_data.get("id", 0))
-        except (TypeError, ValueError):
-            return
-
-        # [FIX]: Ép kiểu an toàn 'is True' để tránh lỗi lọc nhầm ở PRESENCE_UPDATE
-        if not guild_id or not user_id or user_data.get("bot") is True:
-            return
-
-        config = await get_servertag_config(self.bot, guild_id)
-        trigger_status = config.get("trigger_status")
+    # LÕI HỘI TỤ: Xử lý an toàn Database và Trao thưởng
+    async def evaluate_and_reward(self, guild: discord.Guild, member: discord.Member, new_status: bool = None, new_clan: bool = None):
+        config = await get_servertag_config(self.bot, guild.id)
         reward_role_id = config.get("reward_role_id")
-
-        # Lấy trạng thái lưu trữ quá khứ từ Database
-        cached_state = await get_user_servertag_state(self.bot, guild_id, user_id)
         
-        new_has_clan = cached_state["has_clan"]
-        new_has_status = cached_state["has_status"]
+        cached_state = await get_user_servertag_state(self.bot, guild.id, member.id)
+        final_status = new_status if new_status is not None else cached_state["has_status"]
+        final_clan = new_clan if new_clan is not None else cached_state["has_clan"]
+        
         db_updates = {}
+        if final_status != cached_state["has_status"]: db_updates["has_status"] = final_status
+        if final_clan != cached_state["has_clan"]: db_updates["has_clan"] = final_clan
 
-        # 1. ĐÁNH GIÁ THẺ MÁY CHỦ (CLAN TAG) NẾU XUẤT HIỆN TRONG PAYLOAD
-        if "primary_guild" in user_data:
-            pg = user_data["primary_guild"]
-            if pg:
-                enabled = pg.get("identity_enabled", True)
-                clan_id = pg.get("identity_guild_id") or pg.get("id")
-                current_tag_valid = (enabled and str(clan_id) == str(guild_id))
-            else:
-                current_tag_valid = False
-            
-            if current_tag_valid != cached_state["has_clan"]:
-                new_has_clan = current_tag_valid
-                db_updates["has_clan"] = new_has_clan
-
-        # 2. ĐÁNH GIÁ TRẠNG THÁI (CUSTOM STATUS) NẾU XUẤT HIỆN TRONG PAYLOAD
-        # [FIX]: Loại bỏ điều kiện 'in data' nguy hiểm. Bắt buộc kiểm tra lại nếu có trigger_status
-        if trigger_status and event_name == "PRESENCE_UPDATE":
-            activities = data.get("activities", [])
-            current_status_valid = False
-            for act in activities:
-                if act.get("type") == 4:
-                    state_text = str(act.get("state", "")).lower()
-                    if trigger_status.lower() in state_text:
-                        current_status_valid = True
-                        break
-            
-            if current_status_valid != cached_state["has_status"]:
-                new_has_status = current_status_valid
-                db_updates["has_status"] = new_has_status
-
-        # Tính toán điều kiện hợp lệ tổng hợp
-        is_eligible = (new_has_clan or new_has_status)
+        is_eligible = (final_status or final_clan)
         was_rewarded = cached_state["is_rewarded"]
 
-        # Nếu không có hành động phân phát nhưng trạng thái thô thay đổi -> Cập nhật bộ nhớ đệm ẩn
-        if (not is_eligible and not was_rewarded) or (is_eligible and was_rewarded):
-            if db_updates:
-                await update_user_servertag_state(self.bot, guild_id, user_id, db_updates)
-            return  # Thoát sớm để tránh hao tổn tài nguyên
+        # Chống dội lệnh dư thừa
+        if not db_updates and is_eligible == was_rewarded:
+            return
 
-        # 3. CHU TRÌNH THỰC THI CHÍNH XÁC TUYỆT ĐỐI
-        guild = self.bot.get_guild(guild_id)
-        if not guild: return
-        
-        member = guild.get_member(user_id)
-        if not member:
-            # [FIX]: Chỉ gọi API fetch_member đắt đỏ khi chắc chắn cần gán/gỡ Role, chống Rate Limit
-            try:
-                member = await guild.fetch_member(user_id)
-            except discord.NotFound:
-                return
+        if db_updates:
+            await update_user_servertag_state(self.bot, guild.id, member.id, db_updates)
 
         reward_role = guild.get_role(int(reward_role_id)) if reward_role_id else None
-        
-        # TRƯỜNG HỢP A: Kích hoạt phần thưởng mới
+
         if is_eligible and not was_rewarded:
-            db_updates["is_rewarded"] = True
-            await update_user_servertag_state(self.bot, guild_id, user_id, db_updates)
-            
+            await update_user_servertag_state(self.bot, guild.id, member.id, {"is_rewarded": True})
             if reward_role and reward_role not in member.roles:
-                try:
-                    await member.add_roles(reward_role, reason="Hệ thống Servertag: Bật trạng thái hợp lệ")
+                try: await member.add_roles(reward_role, reason="Servertag System")
                 except Exception: pass
             
             task = asyncio.create_task(send_servertag_message(self.bot, guild, member))
             self._tasks.add(task)
             task.add_done_callback(self._tasks.discard)
 
-        # TRƯỜNG HỢP B: Thu hồi toàn bộ quyền lợi và xóa vết
         elif not is_eligible and was_rewarded:
-            db_updates["is_rewarded"] = False
-            await update_user_servertag_state(self.bot, guild_id, user_id, db_updates)
-            
+            await update_user_servertag_state(self.bot, guild.id, member.id, {"is_rewarded": False})
             if reward_role and reward_role in member.roles:
-                try:
-                    await member.remove_roles(reward_role, reason="Hệ thống Servertag: Tắt trạng thái hợp lệ")
+                try: await member.remove_roles(reward_role, reason="Servertag System")
                 except Exception: pass
+
+    # ====================================================
+    # LUỒNG 1: QUÉT TRẠNG THÁI (CHÍNH QUY - 100% HOẠT ĐỘNG)
+    # ====================================================
+    @commands.Cog.listener()
+    async def on_presence_update(self, before: discord.Member, after: discord.Member):
+        if after.bot: return
+        config = await get_servertag_config(self.bot, after.guild.id)
+        trigger = config.get("trigger_status")
+        if not trigger: return
+        
+        has_status = False
+        if after.activities:
+            for act in after.activities:
+                # Type 4 là định dạng Custom Status của API Discord
+                if getattr(act, "type", 0) == 4 or isinstance(act, discord.CustomActivity):
+                    state = str(getattr(act, "state", getattr(act, "name", ""))).lower()
+                    if trigger.lower() in state:
+                        has_status = True
+                        break
+        
+        await self.evaluate_and_reward(after.guild, after, new_status=has_status)
+
+
+    # ====================================================
+    # LUỒNG 2: ĐÀO CLAN TAG (RAW GATEWAY PAYLOAD)
+    # ====================================================
+    @commands.Cog.listener()
+    async def on_socket_response(self, payload: dict):
+        if payload.get("t") != "GUILD_MEMBER_UPDATE":
+            return
+            
+        data = payload.get("d", {})
+        user_data = data.get("user", {})
+        if user_data.get("bot"): return
+        
+        guild_id = int(data.get("guild_id", 0))
+        user_id = int(user_data.get("id", 0))
+        if not guild_id or not user_id: return
+
+        # Đào sâu vào 2 vị trí khả thi nhất mà Discord cất giấu Clan Tag
+        has_clan = False
+        pg = user_data.get("primary_guild")
+        clan = data.get("clan")
+        
+        if pg and isinstance(pg, dict):
+            enabled = pg.get("identity_enabled", True)
+            clan_id = pg.get("identity_guild_id") or pg.get("id")
+            has_clan = (enabled and str(clan_id) == str(guild_id))
+        elif clan and isinstance(clan, dict):
+            has_clan = (str(clan.get("identity_guild_id")) == str(guild_id))
+
+        guild = self.bot.get_guild(guild_id)
+        if not guild: return
+        
+        member = guild.get_member(user_id)
+        if not member:
+            try: member = await guild.fetch_member(user_id)
+            except discord.NotFound: return
+
+        await self.evaluate_and_reward(guild, member, new_clan=has_clan)
 
 async def setup(bot: commands.Bot):
     bot.tree.add_command(ServerTagGroup())
     await bot.add_cog(ServerTagListener(bot))
-    print("[load] success: core.servertag (Ma trận trạng thái an toàn Gateway)", flush=True)
+    print("[load] success: core.servertag (Hybrid Architecture - Phân tách Luồng an toàn)", flush=True)
