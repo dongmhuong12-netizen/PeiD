@@ -2,8 +2,10 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 import asyncio
+import time
 from collections import defaultdict
 
+# --- CÁC MODULE CUSTOM CỦA BẠN ---
 from core.servertag_storage import (
     get_tag_config, update_tag_config,
     get_user_tag_state, update_user_tag_state
@@ -38,8 +40,6 @@ async def send_tag_message(bot, guild: discord.Guild, member: discord.Member, ta
     perms = channel.permissions_for(guild.me)
     if not perms.send_messages: return False
 
-    ninja_mode = {"silent": True, "allowed_mentions": discord.AllowedMentions(users=False)}
-
     try:
         final_content = apply_variables(message_text, guild, member) if message_text else None
         final_embed = None
@@ -52,16 +52,17 @@ async def send_tag_message(bot, guild: discord.Guild, member: discord.Member, ta
                 final_embed = _build_embed(processed_data)
 
         if final_content or final_embed:
-            await channel.send(content=final_content, embed=final_embed, **ninja_mode)
+            await channel.send(content=final_content, embed=final_embed)
             return True
         return False
     except Exception as e:
         print(f"[{tag_type.upper()} TAG ERROR] Thất bại tại guild {guild.id}: {e}", flush=True)
         return False
 
-# ======================
+
+# ====================================================
 # LỆNH: STATUS TAG (Trạng Thái)
-# ======================
+# ====================================================
 
 class StatusTagGroup(app_commands.Group):
     def __init__(self):
@@ -136,9 +137,9 @@ class StatusTagGroup(app_commands.Group):
         await interaction.followup.send(embed=embed)
 
 
-# ======================
+# ====================================================
 # LỆNH: CLAN TAG (Huy hiệu Máy chủ)
-# ======================
+# ====================================================
 
 class ClanTagGroup(app_commands.Group):
     def __init__(self):
@@ -154,14 +155,47 @@ class ClanTagGroup(app_commands.Group):
         embed = discord.Embed(title=f"{Emojis.BUOMA} Cấu hình kênh thông báo Clan Tag thành công: {channel.mention}", color=0xe6e2dd)
         await interaction.followup.send(embed=embed)
 
-    @app_commands.command(name="trigger", description="Thiết lập TỪ KHÓA (chữ) yêu cầu có trong Clan Tag")
+    @app_commands.command(name="trigger", description="Thiết lập TỪ KHÓA yêu cầu có trong Clan Tag và kiểm tra tức thì")
     @app_commands.default_permissions(manage_guild=True)
     async def trigger(self, interaction: discord.Interaction, keyword: str):
         await interaction.response.defer(ephemeral=False)
         gid = interaction.guild.id
+        
         async with _config_locks[gid]:
             await update_tag_config(interaction.client, gid, "clan", "trigger", keyword)
-        embed = discord.Embed(title=f"{Emojis.BUOMA} Cài đặt từ khóa Clan Tag thành công: `{keyword}`", color=0xe6e2dd)
+        
+        debug_info = ""
+        try:
+            raw_member = await interaction.client.http.get_member(gid, interaction.user.id)
+            user_obj = raw_member.get("user", {}) if isinstance(raw_member, dict) else {}
+            
+            def _extract_tag_from_dict(obj):
+                if not isinstance(obj, dict): return None
+                for key in ["clan", "primary_guild"]:
+                    if key in obj and isinstance(obj[key], dict) and "tag" in obj[key]:
+                        return str(obj[key]["tag"])
+                return None
+
+            clan_tag_str = _extract_tag_from_dict(user_obj) or _extract_tag_from_dict(raw_member)
+
+            if clan_tag_str:
+                match = keyword.lower() in clan_tag_str.lower()
+                debug_info = (
+                    f"\n\n{Emojis.START} **HỆ THỐNG KIỂM TRA PHÁT HIỆN:**\n"
+                    f"-> Tag của sếp trên Discord: `{clan_tag_str}`\n"
+                    f"-> Từ khóa sếp vừa cài đặt: `{keyword}`\n"
+                    f"-> Trạng thái kết nối: { '✅ **KHỚP CHUẨN (Hệ thống chạy đúng)**' if match else '❌ **SAI LỆCH MẶT CHỮ**' }"
+                )
+            else:
+                debug_info = f"\n\n{Emojis.START} **HỆ THỐNG KIỂM TRA PHÁT HIỆN:**\n❌ Discord trả về dữ liệu rỗng. Tài khoản hiện tại không đeo Tag."
+        except Exception as e:
+            debug_info = f"\n\n{Emojis.START} **HỆ THỐNG KIỂM TRA PHÁT HIỆN:**\n❌ Lỗi gọi API: `{e}`"
+
+        embed = discord.Embed(
+            title=f"{Emojis.BUOMA} Cài đặt từ khóa Clan Tag thành công: `{keyword}`", 
+            description=f"Đã ghi nhận cấu hình vào cơ sở dữ liệu.{debug_info}",
+            color=0xe6e2dd
+        )
         await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="role", description="Cài đặt Vai trò thưởng khi thành viên đeo đúng Clan Tag")
@@ -213,14 +247,15 @@ class ClanTagGroup(app_commands.Group):
         await interaction.followup.send(embed=embed)
 
 
-# ======================
+# ====================================================
 # LISTENER: BỘ NÃO KIỂM DUYỆT CHÉO (CROSS-VALIDATION)
-# ======================
+# ====================================================
 
 class ServerTagListener(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self._tasks = set()
+        self._cooldown = {} 
 
     def cog_unload(self):
         for task in self._tasks:
@@ -229,10 +264,6 @@ class ServerTagListener(commands.Cog):
 
     # --- LÕI KIỂM DUYỆT CHÉO (CHỐNG XUNG ĐỘT ROLE) ---
     async def evaluate_member_tags(self, guild_id: int, user_id: int, tag_type: str, is_valid: bool):
-        """
-        tag_type: 'status' hoặc 'clan'
-        is_valid: True nếu khớp từ khóa, False nếu không khớp
-        """
         status_config = await get_tag_config(self.bot, guild_id, "status")
         clan_config = await get_tag_config(self.bot, guild_id, "clan")
         
@@ -261,7 +292,6 @@ class ServerTagListener(commands.Cog):
         
         was_rewarded = status_rewarded if tag_type == "status" else clan_rewarded
 
-        # KỊCH BẢN A: Khách thỏa mãn điều kiện -> Tặng Role luôn
         if is_valid and not was_rewarded:
             db_updates[f"{tag_type}_rewarded"] = True
             if target_role and target_role not in member.roles:
@@ -272,14 +302,10 @@ class ServerTagListener(commands.Cog):
             self._tasks.add(task)
             task.add_done_callback(self._tasks.discard)
 
-        # KỊCH BẢN B: Khách mất điều kiện -> KIỂM DUYỆT CHÉO TRƯỚC KHI LỘT
         elif not is_valid and was_rewarded:
             db_updates[f"{tag_type}_rewarded"] = False
-            
-            cross_system = "clan" if tag_type == "status" else "status"
             cross_role_id = clan_role_id if tag_type == "status" else status_role_id
             cross_rewarded = clan_rewarded if tag_type == "status" else status_rewarded
-            
             is_sharing_role = (str(target_role_id) == str(cross_role_id))
             
             if target_role and target_role in member.roles:
@@ -290,87 +316,111 @@ class ServerTagListener(commands.Cog):
         if db_updates:
             await update_user_tag_state(self.bot, guild_id, user_id, db_updates)
 
+    # ----------------------------------------------------
+    # BỘ KÍCH HOẠT CHUÔNG BÁO (TRIGGER DELAYED CHECK)
+    # ----------------------------------------------------
+    async def trigger_delayed_check(self, guild_id: int, user_id: int, event_name: str, delay: float):
+        now = time.time()
+        cache_key = f"{guild_id}_{user_id}"
+        
+        # Chống Spam API: Cứ 5 giây mới cho phép kích hoạt 1 lần truy vấn
+        if now - self._cooldown.get(cache_key, 0) < 5:
+            return
+        self._cooldown[cache_key] = now
+
+        # Thả task chạy chìm
+        task = asyncio.create_task(self.delayed_api_scanner(guild_id, user_id, event_name, delay))
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
 
     # ====================================================
-    # MẮT THẦN 1: QUÉT TRẠNG THÁI (STATUS) 
+    # LƯỚI QUÉT NATIVE EVENTS (BỎ QUA SOCKET RAW LỖI)
     # ====================================================
+    
+    @commands.Cog.listener()
+    async def on_user_update(self, before: discord.User, after: discord.User):
+        """Bắt chuẩn 100% khi Khách lưu Profile toàn cầu (đổi Avatar, Clan Tag, Username)"""
+        if after.bot: return
+        for guild in after.mutual_guilds:
+            await self.trigger_delayed_check(guild.id, after.id, "USER_UPDATE", 2.5)
+
+    @commands.Cog.listener()
+    async def on_member_update(self, before: discord.Member, after: discord.Member):
+        """Bắt chuẩn 100% khi Khách lưu Profile server cụ thể"""
+        if after.bot: return
+        await self.trigger_delayed_check(after.guild.id, after.id, "MEMBER_UPDATE", 2.5)
+
     @commands.Cog.listener()
     async def on_presence_update(self, before: discord.Member, after: discord.Member):
         if after.bot: return
+        
+        # 1. Quét ngay cho hệ thống Status Tag
         config = await get_tag_config(self.bot, after.guild.id, "status")
         trigger = config.get("trigger")
-        if not trigger: return
-        
-        has_status = False
-        if after.activities:
-            for act in after.activities:
-                if getattr(act, "type", 0) == 4 or isinstance(act, discord.CustomActivity):
-                    state = str(getattr(act, "state", getattr(act, "name", ""))).lower()
-                    if trigger.lower() in state:
-                        has_status = True
-                        break
-        
-        await self.evaluate_member_tags(after.guild.id, after.id, "status", has_status)
+        if trigger:
+            has_status = False
+            if after.activities:
+                for act in after.activities:
+                    if getattr(act, "type", 0) == 4 or isinstance(act, discord.CustomActivity):
+                        state = str(getattr(act, "state", getattr(act, "name", ""))).lower()
+                        if trigger.lower() in state:
+                            has_status = True
+                            break
+            await self.evaluate_member_tags(after.guild.id, after.id, "status", has_status)
+            
+        # 2. Dùng Presence Update làm Chuông kích hoạt cho Clan Tag
+        await self.trigger_delayed_check(after.guild.id, after.id, "PRESENCE_UPDATE", 3.0)
 
-
-    # ====================================================
-    # MẮT THẦN 2: QUÉT CHỮ TRONG CLAN TAG (VÉT MÁNG TOÀN DIỆN)
-    # ====================================================
     @commands.Cog.listener()
-    async def on_socket_response(self, payload: dict):
-        event_name = payload.get("t")
-        if event_name not in ["MESSAGE_CREATE", "PRESENCE_UPDATE", "VOICE_STATE_UPDATE", "GUILD_MEMBER_UPDATE", "MESSAGE_REACTION_ADD"]:
-            return
-            
-        data = payload.get("d", {})
-        if not data: return
+    async def on_message(self, message: discord.Message):
+        """Dùng Message làm Chuông dự phòng"""
+        if message.author.bot or not message.guild: return
+        await self.trigger_delayed_check(message.guild.id, message.author.id, "MESSAGE", 1.0)
+
+
+    # ----------------------------------------------------
+    # CỖ MÁY XỬ LÝ CHẬM RÚT API (Y HỆT BLEED)
+    # ----------------------------------------------------
+    async def delayed_api_scanner(self, guild_id: int, user_id: int, event_name: str, delay: float):
+        print(f"\n[📡 CHUÔNG REO NATIVE] Kích hoạt bởi {event_name}! Chờ {delay}s...", flush=True)
         
-        guild_id = int(data.get("guild_id", 0))
-        if not guild_id: return
-
-        user_data = None
-        if "member" in data and "user" in data["member"]:
-            user_data = data["member"]["user"]
-        elif "user" in data:
-            user_data = data["user"]
-        elif "author" in data:
-            user_data = data["author"]
-            
-        if not user_data or user_data.get("bot"): return
-        user_id = int(user_data.get("id", 0))
-        if not user_id: return
-
+        await asyncio.sleep(delay)
+        
         config = await get_tag_config(self.bot, guild_id, "clan")
         trigger = config.get("trigger")
         if not trigger: return
 
-        # CHIẾN THUẬT LƯỚI QUÉT DÀY ĐẶC
-        clan_tag_str = None
-        member_data = data.get("member", {}) if isinstance(data.get("member"), dict) else {}
-        
-        # Discord thay đổi API liên tục, ta cào sạch các túi khả thi
-        for tui in [data, user_data, member_data]:
-            if isinstance(tui, dict):
-                # Lục túi "clan"
-                if "clan" in tui and isinstance(tui["clan"], dict):
-                    if tui["clan"].get("tag"): clan_tag_str = tui["clan"].get("tag")
-                # Lục túi "primary_guild"
-                if "primary_guild" in tui and isinstance(tui["primary_guild"], dict):
-                    if tui["primary_guild"].get("tag"): clan_tag_str = tui["primary_guild"].get("tag")
-                
-                # Tìm thấy rồi thì dừng lục lọi
-                if clan_tag_str: break
+        try:
+            raw_member = await self.bot.http.get_member(guild_id, user_id)
+            user_info = raw_member.get("user", {}) if isinstance(raw_member, dict) else {}
+            if user_info.get("bot"): return 
 
-        has_clan = False
-        
-        # So khớp chữ (Hỗ trợ 100% ký tự Unicode đặc biệt như ୨୧)
-        if clan_tag_str and (trigger.lower() in str(clan_tag_str).lower()):
-            has_clan = True
+            def _extract_tag(obj):
+                if not isinstance(obj, dict): return None
+                for key in ["clan", "primary_guild"]:
+                    if key in obj and isinstance(obj[key], dict) and "tag" in obj[key]:
+                        return str(obj[key]["tag"])
+                return None
 
-        await self.evaluate_member_tags(guild_id, user_id, "clan", has_clan)
+            clan_tag_str = _extract_tag(user_info) or _extract_tag(raw_member)
+            has_clan = False
+            
+            # Diagnostic Console Tracing
+            print(f"   -> Đã kéo API thành công. Tag: '{clan_tag_str}' | Key: '{trigger}'", flush=True)
+            
+            if clan_tag_str and (trigger.lower() in clan_tag_str.lower()):
+                has_clan = True
+                print(f"[RADAR] Quét thấy Tag '{clan_tag_str}' -> TRÙNG KHỚP! (Đang nổ Role)", flush=True)
+            else:
+                print(f"[RADAR] Quét thấy Tag '{clan_tag_str}' -> KHÔNG CÓ/KHÔNG KHỚP!", flush=True)
+
+            await self.evaluate_member_tags(guild_id, user_id, "clan", has_clan)
+        except Exception as e:
+            print(f"[RADAR ERROR] Lỗi khi kéo API: {e}", flush=True)
+
 
 async def setup(bot: commands.Bot):
     bot.tree.add_command(StatusTagGroup())
     bot.tree.add_command(ClanTagGroup())
     await bot.add_cog(ServerTagListener(bot))
-    print("[load] success: core.servertag (Multi-IT, Tách đôi lệnh, Cross-Validation, Lưới Quét Toàn Diện)", flush=True)
+    print("[load] success: core.servertag (Multi-IT, Native Listener Events + 2.5s Delay Architecture)", flush=True)
